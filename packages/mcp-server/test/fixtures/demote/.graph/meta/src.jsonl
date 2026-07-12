@@ -1,0 +1,1 @@
+{"id":"src/app.ts/pay","file":"src/app.ts","kind":"Function","responsibility":"charge a payment","exposed":true,"deps":[],"anchor":"export function pay() {}"}

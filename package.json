@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "open-graph-mcp",
+  "description": "Serviço MCP de knowledge graph governado — derivado dos conceitos do open-graph",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "workspaces": {
+    "packages": ["packages/*"]
+  },
+  "scripts": {
+    "dev": "bun run --cwd packages/mcp-server dev",
+    "dev:web": "bun run --cwd packages/mcp-web dev",
+    "test": "bun run --cwd packages/mcp-server test"
+  }
+}
