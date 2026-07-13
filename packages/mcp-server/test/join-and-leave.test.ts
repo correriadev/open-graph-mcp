@@ -55,7 +55,8 @@ test("focusing a cell broadcasts user.focused to observers of that cell; disconn
 })
 
 test("focus debounce (§6.3): rapid focus switches broadcast only ONE user.focused, for the last cell", async () => {
-  const s = startServer({ focusDebounceMs: 60 })
+  // 250ms window: real margin for the 3 localhost HTTP round-trips to land inside it (60ms was tight under load).
+  const s = startServer({ focusDebounceMs: 250 })
   try {
     const alice = await register(s.url, "alice")
     const bob = await register(s.url, "bob")
@@ -73,7 +74,7 @@ test("focus debounce (§6.3): rapid focus switches broadcast only ONE user.focus
     expect(focused.payload.cell).toBe("ui:3")
 
     // Wait past another full debounce window: no further (stale intermediate) broadcasts may arrive.
-    await new Promise((r) => setTimeout(r, 150))
+    await new Promise((r) => setTimeout(r, 400))
     const all = bobSse.events.filter((e) => e.kind === "user.focused" && e.payload.sessionId === aliceSessionId)
     expect(all).toHaveLength(1)
 

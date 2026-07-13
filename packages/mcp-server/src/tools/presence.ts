@@ -57,10 +57,19 @@ function clearDebounce(state: ServerState, sessionId: string): void {
   }
 }
 
-/** Cria (se ausente) ou toca a Presence da sessão. `isNew` sinaliza a primeira chamada presence-registering. */
-function touch(state: ServerState, sessionId: string, tenant: string, userId: string, agentKind?: string): { presence: Presence; isNew: boolean } {
+const NOT_OWNED = { ok: false as const, reasons: ["session not owned by caller"] }
+
+/**
+ * Cria (se ausente) ou toca a Presence da sessão. `isNew` sinaliza a primeira chamada
+ * presence-registering. SEGURANÇA: sessionIds são sequenciais/adivinháveis (`s${counter}` global em
+ * sse.ts) — a primeira chamada presence-registering LIGA o sessionId à identidade do token; qualquer
+ * chamada posterior com identidade divergente (outro user OU outro tenant) retorna null e o caller
+ * rejeita, sem tocar o estado da vítima nem emitir broadcast.
+ */
+function touch(state: ServerState, sessionId: string, tenant: string, userId: string, agentKind?: string): { presence: Presence; isNew: boolean } | null {
   let p = state.presence.get(sessionId)
   const isNew = !p
+  if (p && (p.userId !== userId || p.tenant !== tenant)) return null
   if (!p) {
     p = {
       sessionId,
@@ -82,10 +91,15 @@ function touch(state: ServerState, sessionId: string, tenant: string, userId: st
   return { presence: p, isNew }
 }
 
-export function presenceBeat(state: ServerState, args: { token: string; sessionId: string; agentKind?: string }): { ok: true; serverTs: number } {
+export function presenceBeat(
+  state: ServerState,
+  args: { token: string; sessionId: string; agentKind?: string },
+): { ok: true; serverTs: number } | { ok: false; reasons: string[] } {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
   if (!args.sessionId || typeof args.sessionId !== "string") throw new Error("presence.beat: sessionId required")
-  const { presence, isNew } = touch(state, args.sessionId, tenant, userId, args.agentKind)
+  const touched = touch(state, args.sessionId, tenant, userId, args.agentKind)
+  if (!touched) return NOT_OWNED
+  const { presence, isNew } = touched
   if (isNew && !presence.invisible) emitJoined(state, presence)
   return { ok: true, serverTs: now() }
 }
@@ -93,10 +107,12 @@ export function presenceBeat(state: ServerState, args: { token: string; sessionI
 export function presenceFocus(
   state: ServerState,
   args: { token: string; sessionId: string; cell?: string | null; invisible?: boolean; agentKind?: string },
-): { ok: true } {
+): { ok: true } | { ok: false; reasons: string[] } {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
   if (!args.sessionId || typeof args.sessionId !== "string") throw new Error("presence.focus: sessionId required")
-  const { presence, isNew } = touch(state, args.sessionId, tenant, userId, args.agentKind)
+  const touched = touch(state, args.sessionId, tenant, userId, args.agentKind)
+  if (!touched) return NOT_OWNED
+  const { presence, isNew } = touched
   if (typeof args.invisible === "boolean") presence.invisible = args.invisible
   if (isNew && !presence.invisible) emitJoined(state, presence)
 
@@ -130,6 +146,8 @@ export function presenceWho(
 ): { users: { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number }[] } {
   const { tenantId: tenant } = requireToken(state, args.token)
   const users: { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number }[] = []
+  // ponytail: N+1 — uma query de openCsIds (e uma de name) por presença. Teto: ~50 sessões (DoD Fase 3)
+  // sobre SQLite local em memória de página — irrelevante. Se o teto subir, trocar por 1 query agregada.
   for (const p of state.presence.values()) {
     if (p.tenant !== tenant || p.invisible) continue
     p.openCsIds = openCsIdsFor(state, tenant, p.userId)
