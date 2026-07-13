@@ -157,7 +157,9 @@ export function changesetCommit(state: ServerState, args: { token: string; csId:
       // vermelho → rollback total: nenhum delta persiste como claim; changeset 'aborted' com reasons.
       write(state.db, state.stateDir, tenant, "changesets", { tenant_id: tenant, id: cs.id, intent: cs.intent, parent: null, status: "aborted", opened_by: cs.opened_by, opened_at: cs.opened_at, closed_at: now(), base_seq: null, admit_seq: null, blast_cells: cs.blast_cells })
       const released = releaseLocks(state, tenant, args.csId)
-      envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: { csId: cs.id, reason: "rejected", cells, reasons: final.reasons } }, { defer: true }))
+      // byUser NO PAYLOAD: o router de afinidade (affinity.ts) roteia changeset.aborted p/ o holder por
+      // este campo — o EventInput.byUser vai só p/ a coluna de auditoria, não entra no envelope.
+      envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: { csId: cs.id, reason: "rejected", cells, reasons: final.reasons, byUser: cs.opened_by } }, { defer: true }))
       for (const cell of released) envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, csId: cs.id, reason: "rejected" } }, { defer: true }))
       return { ok: false, reasons: final.reasons, __tenant: tenant }
     }
@@ -202,7 +204,8 @@ export function changesetAbort(state: ServerState, args: { token: string; csId: 
     const cells: string[] = JSON.parse(cs.blast_cells ?? "[]")
     write(state.db, state.stateDir, tenant, "changesets", { tenant_id: tenant, id: cs.id, intent: cs.intent, parent: null, status: "aborted", opened_by: cs.opened_by, opened_at: cs.opened_at, closed_at: now(), base_seq: null, admit_seq: null, blast_cells: cs.blast_cells })
     const released = releaseLocks(state, tenant, args.csId)
-    envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: { csId: cs.id, reason: "user", cells } }, { defer: true }))
+    // byUser no payload p/ o router de afinidade rotear ao holder (mesmo padrão do commit rejeitado acima).
+    envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: { csId: cs.id, reason: "user", cells, byUser: cs.opened_by } }, { defer: true }))
     for (const cell of released) envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, csId: cs.id, reason: "user" } }, { defer: true }))
     state.deltaCounts.delete(args.csId)
     return { ok: true, __tenant: tenant }

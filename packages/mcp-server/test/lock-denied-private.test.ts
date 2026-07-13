@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
-import { callTool, openSse, register } from "./helpers"
+import { callTool, openSse, readResource, register } from "./helpers"
 
 test("lock.denied reaches ONLY the attempting session — the holder and a bystander get nothing", async () => {
   const s = startServer()
@@ -38,6 +38,13 @@ test("lock.denied reaches ONLY the attempting session — the holder and a bysta
     // Persisted for audit (SQLite), even though only Bob was pushed the SSE frame.
     const row = s.state.db.query("SELECT COUNT(*) AS c FROM events WHERE tenant_id = 'default' AND kind = 'lock.denied'").get() as { c: number }
     expect(row.c).toBe(1)
+
+    // graph://history is SHARED (any tenant token reads it) — lock.denied must not leak through it for
+    // ANY caller, attempter included (deliberate decision: private event, audit stays SQLite-only).
+    for (const who of [alice, bob, carol]) {
+      const hist = await readResource(s.url, "graph://history?since=0", who.token)
+      expect(hist.events.some((e: any) => e.kind === "lock.denied")).toBe(false)
+    }
 
     aliceSse.close()
     carolSse.close()

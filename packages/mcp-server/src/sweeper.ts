@@ -28,7 +28,9 @@ export function sweepTtl(state: ServerState): void {
       write(state.db, state.stateDir, tenant, "changesets", { tenant_id: tenant, id: cs.id, intent: cs.intent, parent: null, status: "aborted", opened_by: cs.opened_by, opened_at: cs.opened_at, closed_at: now(), base_seq: null, admit_seq: null, blast_cells: cs.blast_cells })
       const held = (state.db.query("SELECT cell FROM locks WHERE tenant_id = ? AND cs_id = ?").all(tenant, csId) as { cell: string }[]).map((r) => r.cell)
       state.db.query("DELETE FROM locks WHERE tenant_id = ? AND cs_id = ?").run(tenant, csId)
-      envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: cs.opened_by, payload: { csId: cs.id, reason: "ttl_expired", cells } }, { defer: true }))
+      // byUser no payload: o router de afinidade (affinity.ts) roteia changeset.aborted p/ o holder por este
+      // campo — crítico no TTL expiry: o holder precisa saber que perdeu o turno mesmo sem filtro que case.
+      envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: cs.opened_by, payload: { csId: cs.id, reason: "ttl_expired", cells, byUser: cs.opened_by } }, { defer: true }))
       for (const cell of held) envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: cs.opened_by, payload: { cell, csId: cs.id, reason: "ttl_expired" } }, { defer: true }))
       state.deltaCounts.delete(csId)
     })

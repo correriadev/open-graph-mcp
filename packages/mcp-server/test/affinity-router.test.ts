@@ -59,14 +59,15 @@ test("changeset.committed: cell/cs_id observers + everyone with presence focus o
 })
 
 test("changeset.aborted: ONLY cs_id observers + holder — cell-only observers are excluded", () => {
-  const e = env("changeset.aborted", "cs_1", { csId: "cs_1", cells: ["ui:4"], reason: "user" })
   const set = new Map([
     ["cellOnly", session("cellOnly", [{ kind: "cell", cell: "ui:4" }])], // would match via cell, but spec excludes it
     ["csObserver", session("csObserver", [{ kind: "changeset", id: "cs_1" }])],
     ["holderNoFilter", session("holderNoFilter", [{ kind: "domain", domain: "unrelated" }], "u_holder")],
   ])
-  const e2 = env("changeset.aborted", "cs_1", { csId: "cs_1", cells: ["ui:4"], reason: "user", byUser: "u_holder" })
-  expect(route(e2, set, new Map(), TENANT)).toEqual(new Set(["csObserver", "holderNoFilter"]))
+  // REAL production payload shape (sweeper.ts TTL expiry): byUser = holder in the PAYLOAD is what routes
+  // the event to the holder's session(s) — EventInput.byUser only reaches the audit column, not the envelope.
+  const e = env("changeset.aborted", "cs_1", { csId: "cs_1", reason: "ttl_expired", cells: ["ui:4"], byUser: "u_holder" })
+  expect(route(e, set, new Map(), TENANT)).toEqual(new Set(["csObserver", "holderNoFilter"]))
 })
 
 test("lock.denied: ONLY the attempting user's session(s) — never a broadcast", () => {
