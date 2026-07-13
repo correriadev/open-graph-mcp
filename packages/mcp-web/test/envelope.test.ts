@@ -37,3 +37,13 @@ test("classifyEnvelope applies first event when no graphId is known yet", () => 
   expect(classifyEnvelope(env({ kind: "session.created", seq: 0 }), null, 0)).toBe("duplicate")
   expect(classifyEnvelope(env({ kind: "session.created", seq: 1 }), null, 0)).toBe("apply")
 })
+
+test("classifyEnvelope exempts ephemeral envelopes from seq dedup (presence contract)", () => {
+  // Ephemeral (presence) events reuse the current durable seq — seq <= lastSeq must still apply...
+  expect(classifyEnvelope(env({ kind: "user.focused", seq: 5, ephemeral: true }), "g1", 5)).toBe("apply")
+  expect(classifyEnvelope(env({ kind: "user.joined", seq: 0, ephemeral: true }), "g1", 5)).toBe("apply")
+  // ...while a durable envelope with the same stale seq is still a duplicate.
+  expect(classifyEnvelope(env({ seq: 5 }), "g1", 5)).toBe("duplicate")
+  // graphId reset still wins over the ephemeral exemption.
+  expect(classifyEnvelope(env({ kind: "user.focused", seq: 5, ephemeral: true, graphId: "g2" }), "g1", 5)).toBe("reset")
+})

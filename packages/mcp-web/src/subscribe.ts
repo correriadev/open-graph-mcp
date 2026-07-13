@@ -8,6 +8,8 @@ export type Envelope = {
   target: string
   payload: any
   graphId: string
+  /** Server contract: ephemeral events (presence) reuse the current durable seq — never advance `since`, never dedup by seq. */
+  ephemeral?: true
 }
 
 // ---- pure logic (unit-tested) ---------------------------------------------
@@ -35,6 +37,9 @@ export function classifyEnvelope(
   lastSeq: number,
 ): "reset" | "apply" | "duplicate" {
   if (knownGraphId !== null && env.graphId !== knownGraphId) return "reset"
+  // Ephemeral events (presence) intentionally reuse the current durable seq — they are exempt from
+  // seq dedup and must NOT advance lastSeq (the dispatch loop guards the cursor update too).
+  if (env.ephemeral === true) return "apply"
   if (env.seq <= lastSeq) return "duplicate"
   return "apply"
 }
@@ -103,7 +108,7 @@ export class EventStream {
         return
       case "apply":
         this.graphId = env.graphId
-        this.lastSeq = env.seq
+        if (!env.ephemeral) this.lastSeq = env.seq // ephemeral seq never moves the replay cursor
         this.h.onEvent(env)
     }
   }

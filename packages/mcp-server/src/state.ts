@@ -31,6 +31,8 @@ export type EventEnvelope = {
   target: string | null
   payload: Record<string, unknown>
   graphId: string
+  /** true = evento efêmero (presença, Fase 3 §3.1): nunca persistido; seq NÃO avança o cursor `since` do cliente e não participa de dedup por seq. */
+  ephemeral?: true
 }
 
 export type Session = {
@@ -209,13 +211,16 @@ export function appendEvent(
  * broadcastEphemeral — difunde SEM persistir (nem SQLite `events`, nem espelho JSONL): presença é
  * efêmera (Fase 3 §3.1 — restart esquece tudo; replay/rebuild não deve reproduzir user.joined/
  * focused/left). Roteia pelos MESMOS filtros de sessão dos eventos duráveis (pushEnvelope → matches).
- * O `seq` carrega o max durável corrente do tenant (NÃO aloca um novo): efêmero não avança o cursor
- * `since` — quem reconectar com esse seq refaz o tail durável certo e só não revê a presença.
+ *
+ * CONTRATO do envelope efêmero (`ephemeral: true`): o `seq` carrega o max durável corrente do tenant
+ * (NÃO aloca um novo) — efêmero nunca avança o cursor `since` de replay, e clientes NÃO devem
+ * deduplicar efêmeros por seq (vários efêmeros repetem o mesmo seq por design; a flag é o sinal).
  */
 export function broadcastEphemeral(state: ServerState, tenant: string, input: EventInput): EventEnvelope {
   const env: EventEnvelope = {
     schemaVersion: 1,
     seq: nextSeq(state, tenant) - 1,
+    ephemeral: true,
     ts: new Date().toISOString(),
     kind: input.kind,
     target: input.targetId ?? null,
