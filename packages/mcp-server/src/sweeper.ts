@@ -8,6 +8,7 @@
 import { write } from "./db"
 import { appendEvent, pushEnvelope, type EventEnvelope, type ServerState } from "./state"
 import { sweepPresence } from "./tools/presence"
+import { sweepTyping } from "./tools/typing"
 
 const now = () => new Date().toISOString()
 
@@ -50,7 +51,7 @@ export function flushDeltas(state: ServerState): void {
 
 export function startSweeper(
   state: ServerState,
-  opts: { sweepIntervalMs?: number; aggIntervalMs?: number; presenceSweepIntervalMs?: number } = {},
+  opts: { sweepIntervalMs?: number; aggIntervalMs?: number; presenceSweepIntervalMs?: number; typingIntervalMs?: number } = {},
 ): () => void {
   const ttl = setInterval(() => {
     try {
@@ -74,9 +75,18 @@ export function startSweeper(
       /* idem */
     }
   }, opts.presenceSweepIntervalMs ?? 15_000)
+  // Fase 3 §5.1: scan de "digitando" — default 500ms, configurável p/ teste.
+  const typing = setInterval(() => {
+    try {
+      sweepTyping(state)
+    } catch {
+      /* idem */
+    }
+  }, opts.typingIntervalMs ?? 500)
   return () => {
     clearInterval(ttl)
     clearInterval(agg)
     clearInterval(presence)
+    clearInterval(typing)
   }
 }

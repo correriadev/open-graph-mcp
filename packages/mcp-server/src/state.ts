@@ -9,11 +9,16 @@
 import type { Database } from "bun:sqlite"
 import type { Graph } from "@open-graph-mcp/graph-core/build"
 import { openDb, write } from "./db"
+import { route } from "./affinity"
 
 export const DEFAULT_TENANT = "default"
 export const DEFAULT_TTL_MS = 30 * 60 * 1000
 export const DEFAULT_PRESENCE_TTL_MS = 60_000
 export const DEFAULT_FOCUS_DEBOUNCE_MS = 2_000
+/** Fase 3 §5.1: janela do scan de "digitando" e limiares de classificação (configuráveis p/ teste). */
+export const DEFAULT_TYPING_INTERVAL_MS = 500
+export const DEFAULT_TYPING_MS = 2_000
+export const DEFAULT_IDLE_MS = 5_000
 
 export type Filter =
   | { kind: "all" }
@@ -40,6 +45,10 @@ export type Session = {
   tenant: string
   filters: Filter[]
   push: (env: EventEnvelope) => void
+  /** Identidade do token usado para abrir o SSE (null p/ conexão anônima). Fase 3 §6.1: o router de
+   *  afinidade usa isto p/ rotear por USUÁRIO (holder de changeset.delta, atacante de lock.denied) sem
+   *  depender de Presence (que só existe depois de um presence.beat/focus explícito). */
+  userId: string | null
 }
 
 /** Token em memória → identidade. Some no restart; changesets persistem no SQLite (spec §9). */
@@ -60,6 +69,9 @@ export type Presence = {
   openCsIds: string[]
   invisible: boolean
   lastDeltaAt: number
+  /** Classificação corrente do agregador de "digitando" (Fase 3 §5.1) — usada só p/ detectar TRANSIÇÃO
+   *  (o broadcast de `user.typing_state` acontece só quando isto muda, nunca a cada tick). */
+  typingState: "typing" | "idle" | "quiet"
 }
 
 export type Pipeline = "skeleton" | "existing"
@@ -74,6 +86,9 @@ export type ServerState = {
   ttlMs: number
   presenceTtlMs: number
   focusDebounceMs: number
+  /** Limiares de classificação de "digitando" (Fase 3 §5.1), configuráveis p/ teste. */
+  typingMs: number
+  idleMs: number
   graphs: Map<string, TenantGraph>
   tokens: Map<string, TokenInfo>
   subscriptions: Map<string, Filter[]>
@@ -93,6 +108,8 @@ export function createState(opts: {
   ttlMs?: number
   presenceTtlMs?: number
   focusDebounceMs?: number
+  typingMs?: number
+  idleMs?: number
   db?: Database
 }): ServerState {
   const db = opts.db ?? openDb(opts.stateDir === ":memory:" ? ":memory:" : `${opts.stateDir}/state.sqlite`)
@@ -103,6 +120,8 @@ export function createState(opts: {
     ttlMs: opts.ttlMs ?? DEFAULT_TTL_MS,
     presenceTtlMs: opts.presenceTtlMs ?? DEFAULT_PRESENCE_TTL_MS,
     focusDebounceMs: opts.focusDebounceMs ?? DEFAULT_FOCUS_DEBOUNCE_MS,
+    typingMs: opts.typingMs ?? DEFAULT_TYPING_MS,
+    idleMs: opts.idleMs ?? DEFAULT_IDLE_MS,
     graphs: new Map(),
     tokens: new Map(),
     subscriptions: new Map(),
@@ -123,7 +142,8 @@ export function tenantGraph(state: ServerState, tenant: string): TenantGraph {
   return g
 }
 
-function matchOne(f: Filter, e: EventEnvelope): boolean {
+/** Exportado p/ affinity.ts reusar o teste "casa este filtro" fora do AND-de-todos-os-filtros de matches(). */
+export function matchOne(f: Filter, e: EventEnvelope): boolean {
   switch (f.kind) {
     case "all":
       return true
@@ -156,8 +176,18 @@ export function nextSeq(state: ServerState, tenant: string): number {
   return row.m + 1
 }
 
+/**
+ * pushEnvelope — ponto único de difusão (durável via appendEvent, efêmero via broadcastEphemeral).
+ * Fase 3 §6.1: o destinatário de CADA evento é calculado pelo router de afinidade (affinity.ts), que
+ * generaliza `matches()` (a base "Fase 2 simples") com as regras por-kind da tabela §6.1 (holder,
+ * focus-na-cell, restrição de lock.denied etc). `route` é puro — recebe os mapas e devolve os
+ * sessionIds destinatários; aqui só resolvemos o Session e chamamos `.push`.
+ */
 export function pushEnvelope(state: ServerState, tenant: string, env: EventEnvelope): void {
-  for (const s of state.sessions.values()) if (s.tenant === tenant && matches(s.filters, env)) s.push(env)
+  for (const id of route(env, state.sessions, state.presence, tenant)) {
+    const s = state.sessions.get(id)
+    if (s) s.push(env)
+  }
 }
 
 export type EventInput = {

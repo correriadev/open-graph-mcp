@@ -34,30 +34,42 @@ test("authority.flip flips a cell via the changeset pipeline and records authori
   }
 })
 
-test("authority.flipped is broadcast to ALL connected SSE sessions regardless of their filter", async () => {
+test("authority.flipped is broadcast to ALL connected SSE sessions regardless of their filter (§10.6: 5 sessions)", async () => {
   const s = startServer()
   try {
     const a = await register(s.url, "alice")
     const cell = "broadcastdomain:5"
 
-    // Three sessions with progressively narrower filters, none of which mention this cell/domain/event.
+    // Five sessions with progressively narrower/unrelated filters, none of which mention this cell/domain/event —
+    // affinity routing (affinity.ts) must still reach every single one (§6.1: authority.flipped stays ALWAYS_BROADCAST).
     const sseAll = await openSse(s.url)
     const sseOtherDomain = await openSse(s.url, 0, undefined, "domain:some-unrelated-domain")
     const sseOtherEvent = await openSse(s.url, 0, undefined, "event:changeset.opened")
+    const sseOtherCell = await openSse(s.url, 0, undefined, "cell:zzz:9")
+    const sseOtherChangeset = await openSse(s.url, 0, undefined, "changeset:cs_never_seen")
 
     const flip = await callTool(s.url, "authority.flip", { token: a.token, cell, to: "graph" })
     expect(flip.ok).toBe(true)
 
     const isFlip = (e: any) => e.kind === "authority.flipped" && e.target === cell
-    const [evtAll, evtOtherDomain, evtOtherEvent] = await Promise.all([sseAll.waitFor(isFlip), sseOtherDomain.waitFor(isFlip), sseOtherEvent.waitFor(isFlip)])
+    const [evtAll, evtOtherDomain, evtOtherEvent, evtOtherCell, evtOtherChangeset] = await Promise.all([
+      sseAll.waitFor(isFlip),
+      sseOtherDomain.waitFor(isFlip),
+      sseOtherEvent.waitFor(isFlip),
+      sseOtherCell.waitFor(isFlip),
+      sseOtherChangeset.waitFor(isFlip),
+    ])
 
-    expect(evtAll.seq).toBe(evtOtherDomain.seq)
-    expect(evtAll.seq).toBe(evtOtherEvent.seq)
-    expect(evtAll.payload.cell).toBe(cell)
+    for (const evt of [evtOtherDomain, evtOtherEvent, evtOtherCell, evtOtherChangeset]) {
+      expect(evt.seq).toBe(evtAll.seq)
+      expect(evt.payload.cell).toBe(cell)
+    }
 
     sseAll.close()
     sseOtherDomain.close()
     sseOtherEvent.close()
+    sseOtherCell.close()
+    sseOtherChangeset.close()
   } finally {
     s.stop()
   }

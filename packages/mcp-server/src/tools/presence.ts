@@ -45,7 +45,9 @@ function emitLeft(state: ServerState, p: Presence, reason: "left" | "heartbeat_e
     targetKind: "cell",
     targetId: p.focusCell,
     byUser: p.userId,
-    payload: { sessionId: p.sessionId, userId: p.userId, cell: p.focusCell, reason },
+    // openCsIds: spec §6.1 — user.left roteia tb p/ observadores de qualquer cs_id que o user tinha
+    // aberto (affinity.ts lê isto do payload; sem depender de Presence, que já foi deletada no caller).
+    payload: { sessionId: p.sessionId, userId: p.userId, cell: p.focusCell, reason, openCsIds: p.openCsIds },
   })
 }
 
@@ -82,6 +84,7 @@ function touch(state: ServerState, sessionId: string, tenant: string, userId: st
       openCsIds: openCsIdsFor(state, tenant, userId),
       invisible: false,
       lastDeltaAt: 0,
+      typingState: "quiet",
     }
     state.presence.set(sessionId, p)
   } else {

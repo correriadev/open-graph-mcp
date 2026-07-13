@@ -4,7 +4,8 @@
  * anônima no tenant "default" (compat Fase 1). Primeiro frame: `session.created { sessionId, graphId }`.
  * Depois o tail do log (SQLite) desde N (filtrado) e, ao vivo, cada evento novo do tenant que casa o filtro.
  */
-import { DEFAULT_TENANT, matches, tenantGraph, type EventEnvelope, type Filter, type ServerState } from "./state"
+import { DEFAULT_TENANT, tenantGraph, type EventEnvelope, type Filter, type ServerState } from "./state"
+import { isRecipient } from "./affinity"
 import { presenceSessionClosed } from "./tools/presence"
 
 /** "all" | "cell:<domain:level>" | "domain:<d>" | "event:<k1,k2>" | "changeset:<id>" */
@@ -39,7 +40,11 @@ function tenantOf(state: ServerState, token: string | null): string {
 export function handleEvents(state: ServerState, url: URL): Response {
   const since = Number(url.searchParams.get("since") ?? 0)
   const filters = parseFilterParam(url.searchParams.get("filter"))
-  const tenant = tenantOf(state, url.searchParams.get("token"))
+  const token = url.searchParams.get("token")
+  const tenant = tenantOf(state, token)
+  // Fase 3 §6.1: identidade do token (se houver) fica presa à Session p/ o router de afinidade rotear
+  // por USUÁRIO (holder, atacante de lock.denied) sem depender de presence.beat/focus ter sido chamado.
+  const userId = token ? state.tokens.get(token)?.userId ?? null : null
   // Aleatório (não sequencial): o sessionId é uma capability opaca — só quem recebeu o frame
   // session.created o conhece; um atacante não consegue mais adivinhar nem pré-registrar IDs de
   // presença de vítimas (defense in depth com o binding sessionId→token em tools/presence.ts).
@@ -55,17 +60,19 @@ export function handleEvents(state: ServerState, url: URL): Response {
           /* cliente desconectou entre o match e o enqueue */
         }
       }
-      state.sessions.set(id, { id, tenant, filters, push })
+      const session = { id, tenant, filters, push, userId }
+      state.sessions.set(id, session)
       state.subscriptions.set(id, filters)
 
       controller.enqueue(frame("session.created", { sessionId: id, graphId, tenant }))
-      // tail do log do tenant desde `since`, filtrado pelo filtro corrente da sessão
+      // tail do log do tenant desde `since` — roteado pela MESMA afinidade do live (não só o filtro cru):
+      // sem isto, um lock.denied histórico vazaria p/ qualquer reconexão cujo filtro casasse por acidente.
       const rows = state.db
         .query("SELECT seq, ts, kind, target_id, payload FROM events WHERE tenant_id = ? AND seq > ? ORDER BY seq")
         .all(tenant, since) as { seq: number; ts: string; kind: string; target_id: string | null; payload: string }[]
       for (const r of rows) {
         const env: EventEnvelope = { schemaVersion: 1, seq: r.seq, ts: r.ts, kind: r.kind, target: r.target_id, payload: JSON.parse(r.payload ?? "{}"), graphId }
-        if (matches(filters, env)) push(env)
+        if (isRecipient(env, session, state.presence, tenant)) push(env)
       }
     },
     cancel() {

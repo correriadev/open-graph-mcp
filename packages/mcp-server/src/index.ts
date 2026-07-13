@@ -18,6 +18,7 @@ import { bootstrap } from "./tools/graph-bootstrap"
 import { startWatchLoop, tick } from "./watch-bridge"
 import { startSweeper, sweepTtl, flushDeltas } from "./sweeper"
 import { sweepPresence } from "./tools/presence"
+import { sweepTyping } from "./tools/typing"
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -39,6 +40,9 @@ export type StartOptions = {
   presenceTtlMs?: number
   presenceSweepIntervalMs?: number
   focusDebounceMs?: number
+  typingMs?: number
+  idleMs?: number
+  typingIntervalMs?: number
 }
 export type RunningServer = {
   state: ServerState
@@ -48,12 +52,21 @@ export type RunningServer = {
   sweep: () => void
   flush: () => void
   sweepPresenceNow: () => void
+  tickTypingNow: () => void
   stop: () => void
 }
 
 export function startServer(opts: StartOptions = {}): RunningServer {
   const stateDir = opts.stateDir ?? mkdtempSync(path.join(tmpdir(), "og-state-"))
-  const state = createState({ repoPath: opts.repoPath, stateDir, ttlMs: opts.ttlMs, presenceTtlMs: opts.presenceTtlMs, focusDebounceMs: opts.focusDebounceMs })
+  const state = createState({
+    repoPath: opts.repoPath,
+    stateDir,
+    ttlMs: opts.ttlMs,
+    presenceTtlMs: opts.presenceTtlMs,
+    focusDebounceMs: opts.focusDebounceMs,
+    typingMs: opts.typingMs,
+    idleMs: opts.idleMs,
+  })
   const watchTenant = opts.watchTenant ?? DEFAULT_TENANT
 
   if (opts.autoBootstrap && opts.repoPath) {
@@ -97,6 +110,7 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     sweepIntervalMs: opts.sweepIntervalMs,
     aggIntervalMs: opts.aggIntervalMs,
     presenceSweepIntervalMs: opts.presenceSweepIntervalMs,
+    typingIntervalMs: opts.typingIntervalMs,
   })
 
   return {
@@ -107,6 +121,7 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     sweep: () => sweepTtl(state),
     flush: () => flushDeltas(state),
     sweepPresenceNow: () => sweepPresence(state),
+    tickTypingNow: () => sweepTyping(state),
     stop: () => {
       stopWatch()
       stopSweeper()
