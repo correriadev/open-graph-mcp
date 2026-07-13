@@ -39,9 +39,10 @@ export type SseClient = {
 }
 
 /** Cliente SSE cru (fetch + parser de frames) — sem depender de EventSource global. */
-export async function openSse(base: string, since = 0, token?: string): Promise<SseClient> {
+export async function openSse(base: string, since = 0, token?: string, filter?: string): Promise<SseClient> {
   const q = new URLSearchParams({ since: String(since) })
   if (token) q.set("token", token)
+  if (filter) q.set("filter", filter)
   const res = await fetch(`${base}/events?${q}`)
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()

@@ -104,8 +104,12 @@ function matchOne(f: Filter, e: EventEnvelope): boolean {
   }
 }
 
-/** OR dentro de um filtro, AND entre filtros. Vazio = tudo (spec §4.4). */
+/** Kinds que ignoram filtro de sessão — sempre chegam a todo conectado do tenant (Fase 3 §6.1). */
+const ALWAYS_BROADCAST_KINDS = new Set<string>(["authority.flipped"])
+
+/** OR dentro de um filtro, AND entre filtros. Vazio = tudo (spec §4.4). authority.flipped ignora filtro. */
 export function matches(filters: Filter[], e: EventEnvelope): boolean {
+  if (ALWAYS_BROADCAST_KINDS.has(e.kind)) return true
   if (filters.length === 0) return true
   return filters.every((f) => matchOne(f, e))
 }

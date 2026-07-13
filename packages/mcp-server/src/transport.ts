@@ -14,6 +14,7 @@ import { subscribe } from "./tools/graph-subscribe"
 import { sessionRegister } from "./tools/session"
 import { graphImport } from "./tools/graph-import"
 import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine } from "./tools/changeset"
+import { authorityFlip } from "./tools/authority"
 import { resolveResource, RESOURCE_LIST } from "./resources"
 
 function tenantOf(state: ServerState, token: unknown): string {
@@ -82,6 +83,15 @@ const TOOLS = [
   { name: "changeset.abort", description: "Discard an open changeset and release its locks.", inputSchema: { type: "object", required: ["token", "csId"], properties: { token: { type: "string" }, csId: { type: "string" } } } },
   { name: "changeset.extend", description: "Renew the TTL of an open changeset's locks.", inputSchema: { type: "object", required: ["token", "csId"], properties: { token: { type: "string" }, csId: { type: "string" } } } },
   { name: "changeset.list_mine", description: "List the caller's open changesets (reattach after reconnect).", inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" } } } },
+  {
+    name: "authority.flip",
+    description: "Flip a cell's authority (source ↔ graph) via an ephemeral changeset. Runs the full gate pipeline; emits authority.flipped (always broadcast to all connected sessions).",
+    inputSchema: {
+      type: "object",
+      required: ["token", "cell", "to"],
+      properties: { token: { type: "string" }, cell: { type: "string" }, to: { type: "string", enum: ["source", "graph"] } },
+    },
+  },
 ]
 
 function callTool(state: ServerState, name: string, args: any): unknown {
@@ -110,6 +120,8 @@ function callTool(state: ServerState, name: string, args: any): unknown {
       return changesetExtend(state, args)
     case "changeset.list_mine":
       return changesetListMine(state, args)
+    case "authority.flip":
+      return authorityFlip(state, args)
     default:
       throw new Error(`unknown tool: ${name}`)
   }
