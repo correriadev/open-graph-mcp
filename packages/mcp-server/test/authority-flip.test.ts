@@ -62,3 +62,81 @@ test("authority.flipped is broadcast to ALL connected SSE sessions regardless of
     s.stop()
   }
 })
+
+test("authority.flip refuses when the caller's own open changeset already locks the cell (no reuse hijack)", async () => {
+  const s = startServer()
+  try {
+    const a = await register(s.url, "alice")
+    const cell = "reused:5"
+
+    // Alice has an open changeset on the cell with an unrelated staged delta.
+    const { csId } = await callTool(s.url, "changeset.open", { token: a.token, cells: [cell], intent: "unrelated work" })
+    const staged = await callTool(s.url, "changeset.claim", { token: a.token, csId, delta: { kind: "claim.add", payload: { id: "u1", subject: "s", domain: "reused", level: 5, refs: [] } } })
+    expect(staged.ok).toBe(true)
+
+    // Flip must refuse instead of reusing (and force-committing/aborting) her changeset.
+    const flip = await callTool(s.url, "authority.flip", { token: a.token, cell, to: "graph" })
+    expect(flip.ok).toBe(false)
+    expect(flip.reasons.join(" ")).toContain(csId)
+
+    // Her changeset is untouched: still open, delta still staged, lock still hers.
+    const view = await readResource(s.url, `graph://changeset/${csId}`, a.token)
+    expect(view.status).toBe("open")
+    expect(view.deltas.length).toBe(1)
+    const lock = s.state.db.query("SELECT cs_id FROM locks WHERE tenant_id = ? AND cell = ?").get("default", cell) as { cs_id: string }
+    expect(lock.cs_id).toBe(csId)
+    // And no authority was written.
+    expect(s.state.db.query("SELECT value FROM authority WHERE tenant_id = ? AND cell = ?").get("default", cell)).toBeNull()
+  } finally {
+    s.stop()
+  }
+})
+
+test("authority.flip is denied when another user holds the cell — no state change", async () => {
+  const s = startServer()
+  try {
+    const a = await register(s.url, "alice")
+    const b = await register(s.url, "bob")
+    const cell = "contested:5"
+
+    const { csId } = await callTool(s.url, "changeset.open", { token: b.token, cells: [cell], intent: "bob's turn" })
+
+    const flip = await callTool(s.url, "authority.flip", { token: a.token, cell, to: "graph" })
+    expect(flip.ok).toBe(false)
+
+    // Bob's lock survives; no authority row; no flipped event in history.
+    const lock = s.state.db.query("SELECT cs_id, holder FROM locks WHERE tenant_id = ? AND cell = ?").get("default", cell) as { cs_id: string; holder: string }
+    expect(lock.cs_id).toBe(csId)
+    expect(lock.holder).toBe(b.userId)
+    expect(s.state.db.query("SELECT value FROM authority WHERE tenant_id = ? AND cell = ?").get("default", cell)).toBeNull()
+    const history = await readResource(s.url, "graph://history?since=0")
+    expect(history.events.some((e: any) => e.kind === "authority.flipped")).toBe(false)
+  } finally {
+    s.stop()
+  }
+})
+
+test("authority.flip rejects invalid input cleanly — no dangling lock or changeset", async () => {
+  const s = startServer()
+  try {
+    const a = await register(s.url, "alice")
+
+    const badCell = await callTool(s.url, "authority.flip", { token: a.token, cell: "no-colon-here", to: "graph" })
+    expect(badCell.ok).toBe(false)
+    expect(badCell.reasons[0]).toContain("invalid cell")
+
+    const badTo = await callTool(s.url, "authority.flip", { token: a.token, cell: "ok:5", to: "banana" })
+    expect(badTo.ok).toBe(false)
+    expect(badTo.reasons[0]).toContain("invalid target")
+
+    // Nothing was created: no locks, no changesets, no authority rows.
+    const locks = (s.state.db.query("SELECT COUNT(*) AS c FROM locks WHERE tenant_id = ?").get("default") as { c: number }).c
+    const changesets = (s.state.db.query("SELECT COUNT(*) AS c FROM changesets WHERE tenant_id = ?").get("default") as { c: number }).c
+    const authority = (s.state.db.query("SELECT COUNT(*) AS c FROM authority WHERE tenant_id = ?").get("default") as { c: number }).c
+    expect(locks).toBe(0)
+    expect(changesets).toBe(0)
+    expect(authority).toBe(0)
+  } finally {
+    s.stop()
+  }
+})
