@@ -205,6 +205,27 @@ export function appendEvent(
   return env
 }
 
+/**
+ * broadcastEphemeral — difunde SEM persistir (nem SQLite `events`, nem espelho JSONL): presença é
+ * efêmera (Fase 3 §3.1 — restart esquece tudo; replay/rebuild não deve reproduzir user.joined/
+ * focused/left). Roteia pelos MESMOS filtros de sessão dos eventos duráveis (pushEnvelope → matches).
+ * O `seq` carrega o max durável corrente do tenant (NÃO aloca um novo): efêmero não avança o cursor
+ * `since` — quem reconectar com esse seq refaz o tail durável certo e só não revê a presença.
+ */
+export function broadcastEphemeral(state: ServerState, tenant: string, input: EventInput): EventEnvelope {
+  const env: EventEnvelope = {
+    schemaVersion: 1,
+    seq: nextSeq(state, tenant) - 1,
+    ts: new Date().toISOString(),
+    kind: input.kind,
+    target: input.targetId ?? null,
+    payload: input.payload ?? {},
+    graphId: tenantGraph(state, tenant).graphId,
+  }
+  pushEnvelope(state, tenant, env)
+  return env
+}
+
 /** Wrapper da Fase 1: eventos de bootstrap/watch/drift no tenant default. */
 export function publish(
   state: ServerState,

@@ -13,7 +13,7 @@
  * `openCsIds` é derivado do SQLite (changesets abertos pelo user) a cada touch/consulta — "cached in-mem"
  * só no sentido de viver no objeto Presence entre chamadas; a fonte da verdade continua sendo o SQLite.
  */
-import { appendEvent, type Presence, type ServerState } from "../state"
+import { broadcastEphemeral, type Presence, type ServerState } from "../state"
 import { requireToken } from "./session"
 
 const now = () => Date.now()
@@ -29,7 +29,7 @@ function userName(state: ServerState, tenant: string, userId: string): string {
 }
 
 function emitJoined(state: ServerState, p: Presence): void {
-  appendEvent(state, p.tenant, {
+  broadcastEphemeral(state, p.tenant, {
     kind: "user.joined",
     targetKind: "session",
     targetId: p.sessionId,
@@ -40,7 +40,7 @@ function emitJoined(state: ServerState, p: Presence): void {
 
 function emitLeft(state: ServerState, p: Presence, reason: "left" | "heartbeat_expired"): void {
   if (p.invisible) return
-  appendEvent(state, p.tenant, {
+  broadcastEphemeral(state, p.tenant, {
     kind: "user.left",
     targetKind: "cell",
     targetId: p.focusCell,
@@ -112,7 +112,7 @@ export function presenceFocus(
     state.focusDebounce.delete(sessionId)
     const cur = state.presence.get(sessionId)
     if (!cur || cur.invisible) return
-    appendEvent(state, cur.tenant, {
+    broadcastEphemeral(state, cur.tenant, {
       kind: "user.focused",
       targetKind: "cell",
       targetId: cur.focusCell,
