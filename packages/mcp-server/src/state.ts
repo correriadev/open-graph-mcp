@@ -12,6 +12,8 @@ import { openDb, write } from "./db"
 
 export const DEFAULT_TENANT = "default"
 export const DEFAULT_TTL_MS = 30 * 60 * 1000
+export const DEFAULT_PRESENCE_TTL_MS = 60_000
+export const DEFAULT_FOCUS_DEBOUNCE_MS = 2_000
 
 export type Filter =
   | { kind: "all" }
@@ -41,6 +43,23 @@ export type Session = {
 /** Token em memória → identidade. Some no restart; changesets persistem no SQLite (spec §9). */
 export type TokenInfo = { token: string; userId: string; tenantId: string; name: string }
 
+/**
+ * Presence — estado de presença viva por sessão (Fase 3 §3), EM MEMÓRIA (nunca persistido: restart
+ * esquece tudo). `tenant` não faz parte do contrato público (spec §3.1 não lista), mas é guardado aqui
+ * p/ escopar presence.who/broadcasts por tenant sem depender da sessão SSE ainda estar viva.
+ */
+export type Presence = {
+  sessionId: string
+  tenant: string
+  userId: string
+  agentKind: string
+  lastSeen: number
+  focusCell: string | null
+  openCsIds: string[]
+  invisible: boolean
+  lastDeltaAt: number
+}
+
 export type Pipeline = "skeleton" | "existing"
 
 /** Grafo de conhecimento por tenant (índice quente p/ query/watch). O default carrega o fluxo Fase 1. */
@@ -51,6 +70,8 @@ export type ServerState = {
   stateDir: string
   db: Database
   ttlMs: number
+  presenceTtlMs: number
+  focusDebounceMs: number
   graphs: Map<string, TenantGraph>
   tokens: Map<string, TokenInfo>
   subscriptions: Map<string, Filter[]>
@@ -59,15 +80,28 @@ export type ServerState = {
   /** Contador de deltas por changeset p/ o agregador de 100ms (payload só count, spec §6). */
   deltaCounts: Map<string, { count: number; tenant: string; byUser: string }>
   lastTickHadEvents: boolean
+  /** Presença viva por sessionId (Fase 3 §3) — em memória, some no restart. */
+  presence: Map<string, Presence>
+  /** Timers de debounce de focus por sessionId (Fase 3 §6.3) — só o último settle broadcast. */
+  focusDebounce: Map<string, ReturnType<typeof setTimeout>>
 }
 
-export function createState(opts: { repoPath?: string; stateDir: string; ttlMs?: number; db?: Database }): ServerState {
+export function createState(opts: {
+  repoPath?: string
+  stateDir: string
+  ttlMs?: number
+  presenceTtlMs?: number
+  focusDebounceMs?: number
+  db?: Database
+}): ServerState {
   const db = opts.db ?? openDb(opts.stateDir === ":memory:" ? ":memory:" : `${opts.stateDir}/state.sqlite`)
   return {
     repoPath: opts.repoPath ?? "",
     stateDir: opts.stateDir === ":memory:" ? "" : opts.stateDir,
     db,
     ttlMs: opts.ttlMs ?? DEFAULT_TTL_MS,
+    presenceTtlMs: opts.presenceTtlMs ?? DEFAULT_PRESENCE_TTL_MS,
+    focusDebounceMs: opts.focusDebounceMs ?? DEFAULT_FOCUS_DEBOUNCE_MS,
     graphs: new Map(),
     tokens: new Map(),
     subscriptions: new Map(),
@@ -75,6 +109,8 @@ export function createState(opts: { repoPath?: string; stateDir: string; ttlMs?:
     sessionCounter: 0,
     deltaCounts: new Map(),
     lastTickHadEvents: false,
+    presence: new Map(),
+    focusDebounce: new Map(),
   }
 }
 
@@ -104,8 +140,9 @@ function matchOne(f: Filter, e: EventEnvelope): boolean {
   }
 }
 
-/** Kinds que ignoram filtro de sessão — sempre chegam a todo conectado do tenant (Fase 3 §6.1). */
-const ALWAYS_BROADCAST_KINDS = new Set<string>(["authority.flipped"])
+/** Kinds que ignoram filtro de sessão — sempre chegam a todo conectado do tenant (Fase 3 §6.1).
+ *  `user.joined` é "broadcast geral p/ contagem da topbar atualizar" por definição da tabela §6.1. */
+const ALWAYS_BROADCAST_KINDS = new Set<string>(["authority.flipped", "user.joined"])
 
 /** OR dentro de um filtro, AND entre filtros. Vazio = tudo (spec §4.4). authority.flipped ignora filtro. */
 export function matches(filters: Filter[], e: EventEnvelope): boolean {

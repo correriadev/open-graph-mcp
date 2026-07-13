@@ -43,7 +43,8 @@ export async function openSse(base: string, since = 0, token?: string, filter?: 
   const q = new URLSearchParams({ since: String(since) })
   if (token) q.set("token", token)
   if (filter) q.set("filter", filter)
-  const res = await fetch(`${base}/events?${q}`)
+  const controller = new AbortController()
+  const res = await fetch(`${base}/events?${q}`, { signal: controller.signal })
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   const events: any[] = []
@@ -89,6 +90,9 @@ export async function openSse(base: string, since = 0, token?: string, filter?: 
       })
     },
     close: () => {
+      // abort() actually tears down the underlying connection (server sees stream.cancel()); reader.cancel()
+      // alone only stops the local read loop — Bun's fetch doesn't propagate that to the server socket.
+      controller.abort()
       reader.cancel().catch(() => {})
     },
   }

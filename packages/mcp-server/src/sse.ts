@@ -5,6 +5,7 @@
  * Depois o tail do log (SQLite) desde N (filtrado) e, ao vivo, cada evento novo do tenant que casa o filtro.
  */
 import { DEFAULT_TENANT, matches, tenantGraph, type EventEnvelope, type Filter, type ServerState } from "./state"
+import { presenceSessionClosed } from "./tools/presence"
 
 /** "all" | "cell:<domain:level>" | "domain:<d>" | "event:<k1,k2>" | "changeset:<id>" */
 function parseFilterParam(raw: string | null): Filter[] {
@@ -67,6 +68,7 @@ export function handleEvents(state: ServerState, url: URL): Response {
     cancel() {
       state.sessions.delete(id)
       state.subscriptions.delete(id)
+      presenceSessionClosed(state, id) // spec §9.2: sessão caiu → user.left reason "left" (se tinha presença)
     },
   })
 

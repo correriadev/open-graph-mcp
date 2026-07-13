@@ -7,6 +7,7 @@
  */
 import { write } from "./db"
 import { appendEvent, pushEnvelope, type EventEnvelope, type ServerState } from "./state"
+import { sweepPresence } from "./tools/presence"
 
 const now = () => new Date().toISOString()
 
@@ -47,7 +48,10 @@ export function flushDeltas(state: ServerState): void {
   }
 }
 
-export function startSweeper(state: ServerState, opts: { sweepIntervalMs?: number; aggIntervalMs?: number } = {}): () => void {
+export function startSweeper(
+  state: ServerState,
+  opts: { sweepIntervalMs?: number; aggIntervalMs?: number; presenceSweepIntervalMs?: number } = {},
+): () => void {
   const ttl = setInterval(() => {
     try {
       sweepTtl(state)
@@ -62,8 +66,17 @@ export function startSweeper(state: ServerState, opts: { sweepIntervalMs?: numbe
       /* idem */
     }
   }, opts.aggIntervalMs ?? 100)
+  // Cadência mais curta que o TTL padrão (60s) — bate ~15s, alinhado ao heartbeat de cliente (spec §4).
+  const presence = setInterval(() => {
+    try {
+      sweepPresence(state)
+    } catch {
+      /* idem */
+    }
+  }, opts.presenceSweepIntervalMs ?? 15_000)
   return () => {
     clearInterval(ttl)
     clearInterval(agg)
+    clearInterval(presence)
   }
 }

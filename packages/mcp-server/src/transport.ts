@@ -15,6 +15,7 @@ import { sessionRegister } from "./tools/session"
 import { graphImport } from "./tools/graph-import"
 import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine } from "./tools/changeset"
 import { authorityFlip } from "./tools/authority"
+import { presenceWho, presenceFocus, presenceBeat } from "./tools/presence"
 import { resolveResource, RESOURCE_LIST } from "./resources"
 
 function tenantOf(state: ServerState, token: unknown): string {
@@ -92,6 +93,26 @@ const TOOLS = [
       properties: { token: { type: "string" }, cell: { type: "string" }, to: { type: "string", enum: ["source", "graph"] } },
     },
   },
+  {
+    name: "presence.who",
+    description: "List currently present users (excludes invisible sessions). Filterable by cell (focusing it) or cs_id (has it open).",
+    inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" }, cell: { type: "string" }, cs_id: { type: "string" } } },
+  },
+  {
+    name: "presence.focus",
+    description:
+      "Declare (or clear, if cell omitted/null) the focus cell for this session. Broadcasts user.focused after a short settle debounce (spec §6.3). invisible:true hides the session from presence.who and suppresses its broadcasts.",
+    inputSchema: {
+      type: "object",
+      required: ["token", "sessionId"],
+      properties: { token: { type: "string" }, sessionId: { type: "string" }, cell: { type: ["string", "null"] }, invisible: { type: "boolean" }, agentKind: { type: "string" } },
+    },
+  },
+  {
+    name: "presence.beat",
+    description: "Heartbeat for this session's presence. No beat for 60s expires the presence (user.left, reason heartbeat_expired).",
+    inputSchema: { type: "object", required: ["token", "sessionId"], properties: { token: { type: "string" }, sessionId: { type: "string" }, agentKind: { type: "string" } } },
+  },
 ]
 
 function callTool(state: ServerState, name: string, args: any): unknown {
@@ -122,6 +143,12 @@ function callTool(state: ServerState, name: string, args: any): unknown {
       return changesetListMine(state, args)
     case "authority.flip":
       return authorityFlip(state, args)
+    case "presence.who":
+      return presenceWho(state, args)
+    case "presence.focus":
+      return presenceFocus(state, args)
+    case "presence.beat":
+      return presenceBeat(state, args)
     default:
       throw new Error(`unknown tool: ${name}`)
   }
