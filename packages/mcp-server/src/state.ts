@@ -199,6 +199,21 @@ export type EventInput = {
 }
 
 /**
+ * Payload canônico de `changeset.aborted` — `byUser` (= holder) é ESTRUTURAL aqui: o router de afinidade
+ * (affinity.ts) roteia o abort p/ o holder por este campo do PAYLOAD (EventInput.byUser vai só p/ a
+ * coluna de auditoria, não entra no envelope). Helper único p/ os três emissores (commit rejeitado,
+ * abort explícito, TTL expiry) não divergirem de shape.
+ */
+export function abortedPayload(
+  cs: { id: string; opened_by: string },
+  reason: "rejected" | "user" | "ttl_expired",
+  cells: string[],
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return { csId: cs.id, reason, cells, byUser: cs.opened_by, ...extra }
+}
+
+/**
  * appendEvent — grava o evento no SQLite + JSONL do tenant (seq monotônico por tenant) e o difunde no SSE
  * do tenant. `broadcast:false` → só auditoria (ex.: lock.denied, spec §6). `defer:true` → não difunde agora
  * (usado dentro da transação de commit; o chamador difunde depois de a transação retornar).

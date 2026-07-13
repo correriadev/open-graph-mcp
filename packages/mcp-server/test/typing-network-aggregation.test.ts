@@ -99,3 +99,46 @@ test("invisible users emit no typing_state", async () => {
     s.stop()
   }
 })
+
+test("going invisible while typing emits one final typing→quiet transition, then nothing further", async () => {
+  const s = startServer({ focusDebounceMs: 10 })
+  try {
+    const alice = await register(s.url, "alice")
+    const bob = await register(s.url, "bob")
+    const cell = "ui:7"
+    const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: [cell], intent: "typing4" })
+
+    const bobSse = await openSse(s.url, 0, bob.token, `cell:${cell}`)
+    const aliceSse = await openSse(s.url, 0, alice.token)
+    const aliceSessionId = aliceSse.events[0].sessionId
+    await callTool(s.url, "presence.focus", { token: alice.token, sessionId: aliceSessionId, cell })
+    await bobSse.waitFor((e) => e.kind === "user.focused" && e.payload.sessionId === aliceSessionId)
+
+    // Alice starts typing — Bob sees quiet→typing.
+    await callTool(s.url, "changeset.claim", { token: alice.token, csId, delta: { kind: "claim.add", payload: { id: "cz", subject: "s", domain: "ui", level: 7, refs: [] } } })
+    s.tickTypingNow()
+    const typing = await bobSse.waitFor((e) => e.kind === "user.typing_state" && e.payload.state === "typing")
+    expect(typing.payload.userId).toBe(alice.userId)
+
+    // Alice goes invisible mid-typing. Without the final forced transition, sweepTyping skips invisible
+    // presences and Bob's "typing" indicator would freeze forever.
+    await callTool(s.url, "presence.focus", { token: alice.token, sessionId: aliceSessionId, cell, invisible: true })
+    const quiet = await bobSse.waitFor((e) => e.kind === "user.typing_state" && e.payload.state === "quiet")
+    expect(quiet.payload.prev).toBe("typing")
+    expect(quiet.payload.userId).toBe(alice.userId)
+    expect(quiet.payload.cell).toBe(cell)
+
+    // Nothing further: more claims + ticks while invisible emit no typing_state at all.
+    await callTool(s.url, "changeset.claim", { token: alice.token, csId, delta: { kind: "claim.add", payload: { id: "cz2", subject: "s", domain: "ui", level: 7, refs: [] } } })
+    s.tickTypingNow()
+    s.tickTypingNow()
+    await new Promise((r) => setTimeout(r, 30))
+    const all = bobSse.events.filter((e) => e.kind === "user.typing_state")
+    expect(all).toHaveLength(2) // quiet→typing, then the forced typing→quiet — and nothing else
+
+    aliceSse.close()
+    bobSse.close()
+  } finally {
+    s.stop()
+  }
+})

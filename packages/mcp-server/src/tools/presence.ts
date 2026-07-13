@@ -15,6 +15,7 @@
  */
 import { broadcastEphemeral, type Presence, type ServerState } from "../state"
 import { requireToken } from "./session"
+import { forceQuiet } from "./typing"
 
 const now = () => Date.now()
 
@@ -117,7 +118,13 @@ export function presenceFocus(
   const touched = touch(state, args.sessionId, tenant, userId, args.agentKind)
   if (!touched) return NOT_OWNED
   const { presence, isNew } = touched
-  if (typeof args.invisible === "boolean") presence.invisible = args.invisible
+  if (typeof args.invisible === "boolean") {
+    // Transição visível→invisível ENQUANTO typing/idle: sweepTyping pula invisíveis, então sem uma
+    // transição final → quiet o indicador "digitando" congelaria pra sempre nos observadores da cell
+    // antiga. Emitida ANTES de esconder e ANTES do focusCell mudar (roteia p/ quem via o indicador).
+    if (args.invisible && !presence.invisible) forceQuiet(state, presence)
+    presence.invisible = args.invisible
+  }
   if (isNew && !presence.invisible) emitJoined(state, presence)
 
   // Atualização imediata do estado (presence.who reflete na hora); o BROADCAST de user.focused é
