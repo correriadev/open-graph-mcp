@@ -61,10 +61,11 @@ const NOT_OWNED = { ok: false as const, reasons: ["session not owned by caller"]
 
 /**
  * Cria (se ausente) ou toca a Presence da sessão. `isNew` sinaliza a primeira chamada
- * presence-registering. SEGURANÇA: sessionIds são sequenciais/adivinháveis (`s${counter}` global em
- * sse.ts) — a primeira chamada presence-registering LIGA o sessionId à identidade do token; qualquer
- * chamada posterior com identidade divergente (outro user OU outro tenant) retorna null e o caller
- * rejeita, sem tocar o estado da vítima nem emitir broadcast.
+ * presence-registering. SEGURANÇA: sessionIds são aleatórios (UUID, sse.ts) — capability opaca que
+ * só o dono do stream conhece; adivinhar/pré-registrar IDs de vítimas não é mais viável. Este
+ * binding sessionId→identidade do token na primeira chamada é defense in depth p/ a janela residual
+ * (ID vazado/compartilhado): chamada posterior com identidade divergente (outro user OU outro
+ * tenant) retorna null e o caller rejeita, sem tocar o estado da vítima nem emitir broadcast.
  */
 function touch(state: ServerState, sessionId: string, tenant: string, userId: string, agentKind?: string): { presence: Presence; isNew: boolean } | null {
   let p = state.presence.get(sessionId)

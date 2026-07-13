@@ -78,7 +78,6 @@ export type ServerState = {
   tokens: Map<string, TokenInfo>
   subscriptions: Map<string, Filter[]>
   sessions: Map<string, Session>
-  sessionCounter: number
   /** Contador de deltas por changeset p/ o agregador de 100ms (payload só count, spec §6). */
   deltaCounts: Map<string, { count: number; tenant: string; byUser: string }>
   lastTickHadEvents: boolean
@@ -108,7 +107,6 @@ export function createState(opts: {
     tokens: new Map(),
     subscriptions: new Map(),
     sessions: new Map(),
-    sessionCounter: 0,
     deltaCounts: new Map(),
     lastTickHadEvents: false,
     presence: new Map(),

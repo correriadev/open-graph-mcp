@@ -2,9 +2,10 @@ import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
 import { callTool, openSse, register } from "./helpers"
 
-// sessionIds are sequential and guessable (`s${counter}`, one global counter across tenants), so the
-// first presence-registering call must BIND the sessionId to the token's identity: any later call with a
-// different user (or a user from another tenant) is rejected without touching the victim's presence.
+// sessionIds are random (UUID) capabilities only the stream owner knows, but the first
+// presence-registering call additionally BINDS the sessionId to the token's identity (defense in depth
+// for a leaked/shared ID): any later call with a different user (or a user from another tenant) is
+// rejected without touching the victim's presence.
 test("presence.beat/focus with someone else's sessionId is rejected and leaves the victim untouched", async () => {
   const s = startServer({ focusDebounceMs: 10 })
   try {

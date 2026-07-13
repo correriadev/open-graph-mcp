@@ -40,7 +40,10 @@ export function handleEvents(state: ServerState, url: URL): Response {
   const since = Number(url.searchParams.get("since") ?? 0)
   const filters = parseFilterParam(url.searchParams.get("filter"))
   const tenant = tenantOf(state, url.searchParams.get("token"))
-  const id = `s${++state.sessionCounter}`
+  // Aleatório (não sequencial): o sessionId é uma capability opaca — só quem recebeu o frame
+  // session.created o conhece; um atacante não consegue mais adivinhar nem pré-registrar IDs de
+  // presença de vítimas (defense in depth com o binding sessionId→token em tools/presence.ts).
+  const id = `s_${crypto.randomUUID().slice(0, 12)}`
   const graphId = tenantGraph(state, tenant).graphId
 
   const stream = new ReadableStream<Uint8Array>({
