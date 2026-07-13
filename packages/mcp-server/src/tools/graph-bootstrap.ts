@@ -22,7 +22,7 @@ import { buildGraph, writeGraph } from "@open-graph-mcp/graph-core/build"
 import { bootReadiness, graphChecksum } from "@open-graph-mcp/graph-core/boot-gate"
 import { appendShard, type MetaRecord } from "@open-graph-mcp/graph-core/meta"
 import { DEFAULT_IGNORE } from "@open-graph-mcp/graph-core/scan"
-import { publish, type Pipeline, type ServerState } from "../state"
+import { publish, tenantGraph, DEFAULT_TENANT, type Pipeline, type ServerState } from "../state"
 
 const SOURCE_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs", ".md"])
 
@@ -99,13 +99,14 @@ export function bootstrap(state: ServerState, repoPath: string): BootstrapResult
   const graphId = createHash("sha256").update(`${root}:${graphChecksum(graph)}`).digest("hex").slice(0, 16)
   const stats = { ...graph.stats, pipeline }
 
-  if (state.graphId === graphId && state.graph) return { graphId, stats } // idempotente: nada mudou
+  const tg = tenantGraph(state, DEFAULT_TENANT)
+  if (tg.graphId === graphId && tg.graph) return { graphId, stats } // idempotente: nada mudou
 
   state.repoPath = root
-  state.graph = graph
-  state.graphId = graphId
-  state.pipeline = pipeline
-  state.bootstrappedAt = new Date().toISOString()
+  tg.graph = graph
+  tg.graphId = graphId
+  tg.pipeline = pipeline
+  tg.bootstrappedAt = new Date().toISOString()
   publish(state, { kind: "graph.bootstrapped", target: null, payload: { stats, pipeline } })
   return { graphId, stats }
 }
@@ -113,10 +114,11 @@ export function bootstrap(state: ServerState, repoPath: string): BootstrapResult
 /** graph.rebuild: re-lê .graph/ do disco e re-emite snapshot p/ todos (spec §4.2). */
 export function rebuild(state: ServerState): { ok: true; stats: Graph["stats"] & { pipeline: Pipeline } } {
   if (!state.repoPath) throw new Error("not bootstrapped")
+  const tg = tenantGraph(state, DEFAULT_TENANT)
   const graph = loadGraphJson(state.repoPath)
-  const pipeline = state.pipeline ?? "existing"
-  state.graph = graph
-  state.graphId = createHash("sha256").update(`${state.repoPath}:${graphChecksum(graph)}`).digest("hex").slice(0, 16)
+  const pipeline = tg.pipeline ?? "existing"
+  tg.graph = graph
+  tg.graphId = createHash("sha256").update(`${state.repoPath}:${graphChecksum(graph)}`).digest("hex").slice(0, 16)
   const stats = { ...graph.stats, pipeline }
   publish(state, { kind: "graph.rebuilt", target: null, payload: { stats } })
   return { ok: true, stats }

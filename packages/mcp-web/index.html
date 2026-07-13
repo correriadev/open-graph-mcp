@@ -25,6 +25,43 @@
       #panel #close { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #8a8f98; font-size: 18px; cursor: pointer; }
       #panel dt { color: #8a8f98; font-size: 11px; margin-top: 6px; }
       #panel dd { word-break: break-word; }
+      #panel pre { white-space: pre-wrap; word-break: break-word; font-size: 11px; }
+      /* topbar controls */
+      #name { margin-left: auto; background: #0d0f14; color: #e6e6eb; border: 1px solid #3a3f4b; border-radius: 4px; padding: 2px 6px; }
+      #who { color: #52c41a; }
+      #topbar button, #topbar a { background: #232733; color: #e6e6eb; border: 1px solid #3a3f4b; border-radius: 4px; padding: 3px 10px; cursor: pointer; text-decoration: none; }
+      #topbar button:hover, #topbar a:hover { background: #2c3140; }
+      /* modal */
+      #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 20; display: flex; align-items: center; justify-content: center; }
+      .dialog { background: #14171f; border: 1px solid #2c3140; border-radius: 8px; padding: 16px; width: 360px; }
+      .dialog h3 { margin-bottom: 10px; }
+      .dialog label { display: block; color: #8a8f98; font-size: 11px; margin: 8px 0 3px; }
+      .dialog input, .dialog select, #draft input, #draft textarea, #history input {
+        background: #0d0f14; color: #e6e6eb; border: 1px solid #3a3f4b; border-radius: 4px; padding: 3px 6px; font: inherit; }
+      .dialog input { width: 100%; }
+      .cellrow { display: flex; gap: 4px; margin-bottom: 4px; }
+      .cellrow select { flex: 1; }
+      .dialog button, #draft button, #modal button { background: #232733; color: #e6e6eb; border: 1px solid #3a3f4b; border-radius: 4px; padding: 4px 10px; cursor: pointer; margin-top: 6px; }
+      .row { display: flex; gap: 8px; margin-top: 10px; }
+      .err { color: #ff4d4f; font-size: 11px; margin-top: 6px; min-height: 14px; word-break: break-word; }
+      /* drafting panel */
+      #draft { position: fixed; top: 44px; right: 312px; width: 300px; max-height: calc(100% - 56px); overflow-y: auto;
+        background: rgba(20,23,31,0.97); border: 1px solid #2c3140; border-radius: 6px; padding: 12px; z-index: 9; }
+      #draft #dclose { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #8a8f98; font-size: 18px; cursor: pointer; }
+      #draft h3 { word-break: break-all; margin-bottom: 4px; }
+      #draft h4 { color: #8a8f98; font-size: 11px; text-transform: uppercase; margin: 12px 0 4px; }
+      #draft .intent { color: #8a8f98; margin-bottom: 8px; }
+      #draft .acts { display: flex; gap: 6px; }
+      #draft input, #draft textarea { width: 100%; margin-bottom: 4px; }
+      #draft #dlist { list-style: none; }
+      #draft #dlist li { padding: 3px 0; border-bottom: 1px solid #1c2029; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* history route */
+      #history { position: fixed; inset: 34px 0 0 0; background: #0d0f14; overflow-y: auto; padding: 12px; z-index: 8; }
+      #history .hhead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+      #history .hhead a { color: #8a8f98; margin-left: auto; }
+      #hlist { list-style: none; }
+      #hlist li { padding: 4px 6px; border-bottom: 1px solid #1c2029; cursor: pointer; }
+      #hlist li:hover { background: #1c2029; }
     </style>
   </head>
   <body>

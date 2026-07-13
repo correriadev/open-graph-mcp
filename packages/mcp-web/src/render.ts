@@ -1,6 +1,7 @@
 import type { Graph, GraphNode } from "@open-graph-mcp/graph-core/build"
-import { seedLayout, lodForZoom, type Point } from "@open-graph-mcp/graph-core/layout"
+import { seedLayout, lodForZoom, xForNode, yForLevel, type Point } from "@open-graph-mcp/graph-core/layout"
 import { Quadtree } from "@open-graph-mcp/graph-core/quadtree"
+import { colorForCsId, type Lock, type OpenChangeset } from "./ghosts"
 
 const BAND = 400 // domain column width in world units (mirrors layout.DOMAIN_BAND_WIDTH)
 const NODE_R = 3 // node dot radius, screen px
@@ -29,6 +30,9 @@ export class Renderer {
   private hoverNode: string | null = null
   private drift = new Map<string, string>() // nodeId → grade
   private drag: { x: number; y: number } | null = null
+  private sortedDomains: string[] = []
+  private ghosts: OpenChangeset[] = []
+  private locks: Lock[] = []
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -45,9 +49,17 @@ export class Renderer {
     this.graph = graph
     this.pos = seedLayout(graph)
     this.byId = new Map(graph.nodes.map((n) => [n.id, n]))
+    this.sortedDomains = [...new Set(graph.nodes.map((n) => n.domain).filter((d): d is string => d !== null))].sort()
     this.qt = Quadtree.fromPoints(graph.nodes.map((n) => ({ id: n.id, ...this.pos.get(n.id)! })))
     this.towers = this.buildTowers(graph)
     this.fitCamera()
+    this.dirty = true
+  }
+
+  /** Open changesets → ghost overlay; live locks → cell badges (spec §7.1, §7.2). */
+  setGhosts(changesets: Iterable<OpenChangeset>, locks: Iterable<Lock>) {
+    this.ghosts = [...changesets]
+    this.locks = [...locks]
     this.dirty = true
   }
 
@@ -249,6 +261,71 @@ export class Renderer {
     for (const t of this.towers) {
       if (!showNodes && t.domain !== this.hoverDomain) continue
       this.drawNodes(t)
+    }
+
+    this.drawGhosts()
+    this.drawLocks()
+  }
+
+  /** Cell "domain:level" → world center of that floor in its domain tower (null if no such tower). */
+  private cellCenter(cell: string): { x: number; y: number; domain: string; level: string } | null {
+    const i = cell.indexOf(":")
+    if (i < 0) return null
+    const domain = cell.slice(0, i)
+    const level = cell.slice(i + 1)
+    const t = this.towers.find((tw) => (tw.domain ?? "unassigned") === domain)
+    if (!t) return null
+    return { x: t.idx * BAND + BAND / 2, y: yForLevel(level), domain, level }
+  }
+
+  // ---- ghost overlay (spec §7.1): unadmitted deltas, never drawn as solid ---
+  private drawGhosts() {
+    const ctx = this.ctx
+    for (const cs of this.ghosts) {
+      const color = colorForCsId(cs.csId)
+      const domains = this.sortedDomains
+      cs.deltas.forEach((d, i) => {
+        const cell = d.domain != null && d.level ? `${d.domain}:${d.level}` : cs.cells[0]
+        const c = cell ? this.cellCenter(cell) : null
+        if (!c) return
+        // spread multiple deltas within the floor by hashing csId+idx (mirrors layout.xForNode)
+        const wx = xForNode(`${cs.csId}#${i}`, c.domain, domains)
+        const [sx, sy] = this.toScreen(wx, c.y)
+        ctx.save()
+        ctx.globalAlpha = 0.4
+        ctx.setLineDash([3, 2])
+        ctx.strokeStyle = color
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.arc(sx + 4, sy + 4, NODE_R + 1, 0, Math.PI * 2) // +4px offset: "visibly not yet real"
+        ctx.stroke()
+        ctx.restore()
+      })
+    }
+  }
+
+  // ---- lock badges (spec §7.2) ----------------------------------------------
+  private drawLocks() {
+    const ctx = this.ctx
+    ctx.font = "11px ui-monospace, monospace"
+    for (const lock of this.locks) {
+      const c = this.cellCenter(lock.cell)
+      if (!c) continue
+      const [sx, sy] = this.toScreen(c.x, c.y - 70)
+      const label = `🔒 ${lock.csId.slice(0, 6)} @ ${lock.holder}`
+      const w = ctx.measureText(label).width + 10
+      ctx.fillStyle = "rgba(20,23,31,0.9)"
+      ctx.fillRect(sx - w / 2, sy - 8, w, 16)
+      ctx.strokeStyle = colorForCsId(lock.csId)
+      ctx.lineWidth = 1
+      ctx.strokeRect(sx - w / 2, sy - 8, w, 16)
+      ctx.fillStyle = "#e6e6eb"
+      ctx.fillText(label, sx - w / 2 + 5, sy + 3)
+      if (c.domain === this.hoverDomain && lock.expiresAt) {
+        const mins = Math.max(0, Math.round((lock.expiresAt - Date.now()) / 60000))
+        ctx.fillStyle = "#8a8f98"
+        ctx.fillText(`expires in ${mins}m`, sx - w / 2 + 5, sy + 18)
+      }
     }
   }
 

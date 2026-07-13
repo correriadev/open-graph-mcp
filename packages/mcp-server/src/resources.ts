@@ -1,11 +1,13 @@
 /**
- * resources.ts — leitura MCP (spec §4.3). Conteúdos derivados do grafo publicado + log em memória.
- *   graph://snapshot            → grafo publicado + graphId/pipeline
- *   graph://history?since=N     → tail do log (envelopes com seq > N)
- *   graph://cell/{domain:level} → autoridade, nós, claim count, drift grade da célula
- *   graph://domain/{domain}     → todas as células daquele domain
+ * resources.ts — leitura MCP (spec §4.3 + Fase 2). Escopadas por tenant (param opcional `token`).
+ *   graph://snapshot                → grafo publicado do tenant + graphId/pipeline
+ *   graph://history?since=N         → tail do log de eventos do tenant (SQLite)
+ *   graph://cell/{domain:level}     → autoridade, nós, claim count, drift grade da célula
+ *   graph://domain/{domain}         → todas as células do domain
+ *   graph://changeset/{id}          → estado + deltas + participantes (Fase 2)
+ *   graph://changesets?status=open  → lista de changesets do tenant (Fase 2)
  */
-import type { ServerState } from "./state"
+import { DEFAULT_TENANT, tenantGraph, type EventEnvelope, type ServerState } from "./state"
 
 function driftGradeOf(nodes: { stale?: unknown }[]): "fresh" | "stale" | "gone" {
   let worst: "fresh" | "stale" | "gone" = "fresh"
@@ -16,50 +18,103 @@ function driftGradeOf(nodes: { stale?: unknown }[]): "fresh" | "stale" | "gone" 
   return worst
 }
 
-function cellState(state: ServerState, cellKey: string) {
+function cellState(state: ServerState, tenant: string, cellKey: string) {
+  const graph = tenantGraph(state, tenant).graph
   const cut = cellKey.lastIndexOf(":")
   const domain = cut > 0 ? cellKey.slice(0, cut) : cellKey
   const level = cut > 0 ? cellKey.slice(cut + 1) : ""
-  const nodes = (state.graph?.nodes ?? []).filter(
-    (n) => n.domain === domain && (level === "" || String(n.level) === `P${level}`),
-  )
+  const nodes = (graph?.nodes ?? []).filter((n) => n.domain === domain && (level === "" || String(n.level) === `P${level}`))
   const claims = new Set<string>()
   for (const n of nodes) for (const c of n.claims) claims.add(c)
+  const lock = state.db.query("SELECT cs_id, holder, expires_at FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, cellKey) as
+    | { cs_id: string; holder: string; expires_at: string }
+    | null
   return {
     cell: cellKey,
-    authority: state.graph?.authority?.[cellKey] ?? "source",
+    authority: graph?.authority?.[cellKey] ?? "source",
     nodeCount: nodes.length,
     claimCount: claims.size,
     driftGrade: driftGradeOf(nodes),
+    lock: lock ? { csId: lock.cs_id, holder: lock.holder, expiresAt: lock.expires_at } : null,
     nodes: nodes.map((n) => ({ id: n.id, file: n.file, anchor: n.anchor, stale: n.stale ?? "fresh" })),
   }
 }
 
-export function resolveResource(state: ServerState, uri: string): unknown {
+function historyEnvelopes(state: ServerState, tenant: string, since: number, limit: number): EventEnvelope[] {
+  const graphId = tenantGraph(state, tenant).graphId
+  const rows = state.db
+    .query("SELECT seq, ts, kind, target_id, payload FROM events WHERE tenant_id = ? AND seq > ? ORDER BY seq LIMIT ?")
+    .all(tenant, since, limit) as { seq: number; ts: string; kind: string; target_id: string | null; payload: string }[]
+  return rows.map((r) => ({
+    schemaVersion: 1,
+    seq: r.seq,
+    ts: r.ts,
+    kind: r.kind,
+    target: r.target_id,
+    payload: JSON.parse(r.payload ?? "{}"),
+    graphId,
+  }))
+}
+
+function changesetView(state: ServerState, tenant: string, csId: string) {
+  const cs = state.db.query("SELECT * FROM changesets WHERE tenant_id = ? AND id = ?").get(tenant, csId) as any
+  if (!cs) throw new Error(`unknown changeset: ${csId}`)
+  const deltas = state.db
+    .query("SELECT seq, kind, payload, created_at FROM cs_deltas WHERE tenant_id = ? AND cs_id = ? ORDER BY seq")
+    .all(tenant, csId) as { seq: number; kind: string; payload: string; created_at: string }[]
+  return {
+    id: cs.id,
+    intent: cs.intent,
+    status: cs.status,
+    parent: cs.parent,
+    openedBy: cs.opened_by,
+    openedAt: cs.opened_at,
+    closedAt: cs.closed_at,
+    admitSeq: cs.admit_seq,
+    cells: JSON.parse(cs.blast_cells ?? "[]"),
+    participants: [cs.opened_by],
+    deltas: deltas.map((d) => ({ seq: d.seq, kind: d.kind, payload: JSON.parse(d.payload), createdAt: d.created_at })),
+  }
+}
+
+export function resolveResource(state: ServerState, uri: string, tenant = DEFAULT_TENANT): unknown {
   const rest = uri.replace(/^graph:\/\//, "")
   const [pathPart, queryPart] = rest.split("?")
+  const params = new URLSearchParams(queryPart ?? "")
   const [head, ...tail] = pathPart.split("/")
   const arg = tail.join("/")
 
   switch (head) {
-    case "snapshot":
-      if (!state.graph) throw new Error("not bootstrapped")
-      return { graphId: state.graphId, pipeline: state.pipeline, bootstrappedAt: state.bootstrappedAt, lastEventSeq: state.lastEventSeq, graph: state.graph }
+    case "snapshot": {
+      const tg = tenantGraph(state, tenant)
+      if (!tg.graph) throw new Error("not bootstrapped")
+      return { graphId: tg.graphId, pipeline: tg.pipeline, bootstrappedAt: tg.bootstrappedAt, graph: tg.graph }
+    }
     case "history": {
-      const since = Number(new URLSearchParams(queryPart ?? "").get("since") ?? 0)
-      return { graphId: state.graphId, since, events: state.log.filter((e) => e.seq > since) }
+      const since = Number(params.get("since") ?? 0)
+      const limit = Number(params.get("limit") ?? 1000)
+      return { graphId: tenantGraph(state, tenant).graphId, since, events: historyEnvelopes(state, tenant, since, limit) }
     }
     case "cell":
       if (!arg) throw new Error("cell key required")
-      return cellState(state, arg)
+      return cellState(state, tenant, arg)
     case "domain": {
       if (!arg) throw new Error("domain required")
       const levels = new Set<string>()
-      for (const n of state.graph?.nodes ?? []) if (n.domain === arg) levels.add(String(n.level).replace(/^P/, ""))
-      return {
-        domain: arg,
-        cells: [...levels].sort().map((lvl) => cellState(state, `${arg}:${lvl}`)),
-      }
+      for (const n of tenantGraph(state, tenant).graph?.nodes ?? []) if (n.domain === arg) levels.add(String(n.level).replace(/^P/, ""))
+      return { domain: arg, cells: [...levels].sort().map((lvl) => cellState(state, tenant, `${arg}:${lvl}`)) }
+    }
+    case "changeset":
+      if (!arg) throw new Error("changeset id required")
+      return changesetView(state, tenant, arg)
+    case "changesets": {
+      const status = params.get("status")
+      const rows = (
+        status
+          ? state.db.query("SELECT id FROM changesets WHERE tenant_id = ? AND status = ? ORDER BY opened_at").all(tenant, status)
+          : state.db.query("SELECT id FROM changesets WHERE tenant_id = ? ORDER BY opened_at").all(tenant)
+      ) as { id: string }[]
+      return { changesets: rows.map((r) => changesetView(state, tenant, r.id)) }
     }
     default:
       throw new Error(`unknown resource: ${uri}`)
@@ -68,7 +123,9 @@ export function resolveResource(state: ServerState, uri: string): unknown {
 
 export const RESOURCE_LIST = [
   { uri: "graph://snapshot", name: "snapshot", mimeType: "application/json", description: "Published graph (nodes, edges, authority, stats)." },
-  { uri: "graph://history", name: "history", mimeType: "application/json", description: "Event log tail (?since=N)." },
-  { uri: "graph://cell/{cellKey}", name: "cell", mimeType: "application/json", description: "Cell state: authority, nodes, claim count, drift grade." },
+  { uri: "graph://history", name: "history", mimeType: "application/json", description: "Event log tail (?since=N&limit=)." },
+  { uri: "graph://cell/{cellKey}", name: "cell", mimeType: "application/json", description: "Cell state: authority, nodes, claim count, drift grade, lock." },
   { uri: "graph://domain/{domain}", name: "domain", mimeType: "application/json", description: "All cells of a domain." },
+  { uri: "graph://changeset/{id}", name: "changeset", mimeType: "application/json", description: "Changeset state, deltas and participants." },
+  { uri: "graph://changesets", name: "changesets", mimeType: "application/json", description: "Changesets of the tenant (?status=open)." },
 ]

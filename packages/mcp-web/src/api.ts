@@ -6,6 +6,14 @@ export function serverBase(): string {
 }
 
 let rpcId = 0
+let token: string | null = null
+
+export function setToken(t: string | null): void {
+  token = t
+}
+export function getToken(): string | null {
+  return token
+}
 
 async function rpc(method: string, params: unknown): Promise<any> {
   const res = await fetch(`${serverBase()}/mcp`, {
@@ -35,13 +43,36 @@ function unwrap(result: any): any {
 }
 
 export function toolCall(name: string, args: Record<string, unknown> = {}): Promise<any> {
-  return rpc("tools/call", { name, arguments: args }).then(unwrap)
+  // Every Phase-2 tool takes `token`; auto-inject the live one (server ignores it for Phase-1 tools).
+  const withToken = token && args.token === undefined ? { ...args, token } : args
+  return rpc("tools/call", { name, arguments: withToken }).then(unwrap)
 }
 
 export function resourceRead(uri: string): Promise<any> {
-  return rpc("resources/read", { uri }).then(unwrap)
+  // resources/read accepts an extra `token` param in Phase 2.
+  return rpc("resources/read", token ? { uri, token } : { uri }).then(unwrap)
 }
 
 export const readSnapshot = (): Promise<Graph> => resourceRead("graph://snapshot")
 export const rebuild = (): Promise<any> => toolCall("graph.rebuild", {})
 export const bootstrap = (repoPath: string): Promise<any> => toolCall("graph.bootstrap", { repoPath })
+
+// ---- Phase 2: session / changesets / audit --------------------------------
+
+export type Session = { token: string; userId: string; tenantId: string }
+
+export const registerSession = (name: string, tenant: string): Promise<Session> =>
+  toolCall("session.register", { name, tenant })
+
+export const openChangeset = (cells: string[], intent: string): Promise<any> =>
+  toolCall("changeset.open", { cells, intent })
+export const claimDelta = (csId: string, delta: { kind: string; payload: unknown }): Promise<any> =>
+  toolCall("changeset.claim", { csId, delta })
+export const commitChangeset = (csId: string): Promise<any> => toolCall("changeset.commit", { csId })
+export const abortChangeset = (csId: string): Promise<any> => toolCall("changeset.abort", { csId })
+export const extendChangeset = (csId: string): Promise<any> => toolCall("changeset.extend", { csId })
+export const listMine = (): Promise<any> => toolCall("changeset.list_mine", {})
+
+export const readChangeset = (csId: string): Promise<any> => resourceRead(`graph://changeset/${csId}`)
+export const readOpenChangesets = (): Promise<any> => resourceRead("graph://changesets?status=open")
+export const readHistory = (since = 0): Promise<any> => resourceRead(`graph://history?since=${since}`)

@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import type { Graph } from "@open-graph-mcp/graph-core/build"
 import { watch, type WatchEvent } from "@open-graph-mcp/graph-core/watch"
-import { publish, nodeCell, type ServerState } from "./state"
+import { appendEvent, nodeCell, tenantGraph, DEFAULT_TENANT, type ServerState } from "./state"
 
 /** WatchEvent herdado → envelope MCP (kinds da spec §4.4). */
 function toEnvelope(state: ServerState, e: WatchEvent): { kind: string; target: string | null; payload: Record<string, unknown> } {
@@ -33,34 +33,37 @@ function toEnvelope(state: ServerState, e: WatchEvent): { kind: string; target: 
   return { kind: "drift.node", target: e.id, payload: { ...base, refKind: e.kind, ...(cell ?? {}) } }
 }
 
-export async function tick(state: ServerState): Promise<WatchEvent[]> {
+export async function tick(state: ServerState, tenant = DEFAULT_TENANT): Promise<WatchEvent[]> {
   if (!state.repoPath) return []
   const { newEvents } = await watch(state.repoPath)
 
   // watch carimbou stale/demotion no graph.json — recarrega p/ o snapshot refletir.
   try {
-    state.graph = JSON.parse(readFileSync(path.join(state.repoPath, ".graph", "graph.json"), "utf8")) as Graph
+    tenantGraph(state, tenant).graph = JSON.parse(readFileSync(path.join(state.repoPath, ".graph", "graph.json"), "utf8")) as Graph
   } catch {
     /* graph.json ausente/malformado — mantém o corrente */
   }
 
-  for (const e of newEvents) publish(state, toEnvelope(state, e))
+  for (const e of newEvents) {
+    const env = toEnvelope(state, e)
+    appendEvent(state, tenant, { kind: env.kind, targetId: env.target, payload: env.payload })
+  }
 
   if (newEvents.length) state.lastTickHadEvents = true
   else if (state.lastTickHadEvents) {
-    publish(state, { kind: "watch.converged", target: null, payload: {} })
+    appendEvent(state, tenant, { kind: "watch.converged", targetId: null, payload: {} })
     state.lastTickHadEvents = false
   }
   return newEvents
 }
 
-export function startWatchLoop(state: ServerState, intervalMs = 5000): () => void {
+export function startWatchLoop(state: ServerState, intervalMs = 5000, tenant = DEFAULT_TENANT): () => void {
   let running = false
   const timer = setInterval(async () => {
     if (running) return
     running = true
     try {
-      await tick(state)
+      await tick(state, tenant)
     } catch {
       /* um ciclo que falha não derruba o loop */
     } finally {

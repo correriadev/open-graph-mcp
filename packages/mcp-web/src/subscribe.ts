@@ -1,4 +1,4 @@
-import { serverBase } from "./api"
+import { getToken, serverBase } from "./api"
 
 export type Envelope = {
   schemaVersion: 1
@@ -76,7 +76,9 @@ export class EventStream {
   }
 
   private open() {
-    this.es = new EventSource(`${serverBase()}/events?since=${this.lastSeq}`)
+    const token = getToken()
+    const tokenQ = token ? `&token=${encodeURIComponent(token)}` : ""
+    this.es = new EventSource(`${serverBase()}/events?since=${this.lastSeq}${tokenQ}`)
     this.es.onopen = () => {
       this.backoff = 500
       this.h.onOpen()

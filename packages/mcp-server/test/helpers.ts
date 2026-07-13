@@ -23,8 +23,14 @@ export async function rpc(base: string, method: string, params?: unknown): Promi
 export const callTool = (base: string, name: string, args?: unknown) =>
   rpc(base, "tools/call", { name, arguments: args ?? {} }).then((r) => r.structuredContent)
 
-export const readResource = (base: string, uri: string) =>
-  rpc(base, "resources/read", { uri }).then((r) => JSON.parse(r.contents[0].text))
+export const readResource = (base: string, uri: string, token?: string) =>
+  rpc(base, "resources/read", { uri, token }).then((r) => JSON.parse(r.contents[0].text))
+
+export const register = (base: string, name: string, tenant?: string) =>
+  callTool(base, "session.register", { name, tenant }) as Promise<{ token: string; userId: string; tenantId: string }>
+
+/** Bootstrap the fixture to produce a Phase-1 .graph/, so graph.import has something to migrate. */
+export const buildPhase1Graph = (base: string, repoPath: string) => callTool(base, "graph.bootstrap", { repoPath })
 
 export type SseClient = {
   events: any[]
@@ -33,8 +39,10 @@ export type SseClient = {
 }
 
 /** Cliente SSE cru (fetch + parser de frames) — sem depender de EventSource global. */
-export async function openSse(base: string, since = 0): Promise<SseClient> {
-  const res = await fetch(`${base}/events?since=${since}`)
+export async function openSse(base: string, since = 0, token?: string): Promise<SseClient> {
+  const q = new URLSearchParams({ since: String(since) })
+  if (token) q.set("token", token)
+  const res = await fetch(`${base}/events?${q}`)
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   const events: any[] = []

@@ -7,11 +7,19 @@
  * (ADR nota 2025). Métodos: initialize, tools/list, tools/call, resources/list, resources/read.
  */
 import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js"
-import type { Filter, ServerState } from "./state"
+import { DEFAULT_TENANT, type Filter, type ServerState } from "./state"
 import { bootstrap, rebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
 import { subscribe } from "./tools/graph-subscribe"
+import { sessionRegister } from "./tools/session"
+import { graphImport } from "./tools/graph-import"
+import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine } from "./tools/changeset"
 import { resolveResource, RESOURCE_LIST } from "./resources"
+
+function tenantOf(state: ServerState, token: unknown): string {
+  if (typeof token !== "string" || !token) return DEFAULT_TENANT
+  return state.tokens.get(token)?.tenantId ?? DEFAULT_TENANT
+}
 
 type RpcRequest = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: any }
 type RpcResponse = { jsonrpc: "2.0"; id: string | number | null; result?: unknown; error?: { code: number; message: string } }
@@ -46,6 +54,34 @@ const TOOLS = [
     },
   },
   { name: "graph.rebuild", description: "Re-read .graph/ and re-emit snapshot to all subscribers.", inputSchema: { type: "object", properties: {} } },
+  {
+    name: "session.register",
+    description: "Register a session under a tenant. Returns { token, userId, tenantId }. Token is in-memory (lost on restart).",
+    inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" }, tenant: { type: "string" } } },
+  },
+  {
+    name: "graph.import",
+    description: "Migrate a Phase-1 .graph/ into the authoritative SQLite for the caller's tenant (idempotent).",
+    inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" }, repoPath: { type: "string" } } },
+  },
+  {
+    name: "changeset.open",
+    description: "Open a turn locking the given β/new cells (pessimistic, atomic). Reuses cs for same holder.",
+    inputSchema: { type: "object", required: ["token", "cells", "intent"], properties: { token: { type: "string" }, cells: { type: "array", items: { type: "string" } }, intent: { type: "string" } } },
+  },
+  {
+    name: "changeset.claim",
+    description: "Add a delta (claim.add | authority.flip) to an open changeset. Runs the incremental gate.",
+    inputSchema: { type: "object", required: ["token", "csId", "delta"], properties: { token: { type: "string" }, csId: { type: "string" }, delta: { type: "object" } } },
+  },
+  {
+    name: "changeset.commit",
+    description: "Run the final gate atomically and admit the changeset, or abort it with reasons.",
+    inputSchema: { type: "object", required: ["token", "csId"], properties: { token: { type: "string" }, csId: { type: "string" } } },
+  },
+  { name: "changeset.abort", description: "Discard an open changeset and release its locks.", inputSchema: { type: "object", required: ["token", "csId"], properties: { token: { type: "string" }, csId: { type: "string" } } } },
+  { name: "changeset.extend", description: "Renew the TTL of an open changeset's locks.", inputSchema: { type: "object", required: ["token", "csId"], properties: { token: { type: "string" }, csId: { type: "string" } } } },
+  { name: "changeset.list_mine", description: "List the caller's open changesets (reattach after reconnect).", inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" } } } },
 ]
 
 function callTool(state: ServerState, name: string, args: any): unknown {
@@ -53,11 +89,27 @@ function callTool(state: ServerState, name: string, args: any): unknown {
     case "graph.bootstrap":
       return bootstrap(state, args?.repoPath ?? state.repoPath)
     case "graph.query":
-      return query(state, { terms: args.terms, domain: args.domain, layer: args.layer, limit: args.limit })
+      return query(state, { terms: args.terms, domain: args.domain, layer: args.layer, limit: args.limit }, tenantOf(state, args.token))
     case "graph.subscribe":
       return subscribe(state, args.sessionId, (args.filters ?? []) as Filter[])
     case "graph.rebuild":
       return rebuild(state)
+    case "session.register":
+      return sessionRegister(state, args)
+    case "graph.import":
+      return graphImport(state, args)
+    case "changeset.open":
+      return changesetOpen(state, args)
+    case "changeset.claim":
+      return changesetClaim(state, args)
+    case "changeset.commit":
+      return changesetCommit(state, args)
+    case "changeset.abort":
+      return changesetAbort(state, args)
+    case "changeset.extend":
+      return changesetExtend(state, args)
+    case "changeset.list_mine":
+      return changesetListMine(state, args)
     default:
       throw new Error(`unknown tool: ${name}`)
   }
@@ -80,7 +132,7 @@ function dispatch(state: ServerState, method: string, params: any): unknown {
     case "resources/list":
       return { resources: RESOURCE_LIST }
     case "resources/read": {
-      const contents = resolveResource(state, params.uri)
+      const contents = resolveResource(state, params.uri, tenantOf(state, params.token))
       return { contents: [{ uri: params.uri, mimeType: "application/json", text: JSON.stringify(contents) }] }
     }
     default:
