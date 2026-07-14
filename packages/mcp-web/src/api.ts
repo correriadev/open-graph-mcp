@@ -76,3 +76,13 @@ export const listMine = (): Promise<any> => toolCall("changeset.list_mine", {})
 export const readChangeset = (csId: string): Promise<any> => resourceRead(`graph://changeset/${csId}`)
 export const readOpenChangesets = (): Promise<any> => resourceRead("graph://changesets?status=open")
 export const readHistory = (since = 0): Promise<any> => resourceRead(`graph://history?since=${since}`)
+
+// ---- Phase 3: presence -------------------------------------------------------
+
+export type WhoUser = { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number }
+
+export const presenceBeat = (sessionId: string, agentKind = "web"): Promise<any> =>
+  toolCall("presence.beat", { sessionId, agentKind })
+export const presenceFocus = (sessionId: string, cell: string | null, invisible?: boolean): Promise<any> =>
+  toolCall("presence.focus", { sessionId, cell, ...(invisible === undefined ? {} : { invisible }) })
+export const presenceWho = (): Promise<{ users: WhoUser[] }> => toolCall("presence.who", {})

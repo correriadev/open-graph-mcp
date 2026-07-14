@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { classifyEnvelope, parseEnvelope, type Envelope } from "../src/subscribe"
+import { classifyEnvelope, parseEnvelope, parseFrame, type Envelope } from "../src/subscribe"
 
 const env = (over: Partial<Envelope> = {}): Envelope => ({
   schemaVersion: 1,
@@ -46,4 +46,23 @@ test("classifyEnvelope exempts ephemeral envelopes from seq dedup (presence cont
   expect(classifyEnvelope(env({ seq: 5 }), "g1", 5)).toBe("duplicate")
   // graphId reset still wins over the ephemeral exemption.
   expect(classifyEnvelope(env({ kind: "user.focused", seq: 5, ephemeral: true, graphId: "g2" }), "g1", 5)).toBe("reset")
+})
+
+test("parseFrame reads the named SSE event + its data line (server names frames after the envelope kind)", () => {
+  expect(parseFrame(`event: drift.node\ndata: ${JSON.stringify(env())}`)).toEqual({
+    event: "drift.node",
+    data: JSON.stringify(env()),
+  })
+})
+
+test("parseFrame defaults to 'message' when no event: line is present", () => {
+  expect(parseFrame(`data: ${JSON.stringify(env())}`)).toEqual({ event: "message", data: JSON.stringify(env()) })
+})
+
+test("parseFrame joins multi-line data: fields and returns null with no data at all", () => {
+  expect(parseFrame("event: session.created\ndata: {\"sessionId\":\ndata: \"s1\"}")).toEqual({
+    event: "session.created",
+    data: '{"sessionId":\n"s1"}',
+  })
+  expect(parseFrame("event: ping\n")).toBeNull()
 })
