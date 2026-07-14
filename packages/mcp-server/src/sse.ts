@@ -4,7 +4,7 @@
  * anônima no tenant "default" (compat Fase 1). Primeiro frame: `session.created { sessionId, graphId }`.
  * Depois o tail do log (SQLite) desde N (filtrado) e, ao vivo, cada evento novo do tenant que casa o filtro.
  */
-import { DEFAULT_TENANT, tenantGraph, type EventEnvelope, type Filter, type ServerState } from "./state"
+import { DEFAULT_TENANT, nextSeq, tenantGraph, type EventEnvelope, type Filter, type ServerState } from "./state"
 import { isRecipient } from "./affinity"
 import { presenceSessionClosed } from "./tools/presence"
 
@@ -45,6 +45,10 @@ export function handleEvents(state: ServerState, url: URL): Response {
   // Fase 3 §6.1: identidade do token (se houver) fica presa à Session p/ o router de afinidade rotear
   // por USUÁRIO (holder, atacante de lock.denied) sem depender de presence.beat/focus ter sido chamado.
   const userId = token ? state.tokens.get(token)?.userId ?? null : null
+  // Fase 3 §9.1: um token presente que o processo ATUAL não reconhece é o sinal pragmático de restart —
+  // tokens são em memória (spec §9), então um restart os apaga; um cliente que reconecta trazendo um
+  // token pré-restart cai aqui. Sem token nenhum (sessão nova, nunca teve nada a perder) não conta.
+  const restartPending = !!token && !state.tokens.has(token)
   // Aleatório (não sequencial): o sessionId é uma capability opaca — só quem recebeu o frame
   // session.created o conhece; um atacante não consegue mais adivinhar nem pré-registrar IDs de
   // presença de vítimas (defense in depth com o binding sessionId→token em tools/presence.ts).
@@ -60,11 +64,27 @@ export function handleEvents(state: ServerState, url: URL): Response {
           /* cliente desconectou entre o match e o enqueue */
         }
       }
-      const session = { id, tenant, filters, push, userId }
+      const session = { id, tenant, filters, push, userId, restartPending }
       state.sessions.set(id, session)
       state.subscriptions.set(id, filters)
 
       controller.enqueue(frame("session.created", { sessionId: id, graphId, tenant }))
+      // Fase 3 §9.1: broadcast de restart PRA ESTA sessão (não roteado — é per-connection, calculado
+      // acima). Efêmero (reusa o seq durável corrente, igual toda presença): não é replay de histórico,
+      // é um aviso "isto é uma conexão nova pós-restart". Web já trata este kind cru (Task 4); a versão
+      // texto pra non-web é emitida depois, em presence.ts `touch()`, quando o agentKind é conhecido.
+      if (restartPending) {
+        push({
+          schemaVersion: 1,
+          seq: nextSeq(state, tenant) - 1,
+          ephemeral: true,
+          ts: new Date().toISOString(),
+          kind: "server.restarted",
+          target: null,
+          payload: {},
+          graphId,
+        })
+      }
       // tail do log do tenant desde `since` — roteado pela MESMA afinidade do live (não só o filtro cru):
       // sem isto, um lock.denied histórico vazaria p/ qualquer reconexão cujo filtro casasse por acidente.
       const rows = state.db

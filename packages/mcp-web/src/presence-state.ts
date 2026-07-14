@@ -36,20 +36,28 @@ export function initials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
-export type WhoUser = { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number }
+export type WhoUser = { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number; lastSeen?: number }
 
 export class PresenceStore {
   readonly users = new Map<string, PresenceEntry>()
 
-  /** Fold one ephemeral `user.*` envelope. Unknown kinds are ignored. */
+  /**
+   * Fold one ephemeral `user.*` envelope. Unknown kinds are ignored.
+   *
+   * `lastSeen` (Task 4 review): `user.joined`/`user.focused` now carry the SERVER's ms timestamp in
+   * their payload (presence.ts) — prefer that over the local `now` so the dotColor thresholds (30s/60s,
+   * below) measure staleness from the server's clock. `user.typing_state` doesn't carry one (it's a
+   * pure state transition, not a liveness signal); `now` remains the fallback there and whenever a
+   * payload happens to omit it.
+   */
   apply(env: { kind: string; payload: any }, now = Date.now()): void {
     const p = env.payload ?? {}
     switch (env.kind) {
       case "user.joined":
-        this.upsert(p.userId, { name: p.name ?? p.userId, agentKind: p.agentKind ?? "web" }, now)
+        this.upsert(p.userId, { name: p.name ?? p.userId, agentKind: p.agentKind ?? "web", lastSeen: p.lastSeen }, now)
         break
       case "user.focused":
-        this.upsert(p.userId, { focusCell: p.cell ?? null }, now)
+        this.upsert(p.userId, { focusCell: p.cell ?? null, lastSeen: p.lastSeen }, now)
         break
       case "user.left":
         this.users.delete(p.userId)
@@ -74,7 +82,7 @@ export class PresenceStore {
       lastSeen: now,
       typingState: "quiet",
     }
-    this.users.set(userId, { ...base, ...patch, userId, lastSeen: now })
+    this.users.set(userId, { ...base, ...patch, userId, lastSeen: patch.lastSeen ?? now })
   }
 
   /**
@@ -94,7 +102,7 @@ export class PresenceStore {
         agentKind: u.agentKind,
         focusCell: u.focusCell,
         openCount: u.openCount,
-        lastSeen: now,
+        lastSeen: u.lastSeen ?? now, // server-provided (presence.who, Task 4 review) — now only as fallback
         typingState: cur?.typingState ?? "quiet",
       })
     }

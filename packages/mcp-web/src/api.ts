@@ -79,7 +79,7 @@ export const readHistory = (since = 0): Promise<any> => resourceRead(`graph://hi
 
 // ---- Phase 3: presence -------------------------------------------------------
 
-export type WhoUser = { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number }
+export type WhoUser = { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number; lastSeen: number }
 
 export const presenceBeat = (sessionId: string, agentKind = "web"): Promise<any> =>
   toolCall("presence.beat", { sessionId, agentKind })

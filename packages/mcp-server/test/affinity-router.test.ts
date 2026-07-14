@@ -5,7 +5,7 @@ import type { EventEnvelope, Filter, Presence, Session } from "../src/state"
 const TENANT = "acme"
 
 function session(id: string, filters: Filter[], userId: string | null = null): Session {
-  return { id, tenant: TENANT, filters, userId, push: () => {} }
+  return { id, tenant: TENANT, filters, userId, push: () => {}, restartPending: false }
 }
 
 function presence(sessionId: string, userId: string, focusCell: string | null): Presence {
@@ -119,7 +119,7 @@ test("user.joined: broadcast to everyone regardless of filter (unchanged)", () =
 })
 
 test("tenant isolation: sessions in another tenant never receive, even with a matching filter", () => {
-  const otherTenantSession: Session = { id: "other", tenant: "other-tenant", filters: [{ kind: "cell", cell: "ui:4" }], userId: null, push: () => {} }
+  const otherTenantSession: Session = { id: "other", tenant: "other-tenant", filters: [{ kind: "cell", cell: "ui:4" }], userId: null, push: () => {}, restartPending: false }
   const mixed = new Map([[S1.id, S1], [otherTenantSession.id, otherTenantSession]])
   const e = env("lock.acquired", "ui:4", { cell: "ui:4", csId: "cs_1", domain: "ui", holder: "u_holder" })
   expect(route(e, mixed, new Map(), TENANT)).toEqual(new Set(["s1"]))

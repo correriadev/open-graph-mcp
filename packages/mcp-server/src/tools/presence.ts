@@ -16,6 +16,7 @@
 import { broadcastEphemeral, type Presence, type ServerState } from "../state"
 import { requireToken } from "./session"
 import { forceQuiet } from "./typing"
+import { pushSystemMessage } from "../system-message"
 
 const now = () => Date.now()
 
@@ -35,7 +36,11 @@ function emitJoined(state: ServerState, p: Presence): void {
     targetKind: "session",
     targetId: p.sessionId,
     byUser: p.userId,
-    payload: { sessionId: p.sessionId, userId: p.userId, name: userName(state, p.tenant, p.userId), agentKind: p.agentKind },
+    // lastSeen (Fase 3 review Task 4): server ms timestamp — o cliente web usa isto (em vez de um `now`
+    // local) pro dotColor de staleness (30s/60s, presence-state.ts) refletir o relógio do SERVER, não
+    // "quando meu browser recebeu o frame" (que já é quase a mesma coisa em SSE ao vivo, mas diverge no
+    // replay do tail e evita drift de relógio entre abas).
+    payload: { sessionId: p.sessionId, userId: p.userId, name: userName(state, p.tenant, p.userId), agentKind: p.agentKind, lastSeen: p.lastSeen },
   })
 }
 
@@ -93,6 +98,17 @@ function touch(state: ServerState, sessionId: string, tenant: string, userId: st
     if (agentKind) p.agentKind = agentKind
     p.openCsIds = openCsIdsFor(state, tenant, userId)
   }
+  // Fase 3 §8/§9.1: consome o sinal de restart da Session (sse.ts) assim que o agentKind é conhecido —
+  // primeira chamada presence-registering desta sessão desde a reconexão. Só non-web recebe a versão
+  // texto (web já trata o envelope `server.restarted` cru — Task 4); consumido uma vez (flag limpa)
+  // pra não repetir em beats subsequentes.
+  const session = state.sessions.get(sessionId)
+  if (session?.restartPending) {
+    session.restartPending = false
+    if (p.agentKind !== "web") {
+      pushSystemMessage(state, tenant, session, "[open-graph] Servidor reiniciou — sua presença foi resetada; redeclare foco.")
+    }
+  }
   return { presence: p, isNew }
 }
 
@@ -144,7 +160,7 @@ export function presenceFocus(
       targetKind: "cell",
       targetId: cur.focusCell,
       byUser: cur.userId,
-      payload: { sessionId, userId: cur.userId, cell: cur.focusCell },
+      payload: { sessionId, userId: cur.userId, cell: cur.focusCell, lastSeen: cur.lastSeen },
     })
   }, state.focusDebounceMs)
   state.focusDebounce.set(sessionId, timer)
@@ -154,9 +170,9 @@ export function presenceFocus(
 export function presenceWho(
   state: ServerState,
   args: { token: string; cell?: string; cs_id?: string },
-): { users: { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number }[] } {
+): { users: { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number; lastSeen: number }[] } {
   const { tenantId: tenant } = requireToken(state, args.token)
-  const users: { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number }[] = []
+  const users: { id: string; name: string; agentKind: string; focusCell: string | null; openCount: number; lastSeen: number }[] = []
   // ponytail: N+1 — uma query de openCsIds (e uma de name) por presença. Teto: ~50 sessões (DoD Fase 3)
   // sobre SQLite local em memória de página — irrelevante. Se o teto subir, trocar por 1 query agregada.
   for (const p of state.presence.values()) {
@@ -164,7 +180,9 @@ export function presenceWho(
     p.openCsIds = openCsIdsFor(state, tenant, p.userId)
     if (args.cell && p.focusCell !== args.cell) continue
     if (args.cs_id && !p.openCsIds.includes(args.cs_id)) continue
-    users.push({ id: p.userId, name: userName(state, tenant, p.userId), agentKind: p.agentKind, focusCell: p.focusCell, openCount: p.openCsIds.length })
+    // lastSeen (Task 4 review): server ms timestamp p/ o cliente web calcular o dotColor de staleness
+    // (30s/60s) a partir do relógio do server, não de um `now()` local do poll.
+    users.push({ id: p.userId, name: userName(state, tenant, p.userId), agentKind: p.agentKind, focusCell: p.focusCell, openCount: p.openCsIds.length, lastSeen: p.lastSeen })
   }
   return { users }
 }

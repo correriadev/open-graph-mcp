@@ -10,6 +10,7 @@ import type { Database } from "bun:sqlite"
 import type { Graph } from "@open-graph-mcp/graph-core/build"
 import { openDb, write } from "./db"
 import { route } from "./affinity"
+import { renderSystemMessage, pushSystemMessage } from "./system-message"
 
 export const DEFAULT_TENANT = "default"
 export const DEFAULT_TTL_MS = 30 * 60 * 1000
@@ -49,6 +50,14 @@ export type Session = {
    *  afinidade usa isto p/ rotear por USUÁRIO (holder de changeset.delta, atacante de lock.denied) sem
    *  depender de Presence (que só existe depois de um presence.beat/focus explícito). */
   userId: string | null
+  /** true = esta sessão SSE nasceu de uma reconexão com um token que o processo atual não reconhece
+   *  (spec §9.1: tokens são em memória — um restart do server os apaga). Sinal pragmático de "o server
+   *  reiniciou desde a última vez que este cliente se conectou", sem precisar de um bootId dedicado:
+   *  se o cliente apresenta um token e o processo não o conhece, ou o token expirou/é lixo, ou (o caso
+   *  que nos interessa) o processo reiniciou. Consumido uma vez por presence.ts `touch()` — assim que o
+   *  agentKind é conhecido (primeiro beat/focus) — pra decidir se emite o system.message de restart
+   *  (só non-web; web já trata o envelope `server.restarted` cru, Task 4). */
+  restartPending: boolean
 }
 
 /** Token em memória → identidade. Some no restart; changesets persistem no SQLite (spec §9). */
@@ -186,8 +195,24 @@ export function nextSeq(state: ServerState, tenant: string): number {
 export function pushEnvelope(state: ServerState, tenant: string, env: EventEnvelope): void {
   for (const id of route(env, state.sessions, state.presence, tenant)) {
     const s = state.sessions.get(id)
-    if (s) s.push(env)
+    if (!s) continue
+    s.push(env)
+    maybeSystemMessage(state, tenant, env, s)
   }
+}
+
+/**
+ * Fase 3 §8.1: pra cada destinatário que o affinity router JÁ decidiu (route(), acima) — nenhuma rota
+ * nova — renderiza uma versão texto do evento e empurra como `system.message` SE essa sessão for de um
+ * agentKind não-web. `system.message` nunca entra aqui de novo (evita eco): renderSystemMessage não
+ * conhece esse kind vindo de pushEnvelope (só é usado diretamente por sse.ts pro caso server.restarted).
+ */
+function maybeSystemMessage(state: ServerState, tenant: string, env: EventEnvelope, s: Session): void {
+  if (env.kind === "system.message") return
+  const presence = state.presence.get(s.id)
+  if (!presence || presence.agentKind === "web") return
+  const text = renderSystemMessage(state, tenant, env, presence.userId)
+  if (text) pushSystemMessage(state, tenant, s, text, env.target)
 }
 
 export type EventInput = {
