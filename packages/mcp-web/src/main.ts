@@ -17,7 +17,11 @@ const CS_KINDS = new Set([
 ])
 const LEVELS = ["P1", "P2", "P3", "P4", "P5"]
 const PRESENCE_KINDS = new Set(["user.joined", "user.focused", "user.left", "user.typing_state"])
-const esc = (s: string) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!)
+const esc = (s: string) =>
+  String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  )
 
 document.body.innerHTML = `
 <div id="topbar">

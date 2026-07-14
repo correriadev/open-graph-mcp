@@ -57,7 +57,12 @@ export function parseFrame(raw: string): { event: string; data: string } | null 
   let data: string | null = null
   for (const line of raw.split("\n")) {
     if (line.startsWith("event:")) event = line.slice(6).trim()
-    else if (line.startsWith("data:")) data = (data === null ? "" : `${data}\n`) + line.slice(5).trim()
+    else if (line.startsWith("data:")) {
+      // SSE strips exactly ONE leading space after "data:", not arbitrary whitespace — full trim()
+      // would corrupt payloads whose significant content is (or ends with) whitespace.
+      const value = line.slice(5).replace(/^ /, "")
+      data = (data === null ? "" : `${data}\n`) + value
+    }
   }
   return data === null ? null : { event, data }
 }
@@ -90,6 +95,7 @@ export class EventStream {
 
   stop() {
     this.closed = true
+    this.generation++ // suppress the stale read loop's catch (its abort rejection must not reconnect)
     this.abort?.abort()
     this.abort = null
   }
@@ -175,6 +181,10 @@ export class EventStream {
   }
 
   private reconnect(delay: number) {
+    // Bump generation BEFORE aborting: the in-flight read loop's reader.read() will reject, but its
+    // catch guards on `gen === this.generation` — now false — so it won't fire a second onDisconnect
+    // (which would leak an orphaned connection by overwriting this.abort without aborting the first).
+    this.generation++
     this.abort?.abort()
     this.abort = null
     if (this.closed) return

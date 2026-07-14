@@ -66,3 +66,10 @@ test("parseFrame joins multi-line data: fields and returns null with no data at 
   })
   expect(parseFrame("event: ping\n")).toBeNull()
 })
+
+test("parseFrame strips only ONE leading space from data (SSE spec), preserving further whitespace", () => {
+  // "data:  x " → drop one space → " x " (leading space + trailing space significant)
+  expect(parseFrame("data:  x ")).toEqual({ event: "message", data: " x " })
+  // "data:x" (no space) is left intact
+  expect(parseFrame("data:x")).toEqual({ event: "message", data: "x" })
+})
