@@ -10,8 +10,9 @@
  */
 import { createHash } from "node:crypto"
 import { write } from "../db"
-import { appendEvent, pushEnvelope, tenantGraph, type EventEnvelope, type ServerState } from "../state"
+import { abortedPayload, appendEvent, pushEnvelope, tenantGraph, type EventEnvelope, type ServerState } from "../state"
 import { requireToken } from "./session"
+import { touchDelta } from "./typing"
 import { readClaims, readNodes, authorityOf, makeReadFile, writeClaim, writeAuthority, maxClaimSeq } from "../store"
 import { incrementalGate, finalGate, cellOfClaim, type Delta } from "../gates"
 
@@ -71,8 +72,10 @@ export function changesetOpen(state: ServerState, args: { token: string; cells: 
       const lock = state.db.query("SELECT cs_id, holder FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, cell) as { cs_id: string; holder: string } | null
       if (!lock) continue
       if (lock.holder !== userId) {
-        // auditoria só (não broadcast, spec §6)
-        appendEvent(state, tenant, { kind: "lock.denied", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, attempted_by: userId, holder: lock.holder, csId: lock.cs_id } }, { broadcast: false })
+        // Fase 3 §6.1: lock.denied roteia SÓ p/ quem tentou (nunca broadcast) — o router de afinidade
+        // (affinity.ts) restringe isto por userId; `defer` só adia o push p/ depois do commit da tx,
+        // igual todo evento gravado aqui dentro (INV-2).
+        envs.push(appendEvent(state, tenant, { kind: "lock.denied", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, attempted_by: userId, holder: lock.holder, csId: lock.cs_id } }, { defer: true }))
         const exp = (state.db.query("SELECT expires_at FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, cell) as { expires_at: string }).expires_at
         return { ok: false, reason: "cell_locked", cell, holder: lock.holder, csId: lock.cs_id, expiresAt: exp, __tenant: tenant }
       }
@@ -111,6 +114,9 @@ export type ClaimResult = { ok: true; warnings: string[]; __tenant?: string } | 
 
 export function changesetClaim(state: ServerState, args: { token: string; csId: string; delta: Delta }): ClaimResult {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
+  // Fase 3 §5.1: TODA chamada de claim atualiza Presence.lastDeltaAt do user (mesmo se o gate rejeitar
+  // depois) — é o sinal de "está mexendo", não um efeito colateral do sucesso da mutação.
+  touchDelta(state, tenant, userId)
   return inTx(state, (): ClaimResult => {
     const cs = loadCs(state, tenant, args.csId)
     if (!cs || cs.status !== "open") return { ok: false, reasons: [`changeset ${args.csId} not open`], __tenant: tenant }
@@ -151,7 +157,7 @@ export function changesetCommit(state: ServerState, args: { token: string; csId:
       // vermelho → rollback total: nenhum delta persiste como claim; changeset 'aborted' com reasons.
       write(state.db, state.stateDir, tenant, "changesets", { tenant_id: tenant, id: cs.id, intent: cs.intent, parent: null, status: "aborted", opened_by: cs.opened_by, opened_at: cs.opened_at, closed_at: now(), base_seq: null, admit_seq: null, blast_cells: cs.blast_cells })
       const released = releaseLocks(state, tenant, args.csId)
-      envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: { csId: cs.id, reason: "rejected", cells, reasons: final.reasons } }, { defer: true }))
+      envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: abortedPayload(cs, "rejected", cells, { reasons: final.reasons }) }, { defer: true }))
       for (const cell of released) envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, csId: cs.id, reason: "rejected" } }, { defer: true }))
       return { ok: false, reasons: final.reasons, __tenant: tenant }
     }
@@ -196,7 +202,7 @@ export function changesetAbort(state: ServerState, args: { token: string; csId: 
     const cells: string[] = JSON.parse(cs.blast_cells ?? "[]")
     write(state.db, state.stateDir, tenant, "changesets", { tenant_id: tenant, id: cs.id, intent: cs.intent, parent: null, status: "aborted", opened_by: cs.opened_by, opened_at: cs.opened_at, closed_at: now(), base_seq: null, admit_seq: null, blast_cells: cs.blast_cells })
     const released = releaseLocks(state, tenant, args.csId)
-    envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: { csId: cs.id, reason: "user", cells } }, { defer: true }))
+    envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: abortedPayload(cs, "user", cells) }, { defer: true }))
     for (const cell of released) envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, csId: cs.id, reason: "user" } }, { defer: true }))
     state.deltaCounts.delete(args.csId)
     return { ok: true, __tenant: tenant }

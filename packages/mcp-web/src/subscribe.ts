@@ -8,6 +8,8 @@ export type Envelope = {
   target: string
   payload: any
   graphId: string
+  /** Server contract: ephemeral events (presence) reuse the current durable seq — never advance `since`, never dedup by seq. */
+  ephemeral?: true
 }
 
 // ---- pure logic (unit-tested) ---------------------------------------------
@@ -35,23 +37,52 @@ export function classifyEnvelope(
   lastSeq: number,
 ): "reset" | "apply" | "duplicate" {
   if (knownGraphId !== null && env.graphId !== knownGraphId) return "reset"
+  // Ephemeral events (presence) intentionally reuse the current durable seq — they are exempt from
+  // seq dedup and must NOT advance lastSeq (the dispatch loop guards the cursor update too).
+  if (env.ephemeral === true) return "apply"
   if (env.seq <= lastSeq) return "duplicate"
   return "apply"
 }
 
-// ---- EventSource wiring (impure) ------------------------------------------
+/**
+ * Split one raw SSE frame (everything between two blank lines) into its `event:` name and joined
+ * `data:` lines. The server (mcp-server/src/sse.ts) names every frame after its envelope kind — e.g.
+ * `event: drift.node` — instead of the SSE default (`message`/unnamed). `EventSource#onmessage` only
+ * ever fires for the default-named event, so a plain EventSource silently drops every frame the server
+ * sends; this parser is why the client reads the stream with `fetch` + `ReadableStream` (below) rather
+ * than the EventSource API. Returns null for a frame with no `data:` line (keep-alive comments etc).
+ */
+export function parseFrame(raw: string): { event: string; data: string } | null {
+  let event = "message"
+  let data: string | null = null
+  for (const line of raw.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim()
+    else if (line.startsWith("data:")) {
+      // SSE strips exactly ONE leading space after "data:", not arbitrary whitespace — full trim()
+      // would corrupt payloads whose significant content is (or ends with) whitespace.
+      const value = line.slice(5).replace(/^ /, "")
+      data = (data === null ? "" : `${data}\n`) + value
+    }
+  }
+  return data === null ? null : { event, data }
+}
+
+// ---- fetch/ReadableStream wiring (impure) ---------------------------------
 
 export type StreamHandlers = {
   onEvent: (env: Envelope) => void
   onReset: () => void
   onOpen: () => void
   onClose: () => void
+  /** First frame of a connection (spec §3.3/§9.1): the SSE session id presence.beat/focus need. */
+  onSessionId?: (sessionId: string) => void
 }
 
 export class EventStream {
-  private es: EventSource | null = null
+  private abort: AbortController | null = null
   private backoff = 500
   private closed = false
+  private generation = 0
   graphId: string | null = null
   lastSeq = 0
 
@@ -64,8 +95,9 @@ export class EventStream {
 
   stop() {
     this.closed = true
-    this.es?.close()
-    this.es = null
+    this.generation++ // suppress the stale read loop's catch (its abort rejection must not reconnect)
+    this.abort?.abort()
+    this.abort = null
   }
 
   /** Drop local cursor and reconnect from scratch — used after a graphId reset. */
@@ -75,20 +107,54 @@ export class EventStream {
     this.reconnect(0)
   }
 
-  private open() {
+  private async open() {
+    const gen = ++this.generation
+    const ac = new AbortController()
+    this.abort = ac
     const token = getToken()
     const tokenQ = token ? `&token=${encodeURIComponent(token)}` : ""
-    this.es = new EventSource(`${serverBase()}/events?since=${this.lastSeq}${tokenQ}`)
-    this.es.onopen = () => {
+    try {
+      const res = await fetch(`${serverBase()}/events?since=${this.lastSeq}${tokenQ}`, {
+        signal: ac.signal,
+        headers: { accept: "text/event-stream" },
+      })
+      if (!res.ok || !res.body) throw new Error(`events → HTTP ${res.status}`)
       this.backoff = 500
       this.h.onOpen()
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ""
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (gen !== this.generation) return // superseded by a reset()/reconnect — drop stale reads
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        let cut: number
+        while ((cut = buf.indexOf("\n\n")) >= 0) {
+          const raw = buf.slice(0, cut)
+          buf = buf.slice(cut + 2)
+          this.dispatchFrame(raw)
+        }
+      }
+      if (gen === this.generation) this.onDisconnect()
+    } catch {
+      if (gen === this.generation) this.onDisconnect()
     }
-    this.es.onmessage = (ev) => this.dispatch(ev.data)
-    this.es.onerror = () => {
-      this.h.onClose()
-      this.reconnect(this.backoff)
-      this.backoff = Math.min(this.backoff * 2, 10_000)
+  }
+
+  private dispatchFrame(raw: string) {
+    const frame = parseFrame(raw)
+    if (!frame) return
+    if (frame.event === "session.created") {
+      try {
+        const { sessionId } = JSON.parse(frame.data)
+        if (typeof sessionId === "string") this.h.onSessionId?.(sessionId)
+      } catch {
+        /* malformed session.created frame — ignore */
+      }
+      return
     }
+    this.dispatch(frame.data)
   }
 
   private dispatch(raw: string) {
@@ -103,14 +169,24 @@ export class EventStream {
         return
       case "apply":
         this.graphId = env.graphId
-        this.lastSeq = env.seq
+        if (!env.ephemeral) this.lastSeq = env.seq // ephemeral seq never moves the replay cursor
         this.h.onEvent(env)
     }
   }
 
+  private onDisconnect() {
+    this.h.onClose()
+    this.reconnect(this.backoff)
+    this.backoff = Math.min(this.backoff * 2, 10_000)
+  }
+
   private reconnect(delay: number) {
-    this.es?.close()
-    this.es = null
+    // Bump generation BEFORE aborting: the in-flight read loop's reader.read() will reject, but its
+    // catch guards on `gen === this.generation` — now false — so it won't fire a second onDisconnect
+    // (which would leak an orphaned connection by overwriting this.abort without aborting the first).
+    this.generation++
+    this.abort?.abort()
+    this.abort = null
     if (this.closed) return
     setTimeout(() => {
       if (!this.closed) this.open()

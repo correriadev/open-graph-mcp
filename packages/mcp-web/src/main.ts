@@ -1,8 +1,10 @@
 import type { Graph, GraphNode } from "@open-graph-mcp/graph-core/build"
 import * as api from "./api"
 import { GhostStore, type GhostDelta } from "./ghosts"
+import { dotColor, PresenceStore, type PresenceEntry } from "./presence-state"
 import { Renderer } from "./render"
 import { EventStream, type Envelope } from "./subscribe"
+import { ToastQueue } from "./toasts"
 
 const DRIFT_KINDS = new Set(["drift.node", "drift.cell"])
 const CS_KINDS = new Set([
@@ -14,7 +16,12 @@ const CS_KINDS = new Set([
   "lock.released",
 ])
 const LEVELS = ["P1", "P2", "P3", "P4", "P5"]
-const esc = (s: string) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!)
+const PRESENCE_KINDS = new Set(["user.joined", "user.focused", "user.left", "user.typing_state"])
+const esc = (s: string) =>
+  String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  )
 
 document.body.innerHTML = `
 <div id="topbar">
@@ -26,13 +33,21 @@ document.body.innerHTML = `
   <span id="who"></span>
   <button id="openturn">Open Turn</button>
   <a id="histlink" href="#/history">history</a>
+  <button id="settingsBtn" title="Settings">⚙</button>
   <button id="rebuild">Re-bootstrap</button>
 </div>
 <canvas id="cv"></canvas>
+<aside id="presence">
+  <div class="phead"><span id="pcount">Conectados (0)</span><button id="ptoggle" title="expand/collapse">▾</button></div>
+  <ul id="plist"></ul>
+</aside>
 <aside id="events"><h3>events</h3><ul id="evlist"></ul></aside>
 <section id="panel" hidden></section>
 <section id="draft" hidden></section>
 <section id="history" hidden></section>
+<div id="typing" hidden></div>
+<div id="toasts"></div>
+<div id="avatarTip" hidden></div>
 <div id="modal" hidden></div>`
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
@@ -40,11 +55,209 @@ const canvas = $("cv") as HTMLCanvasElement
 
 const renderer = new Renderer(canvas, {
   onNodePick: (n, cell, authority, drift) => showPanel(n, cell, authority, drift),
+  onAvatarHover: (entry, locked, sx, sy) => showAvatarTip(entry, locked, sx, sy),
 })
 
 const ghosts = new GhostStore()
+const presence = new PresenceStore()
+const toasts = new ToastQueue()
 let graph: Graph | null = null
 let activeCsId: string | null = null // changeset this client is drafting
+
+// ---- presence (spec §7) -----------------------------------------------------
+type Settings = { showPresence: boolean; notifyCommits: boolean }
+function loadSettings(): Settings {
+  try {
+    const raw = sessionStorage.getItem("og.settings")
+    if (raw) return { showPresence: true, notifyCommits: true, ...JSON.parse(raw) }
+  } catch {
+    /* corrupt/inaccessible sessionStorage — fall back to defaults */
+  }
+  return { showPresence: true, notifyCommits: true }
+}
+const settings = loadSettings()
+function saveSettings() {
+  sessionStorage.setItem("og.settings", JSON.stringify(settings))
+}
+
+let sseSessionId: string | null = null
+let focusedCell: string | null = null
+
+async function declareFocus(cell: string | null): Promise<void> {
+  focusedCell = cell
+  if (!sseSessionId || !api.getToken()) return // presence tools need an authenticated session
+  try {
+    // always explicit: the server only updates invisibility when the flag is a boolean, so an
+    // `undefined` here would leave a previously-invisible presence invisible after re-enabling
+    await api.presenceFocus(sseSessionId, cell, !settings.showPresence)
+  } catch (e) {
+    console.error("presence.focus failed", e)
+  }
+}
+
+/**
+ * Registers this session + (re)declares current focus — called on every connect/reconnect (spec §9.1).
+ * Focus goes FIRST: the server only suppresses `user.joined` for invisible users when the very first
+ * presence-registering call already carries `invisible:true` (stalker mode is born silent, spec §9.4);
+ * a beat-first order would announce a user who asked not to be shown.
+ */
+async function declarePresence(): Promise<void> {
+  if (!sseSessionId || !api.getToken()) return
+  await declareFocus(focusedCell)
+  try {
+    await api.presenceBeat(sseSessionId, "web")
+  } catch (e) {
+    console.error("presence.beat failed", e)
+  }
+  pollWho()
+}
+
+async function pollWho(): Promise<void> {
+  if (!api.getToken()) return
+  try {
+    const res = await api.presenceWho()
+    presence.mergeWho(res.users ?? [])
+    renderPresenceBar()
+    renderer.setPresence(presence.list())
+    renderTyping()
+  } catch (e) {
+    console.error("presence.who failed", e)
+  }
+}
+
+setInterval(() => {
+  if (sseSessionId && api.getToken())
+    api.presenceBeat(sseSessionId, "web").catch((e) => console.error("presence.beat failed", e))
+}, 15_000)
+
+setInterval(pollWho, 10_000)
+
+// keep dot colors fresh even without new presence traffic
+setInterval(renderPresenceBar, 5_000)
+
+function renderPresenceBar(): void {
+  const list = presence.list()
+  $("pcount").textContent = `Conectados (${list.length})`
+  const ul = $("plist")
+  if ($("presence").classList.contains("collapsed")) {
+    ul.innerHTML = ""
+    return
+  }
+  ul.innerHTML = list
+    .map((u) => {
+      const status =
+        u.typingState === "typing" ? "digitando…" : u.focusCell ? `focando ${esc(u.focusCell)}` : "idle"
+      const turno = u.openCount > 0 ? ` · turno ${u.openCount > 1 ? `×${u.openCount}` : ""}`.trimEnd() : ""
+      return `<li><span class="dot ${dotColor(u.lastSeen)}"></span><b>${esc(u.name)}</b> <span class="kind">(${esc(u.agentKind)})</span><div class="sub">${status}${turno}</div></li>`
+    })
+    .join("")
+}
+
+$("ptoggle").onclick = () => {
+  $("presence").classList.toggle("collapsed")
+  renderPresenceBar()
+}
+
+function showAvatarTip(entry: PresenceEntry | null, locked: boolean, sx: number, sy: number): void {
+  const tip = $("avatarTip")
+  if (!entry) {
+    tip.hidden = true
+    return
+  }
+  tip.hidden = false
+  const last = new Date(entry.lastSeen).toLocaleTimeString()
+  tip.textContent = `${entry.name} · ${entry.agentKind}${locked ? " · turno aberto" : ""} · última atividade ${last}`
+  tip.style.left = `${sx + 14}px`
+  tip.style.top = `${sy + 34 + 14}px` // +34 = topbar height (canvas is offset below it)
+}
+
+function renderTyping(): void {
+  const el = $("typing")
+  const typist = presence.list().find((u) => u.typingState === "typing")
+  if (!typist) {
+    el.hidden = true
+    return
+  }
+  // lock.holder is a userId (server tools/changeset.ts), matching PresenceEntry.userId
+  const lock = typist.focusCell ? ghosts.locks.get(typist.focusCell) : undefined
+  const csId = lock && lock.holder === typist.userId ? lock.csId : null
+  el.hidden = false
+  el.innerHTML = `${esc(typist.name)} está editando${csId ? ` ${esc(csId)}` : ""}<span class="dots"><span>.</span><span>.</span><span>.</span></span>`
+}
+
+// ---- toast notifications (spec §7.4) ---------------------------------------
+function pushToast(key: string, text: string, target?: string): void {
+  const t = toasts.push(key, text, { target })
+  renderToasts()
+  setTimeout(() => {
+    toasts.remove(t.id)
+    renderToasts()
+  }, 8_000)
+}
+
+function renderToasts(): void {
+  const { toasts: visible, overflow } = toasts.visible(5)
+  const el = $("toasts")
+  el.innerHTML =
+    visible
+      .map(
+        (t) =>
+          `<div class="toast" data-id="${esc(t.id)}" title="${esc(new Date(t.ts).toLocaleTimeString())}">${esc(t.text)}</div>`,
+      )
+      .join("") + (overflow > 0 ? `<div class="toast overflow">(+${overflow})</div>` : "")
+  el.querySelectorAll<HTMLDivElement>(".toast[data-id]").forEach((div) => {
+    div.onclick = () => {
+      const t = toasts.all().find((x) => x.id === div.dataset.id)
+      if (t?.target) renderer.focusTarget(t.target)
+    }
+  })
+}
+
+const myUserId = (): string => localStorage.getItem("og.userId") ?? ""
+/** userId → display name, via the live presence roster (falls back to the id itself). */
+const nameOf = (userId: string): string => presence.users.get(userId)?.name ?? userId
+
+/** Toast triggers for events relevant to the current user (spec §7.4). */
+function maybeToast(env: Envelope): void {
+  const p = env.payload ?? {}
+  if (env.kind === "changeset.aborted" && p.reason === "ttl_expired") {
+    // affinity router already scopes this to cs observers + holder — anyone receiving it cares
+    pushToast(p.csId, `${p.csId} abortado por TTL`, p.cells?.[0])
+  } else if (env.kind === "lock.acquired" && focusedCell && p.cell === focusedCell && p.holder !== myUserId()) {
+    // p.holder is a userId here (server changeset.open lock payload)
+    pushToast(p.csId ?? p.cell, `${nameOf(p.holder)} abriu turno em [${p.cell}] — você perdeu prioridade`, p.cell)
+  } else if (env.kind === "changeset.committed" && settings.notifyCommits) {
+    // committed payload has no byUser — the ghost entry (removed only after this runs) knows the opener
+    const opener = ghosts.changesets.get(p.csId)?.byUser
+    if (opener && opener === myUserId()) return // don't toast our own commit
+    const cell = p.cells?.[0]
+    pushToast(p.csId, `${opener ? nameOf(opener) : "alguém"} commitou ${p.csId} em [${cell ?? "?"}]`, cell)
+  }
+}
+
+// ---- settings modal (spec §7.5) --------------------------------------------
+function openSettingsModal(): void {
+  const m = $("modal")
+  m.hidden = false
+  m.innerHTML = `
+    <div class="dialog">
+      <h3>Settings</h3>
+      <label class="chk"><input type="checkbox" id="s_presence" ${settings.showPresence ? "checked" : ""} /> Mostrar minha presença para outros</label>
+      <label class="chk"><input type="checkbox" id="s_notify" ${settings.notifyCommits ? "checked" : ""} /> Receber notificações de commit em cells que observo</label>
+      <div class="row"><button id="sclose">Fechar</button></div>
+    </div>`
+  $("sclose").onclick = () => (m.hidden = true)
+  $<HTMLInputElement>("s_presence").onchange = (e) => {
+    settings.showPresence = (e.target as HTMLInputElement).checked
+    saveSettings()
+    declareFocus(focusedCell)
+  }
+  $<HTMLInputElement>("s_notify").onchange = (e) => {
+    settings.notifyCommits = (e.target as HTMLInputElement).checked
+    saveSettings()
+  }
+}
+$("settingsBtn").onclick = () => openSettingsModal()
 
 // ---- session / reconnect (spec §9) -----------------------------------------
 const tenant = new URLSearchParams(location.search).get("tenant") || "default"
@@ -65,6 +278,7 @@ async function bootSession(): Promise<void> {
     api.setToken(s.token)
     localStorage.setItem("og.token", s.token)
     localStorage.setItem("og.name", name)
+    localStorage.setItem("og.userId", s.userId)
     $("who").textContent = name
     await reattach()
   } catch (e) {
@@ -133,6 +347,7 @@ function showPanel(n: GraphNode, cell: string, authority: string, drift: string 
       ${lock ? `<dt>🔒 locked by</dt><dd>${esc(lock.holder)} · ${esc(lock.csId)}<br>expires ${new Date(lock.expiresAt).toLocaleTimeString()}</dd>` : ""}
     </dl>`
   $("close").onclick = () => (p.hidden = true)
+  declareFocus(cell) // clicking a node = focusing its cell (spec §7: client cell-focus concept)
 }
 
 // ---- events sidebar --------------------------------------------------------
@@ -159,6 +374,21 @@ function applyEvent(env: Envelope) {
     refreshDriftBadge()
   }
   if (env.kind === "graph.rebuilt" || env.kind === "graph.bootstrapped") loadSnapshot()
+
+  if (env.kind === "server.restarted") {
+    // Task 5 event; presence lives in server memory only (spec §9.1) — redeclare ours and flag it.
+    pushToast("server", "Server reiniciou — sua presença foi resetada")
+    declarePresence()
+  }
+
+  if (PRESENCE_KINDS.has(env.kind)) {
+    presence.apply(env)
+    renderPresenceBar()
+    renderer.setPresence(presence.list())
+    renderTyping()
+  }
+
+  maybeToast(env)
 
   if (CS_KINDS.has(env.kind) || env.kind === "authority.flipped") {
     const r = ghosts.apply(env)
@@ -462,6 +692,7 @@ function route() {
   $("history").hidden = !hist
   canvas.style.visibility = hist ? "hidden" : "visible"
   $("events").hidden = hist
+  $("presence").hidden = hist
   if (hist) showHistory()
 }
 addEventListener("hashchange", route)
@@ -480,6 +711,12 @@ const stream = new EventStream({
   onReset: loadSnapshot,
   onOpen: () => setConn(true),
   onClose: () => setConn(false),
+  // Every (re)connection mints a fresh SSE session id; presence is keyed to it (spec §3.3), so we
+  // re-register and re-declare the current focus each time (spec §9.1: no server-side auto-refocus).
+  onSessionId: (id) => {
+    sseSessionId = id
+    declarePresence()
+  },
 })
 
 ;(async () => {

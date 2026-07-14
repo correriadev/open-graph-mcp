@@ -9,9 +9,17 @@
 import type { Database } from "bun:sqlite"
 import type { Graph } from "@open-graph-mcp/graph-core/build"
 import { openDb, write } from "./db"
+import { route } from "./affinity"
+import { renderSystemMessage, pushSystemMessage } from "./system-message"
 
 export const DEFAULT_TENANT = "default"
 export const DEFAULT_TTL_MS = 30 * 60 * 1000
+export const DEFAULT_PRESENCE_TTL_MS = 60_000
+export const DEFAULT_FOCUS_DEBOUNCE_MS = 2_000
+/** Fase 3 §5.1: janela do scan de "digitando" e limiares de classificação (configuráveis p/ teste). */
+export const DEFAULT_TYPING_INTERVAL_MS = 500
+export const DEFAULT_TYPING_MS = 2_000
+export const DEFAULT_IDLE_MS = 5_000
 
 export type Filter =
   | { kind: "all" }
@@ -29,6 +37,8 @@ export type EventEnvelope = {
   target: string | null
   payload: Record<string, unknown>
   graphId: string
+  /** true = evento efêmero (presença, Fase 3 §3.1): nunca persistido; seq NÃO avança o cursor `since` do cliente e não participa de dedup por seq. */
+  ephemeral?: true
 }
 
 export type Session = {
@@ -36,10 +46,42 @@ export type Session = {
   tenant: string
   filters: Filter[]
   push: (env: EventEnvelope) => void
+  /** Identidade do token usado para abrir o SSE (null p/ conexão anônima). Fase 3 §6.1: o router de
+   *  afinidade usa isto p/ rotear por USUÁRIO (holder de changeset.delta, atacante de lock.denied) sem
+   *  depender de Presence (que só existe depois de um presence.beat/focus explícito). */
+  userId: string | null
+  /** true = esta sessão SSE nasceu de uma reconexão com um token que o processo atual não reconhece
+   *  (spec §9.1: tokens são em memória — um restart do server os apaga). Sinal pragmático de "o server
+   *  reiniciou desde a última vez que este cliente se conectou", sem precisar de um bootId dedicado:
+   *  se o cliente apresenta um token e o processo não o conhece, ou o token expirou/é lixo, ou (o caso
+   *  que nos interessa) o processo reiniciou. Consumido uma vez por presence.ts `touch()` — assim que o
+   *  agentKind é conhecido (primeiro beat/focus) — pra decidir se emite o system.message de restart
+   *  (só non-web; web já trata o envelope `server.restarted` cru, Task 4). */
+  restartPending: boolean
 }
 
 /** Token em memória → identidade. Some no restart; changesets persistem no SQLite (spec §9). */
 export type TokenInfo = { token: string; userId: string; tenantId: string; name: string }
+
+/**
+ * Presence — estado de presença viva por sessão (Fase 3 §3), EM MEMÓRIA (nunca persistido: restart
+ * esquece tudo). `tenant` não faz parte do contrato público (spec §3.1 não lista), mas é guardado aqui
+ * p/ escopar presence.who/broadcasts por tenant sem depender da sessão SSE ainda estar viva.
+ */
+export type Presence = {
+  sessionId: string
+  tenant: string
+  userId: string
+  agentKind: string
+  lastSeen: number
+  focusCell: string | null
+  openCsIds: string[]
+  invisible: boolean
+  lastDeltaAt: number
+  /** Classificação corrente do agregador de "digitando" (Fase 3 §5.1) — usada só p/ detectar TRANSIÇÃO
+   *  (o broadcast de `user.typing_state` acontece só quando isto muda, nunca a cada tick). */
+  typingState: "typing" | "idle" | "quiet"
+}
 
 export type Pipeline = "skeleton" | "existing"
 
@@ -51,30 +93,52 @@ export type ServerState = {
   stateDir: string
   db: Database
   ttlMs: number
+  presenceTtlMs: number
+  focusDebounceMs: number
+  /** Limiares de classificação de "digitando" (Fase 3 §5.1), configuráveis p/ teste. */
+  typingMs: number
+  idleMs: number
   graphs: Map<string, TenantGraph>
   tokens: Map<string, TokenInfo>
   subscriptions: Map<string, Filter[]>
   sessions: Map<string, Session>
-  sessionCounter: number
   /** Contador de deltas por changeset p/ o agregador de 100ms (payload só count, spec §6). */
   deltaCounts: Map<string, { count: number; tenant: string; byUser: string }>
   lastTickHadEvents: boolean
+  /** Presença viva por sessionId (Fase 3 §3) — em memória, some no restart. */
+  presence: Map<string, Presence>
+  /** Timers de debounce de focus por sessionId (Fase 3 §6.3) — só o último settle broadcast. */
+  focusDebounce: Map<string, ReturnType<typeof setTimeout>>
 }
 
-export function createState(opts: { repoPath?: string; stateDir: string; ttlMs?: number; db?: Database }): ServerState {
+export function createState(opts: {
+  repoPath?: string
+  stateDir: string
+  ttlMs?: number
+  presenceTtlMs?: number
+  focusDebounceMs?: number
+  typingMs?: number
+  idleMs?: number
+  db?: Database
+}): ServerState {
   const db = opts.db ?? openDb(opts.stateDir === ":memory:" ? ":memory:" : `${opts.stateDir}/state.sqlite`)
   return {
     repoPath: opts.repoPath ?? "",
     stateDir: opts.stateDir === ":memory:" ? "" : opts.stateDir,
     db,
     ttlMs: opts.ttlMs ?? DEFAULT_TTL_MS,
+    presenceTtlMs: opts.presenceTtlMs ?? DEFAULT_PRESENCE_TTL_MS,
+    focusDebounceMs: opts.focusDebounceMs ?? DEFAULT_FOCUS_DEBOUNCE_MS,
+    typingMs: opts.typingMs ?? DEFAULT_TYPING_MS,
+    idleMs: opts.idleMs ?? DEFAULT_IDLE_MS,
     graphs: new Map(),
     tokens: new Map(),
     subscriptions: new Map(),
     sessions: new Map(),
-    sessionCounter: 0,
     deltaCounts: new Map(),
     lastTickHadEvents: false,
+    presence: new Map(),
+    focusDebounce: new Map(),
   }
 }
 
@@ -87,7 +151,8 @@ export function tenantGraph(state: ServerState, tenant: string): TenantGraph {
   return g
 }
 
-function matchOne(f: Filter, e: EventEnvelope): boolean {
+/** Exportado p/ affinity.ts reusar o teste "casa este filtro" fora do AND-de-todos-os-filtros de matches(). */
+export function matchOne(f: Filter, e: EventEnvelope): boolean {
   switch (f.kind) {
     case "all":
       return true
@@ -104,8 +169,13 @@ function matchOne(f: Filter, e: EventEnvelope): boolean {
   }
 }
 
-/** OR dentro de um filtro, AND entre filtros. Vazio = tudo (spec §4.4). */
+/** Kinds que ignoram filtro de sessão — sempre chegam a todo conectado do tenant (Fase 3 §6.1).
+ *  `user.joined` é "broadcast geral p/ contagem da topbar atualizar" por definição da tabela §6.1. */
+const ALWAYS_BROADCAST_KINDS = new Set<string>(["authority.flipped", "user.joined"])
+
+/** OR dentro de um filtro, AND entre filtros. Vazio = tudo (spec §4.4). authority.flipped ignora filtro. */
 export function matches(filters: Filter[], e: EventEnvelope): boolean {
+  if (ALWAYS_BROADCAST_KINDS.has(e.kind)) return true
   if (filters.length === 0) return true
   return filters.every((f) => matchOne(f, e))
 }
@@ -115,8 +185,34 @@ export function nextSeq(state: ServerState, tenant: string): number {
   return row.m + 1
 }
 
+/**
+ * pushEnvelope — ponto único de difusão (durável via appendEvent, efêmero via broadcastEphemeral).
+ * Fase 3 §6.1: o destinatário de CADA evento é calculado pelo router de afinidade (affinity.ts), que
+ * generaliza `matches()` (a base "Fase 2 simples") com as regras por-kind da tabela §6.1 (holder,
+ * focus-na-cell, restrição de lock.denied etc). `route` é puro — recebe os mapas e devolve os
+ * sessionIds destinatários; aqui só resolvemos o Session e chamamos `.push`.
+ */
 export function pushEnvelope(state: ServerState, tenant: string, env: EventEnvelope): void {
-  for (const s of state.sessions.values()) if (s.tenant === tenant && matches(s.filters, env)) s.push(env)
+  for (const id of route(env, state.sessions, state.presence, tenant)) {
+    const s = state.sessions.get(id)
+    if (!s) continue
+    s.push(env)
+    maybeSystemMessage(state, tenant, env, s)
+  }
+}
+
+/**
+ * Fase 3 §8.1: pra cada destinatário que o affinity router JÁ decidiu (route(), acima) — nenhuma rota
+ * nova — renderiza uma versão texto do evento e empurra como `system.message` SE essa sessão for de um
+ * agentKind não-web. `system.message` nunca entra aqui de novo (evita eco): renderSystemMessage não
+ * conhece esse kind vindo de pushEnvelope (só é usado diretamente por sse.ts pro caso server.restarted).
+ */
+function maybeSystemMessage(state: ServerState, tenant: string, env: EventEnvelope, s: Session): void {
+  if (env.kind === "system.message") return
+  const presence = state.presence.get(s.id)
+  if (!presence || presence.agentKind === "web") return
+  const text = renderSystemMessage(state, tenant, env, presence.userId)
+  if (text) pushSystemMessage(state, tenant, s, text, env.target)
 }
 
 export type EventInput = {
@@ -125,6 +221,21 @@ export type EventInput = {
   targetId?: string | null
   payload?: Record<string, unknown>
   byUser?: string | null
+}
+
+/**
+ * Payload canônico de `changeset.aborted` — `byUser` (= holder) é ESTRUTURAL aqui: o router de afinidade
+ * (affinity.ts) roteia o abort p/ o holder por este campo do PAYLOAD (EventInput.byUser vai só p/ a
+ * coluna de auditoria, não entra no envelope). Helper único p/ os três emissores (commit rejeitado,
+ * abort explícito, TTL expiry) não divergirem de shape.
+ */
+export function abortedPayload(
+  cs: { id: string; opened_by: string },
+  reason: "rejected" | "user" | "ttl_expired",
+  cells: string[],
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return { csId: cs.id, reason, cells, byUser: cs.opened_by, ...extra }
 }
 
 /**
@@ -161,6 +272,30 @@ export function appendEvent(
     graphId: tenantGraph(state, tenant).graphId,
   }
   if (opts.broadcast !== false && !opts.defer) pushEnvelope(state, tenant, env)
+  return env
+}
+
+/**
+ * broadcastEphemeral — difunde SEM persistir (nem SQLite `events`, nem espelho JSONL): presença é
+ * efêmera (Fase 3 §3.1 — restart esquece tudo; replay/rebuild não deve reproduzir user.joined/
+ * focused/left). Roteia pelos MESMOS filtros de sessão dos eventos duráveis (pushEnvelope → matches).
+ *
+ * CONTRATO do envelope efêmero (`ephemeral: true`): o `seq` carrega o max durável corrente do tenant
+ * (NÃO aloca um novo) — efêmero nunca avança o cursor `since` de replay, e clientes NÃO devem
+ * deduplicar efêmeros por seq (vários efêmeros repetem o mesmo seq por design; a flag é o sinal).
+ */
+export function broadcastEphemeral(state: ServerState, tenant: string, input: EventInput): EventEnvelope {
+  const env: EventEnvelope = {
+    schemaVersion: 1,
+    seq: nextSeq(state, tenant) - 1,
+    ephemeral: true,
+    ts: new Date().toISOString(),
+    kind: input.kind,
+    target: input.targetId ?? null,
+    payload: input.payload ?? {},
+    graphId: tenantGraph(state, tenant).graphId,
+  }
+  pushEnvelope(state, tenant, env)
   return env
 }
 

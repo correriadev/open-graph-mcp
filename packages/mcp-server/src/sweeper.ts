@@ -6,7 +6,9 @@
  *    (não por lance, spec §6), e zera o contador.
  */
 import { write } from "./db"
-import { appendEvent, pushEnvelope, type EventEnvelope, type ServerState } from "./state"
+import { abortedPayload, appendEvent, pushEnvelope, type EventEnvelope, type ServerState } from "./state"
+import { sweepPresence } from "./tools/presence"
+import { sweepTyping } from "./tools/typing"
 
 const now = () => new Date().toISOString()
 
@@ -26,7 +28,9 @@ export function sweepTtl(state: ServerState): void {
       write(state.db, state.stateDir, tenant, "changesets", { tenant_id: tenant, id: cs.id, intent: cs.intent, parent: null, status: "aborted", opened_by: cs.opened_by, opened_at: cs.opened_at, closed_at: now(), base_seq: null, admit_seq: null, blast_cells: cs.blast_cells })
       const held = (state.db.query("SELECT cell FROM locks WHERE tenant_id = ? AND cs_id = ?").all(tenant, csId) as { cell: string }[]).map((r) => r.cell)
       state.db.query("DELETE FROM locks WHERE tenant_id = ? AND cs_id = ?").run(tenant, csId)
-      envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: cs.opened_by, payload: { csId: cs.id, reason: "ttl_expired", cells } }, { defer: true }))
+      // abortedPayload carrega byUser (holder) — crítico no TTL expiry: o router de afinidade roteia
+      // por ele e o holder precisa saber que perdeu o turno mesmo sem filtro que case.
+      envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: cs.opened_by, payload: abortedPayload(cs, "ttl_expired", cells) }, { defer: true }))
       for (const cell of held) envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: cs.opened_by, payload: { cell, csId: cs.id, reason: "ttl_expired" } }, { defer: true }))
       state.deltaCounts.delete(csId)
     })
@@ -47,7 +51,10 @@ export function flushDeltas(state: ServerState): void {
   }
 }
 
-export function startSweeper(state: ServerState, opts: { sweepIntervalMs?: number; aggIntervalMs?: number } = {}): () => void {
+export function startSweeper(
+  state: ServerState,
+  opts: { sweepIntervalMs?: number; aggIntervalMs?: number; presenceSweepIntervalMs?: number; typingIntervalMs?: number } = {},
+): () => void {
   const ttl = setInterval(() => {
     try {
       sweepTtl(state)
@@ -62,8 +69,26 @@ export function startSweeper(state: ServerState, opts: { sweepIntervalMs?: numbe
       /* idem */
     }
   }, opts.aggIntervalMs ?? 100)
+  // Cadência mais curta que o TTL padrão (60s) — bate ~15s, alinhado ao heartbeat de cliente (spec §4).
+  const presence = setInterval(() => {
+    try {
+      sweepPresence(state)
+    } catch {
+      /* idem */
+    }
+  }, opts.presenceSweepIntervalMs ?? 15_000)
+  // Fase 3 §5.1: scan de "digitando" — default 500ms, configurável p/ teste.
+  const typing = setInterval(() => {
+    try {
+      sweepTyping(state)
+    } catch {
+      /* idem */
+    }
+  }, opts.typingIntervalMs ?? 500)
   return () => {
     clearInterval(ttl)
     clearInterval(agg)
+    clearInterval(presence)
+    clearInterval(typing)
   }
 }

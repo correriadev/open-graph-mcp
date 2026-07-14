@@ -2,15 +2,19 @@ import type { Graph, GraphNode } from "@open-graph-mcp/graph-core/build"
 import { seedLayout, lodForZoom, xForNode, yForLevel, type Point } from "@open-graph-mcp/graph-core/layout"
 import { Quadtree } from "@open-graph-mcp/graph-core/quadtree"
 import { colorForCsId, type Lock, type OpenChangeset } from "./ghosts"
+import { initials, type PresenceEntry } from "./presence-state"
 
 const BAND = 400 // domain column width in world units (mirrors layout.DOMAIN_BAND_WIDTH)
 const NODE_R = 3 // node dot radius, screen px
 
 type Cam = { x: number; y: number; zoom: number }
 type Tower = { domain: string | null; idx: number; nodes: GraphNode[]; claims: number; beta: number; y0: number; y1: number }
+type AvatarHit = { x: number; y: number; r: number; entry: PresenceEntry; locked: boolean }
 
 export type PickHandlers = {
   onNodePick: (node: GraphNode, cell: string, authority: string, drift: string | null) => void
+  /** Hover over a presence avatar badge (spec §7.2) — null when the pointer leaves it. Screen coords for tooltip placement. */
+  onAvatarHover?: (entry: PresenceEntry | null, locked: boolean, sx: number, sy: number) => void
 }
 
 function cellKey(n: GraphNode): string {
@@ -33,6 +37,9 @@ export class Renderer {
   private sortedDomains: string[] = []
   private ghosts: OpenChangeset[] = []
   private locks: Lock[] = []
+  private presence: PresenceEntry[] = []
+  private avatarHits: AvatarHit[] = []
+  private hoverAvatar: PresenceEntry | null = null
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -60,6 +67,12 @@ export class Renderer {
   setGhosts(changesets: Iterable<OpenChangeset>, locks: Iterable<Lock>) {
     this.ghosts = [...changesets]
     this.locks = [...locks]
+    this.dirty = true
+  }
+
+  /** Presence roster → avatar overlay near focused cells (spec §7.2). */
+  setPresence(entries: PresenceEntry[]) {
+    this.presence = entries
     this.dirty = true
   }
 
@@ -196,6 +209,11 @@ export class Renderer {
   }
 
   private onHover(sx: number, sy: number) {
+    const avatar = this.avatarAt(sx, sy)
+    if (avatar || this.hoverAvatar) {
+      this.hoverAvatar = avatar?.entry ?? null
+      this.h.onAvatarHover?.(avatar?.entry ?? null, avatar?.locked ?? false, sx, sy)
+    }
     const showNodes = lodForZoom(this.cam.zoom) !== "tower" || this.hoverDomain !== undefined
     const node = showNodes ? this.nodeAt(sx, sy) : null
     const hn = node?.id ?? null
@@ -205,7 +223,7 @@ export class Renderer {
       const hd = t ? t.domain : undefined
       if (hd !== this.hoverDomain) { this.hoverDomain = hd; this.dirty = true }
     }
-    this.canvas.style.cursor = node ? "pointer" : "default"
+    this.canvas.style.cursor = node || avatar ? "pointer" : "default"
   }
 
   private onClick(sx: number, sy: number) {
@@ -265,6 +283,7 @@ export class Renderer {
 
     this.drawGhosts()
     this.drawLocks()
+    this.drawAvatars()
   }
 
   /** Cell "domain:level" → world center of that floor in its domain tower (null if no such tower). */
@@ -327,6 +346,50 @@ export class Renderer {
         ctx.fillText(`expires in ${mins}m`, sx - w / 2 + 5, sy + 18)
       }
     }
+  }
+
+  /**
+   * Avatar overlay (spec §7.2): a cell LOCKED by user X gets a solid mini-circle badge; a cell someone
+   * merely FOCUSES (no lock) gets a smaller, semi-transparent one. Hover is resolved in onHover() below
+   * against `avatarHits`, rebuilt here every draw.
+   */
+  private drawAvatars() {
+    const ctx = this.ctx
+    this.avatarHits = []
+    for (const u of this.presence) {
+      if (!u.focusCell) continue
+      const c = this.cellCenter(u.focusCell)
+      if (!c) continue
+      // lock.holder is a userId (server tools/changeset.ts), not a display name
+      const locked = this.locks.some((l) => l.cell === u.focusCell && l.holder === u.userId)
+      const [sx, sy] = this.toScreen(c.x, c.y)
+      const r = locked ? 9 : 6
+      const ax = sx + (locked ? -18 : 18)
+      const ay = sy - 40
+      ctx.save()
+      ctx.globalAlpha = locked ? 0.95 : 0.5
+      ctx.beginPath()
+      ctx.arc(ax, ay, r, 0, Math.PI * 2)
+      ctx.fillStyle = locked ? "#2f8f4e" : "#4a90d9"
+      ctx.fill()
+      ctx.lineWidth = 1
+      ctx.strokeStyle = "#0d0f14"
+      ctx.stroke()
+      ctx.fillStyle = "#fff"
+      ctx.font = `${locked ? 10 : 8}px ui-monospace, monospace`
+      ctx.textAlign = "center"
+      ctx.textBaseline = "middle"
+      ctx.fillText(initials(u.name), ax, ay + 1)
+      ctx.restore()
+      this.avatarHits.push({ x: ax, y: ay, r, entry: u, locked })
+    }
+  }
+
+  private avatarAt(sx: number, sy: number): AvatarHit | null {
+    for (const a of this.avatarHits) {
+      if ((a.x - sx) ** 2 + (a.y - sy) ** 2 <= a.r * a.r) return a
+    }
+    return null
   }
 
   private drawNodes(t: Tower) {

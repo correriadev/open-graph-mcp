@@ -42,8 +42,11 @@ function cellState(state: ServerState, tenant: string, cellKey: string) {
 
 function historyEnvelopes(state: ServerState, tenant: string, since: number, limit: number): EventEnvelope[] {
   const graphId = tenantGraph(state, tenant).graphId
+  // DECISÃO deliberada (Fase 3 §6.1): lock.denied é PRIVADO — só o user que tentou o recebe (SSE live e
+  // replay de backlog passam pelo router de afinidade). graph://history é compartilhado (qualquer token do
+  // tenant lê), então lock.denied fica FORA daqui por completo; permanece no SQLite como auditoria.
   const rows = state.db
-    .query("SELECT seq, ts, kind, target_id, payload FROM events WHERE tenant_id = ? AND seq > ? ORDER BY seq LIMIT ?")
+    .query("SELECT seq, ts, kind, target_id, payload FROM events WHERE tenant_id = ? AND seq > ? AND kind != 'lock.denied' ORDER BY seq LIMIT ?")
     .all(tenant, since, limit) as { seq: number; ts: string; kind: string; target_id: string | null; payload: string }[]
   return rows.map((r) => ({
     schemaVersion: 1,

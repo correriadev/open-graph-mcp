@@ -4,7 +4,9 @@
  * anônima no tenant "default" (compat Fase 1). Primeiro frame: `session.created { sessionId, graphId }`.
  * Depois o tail do log (SQLite) desde N (filtrado) e, ao vivo, cada evento novo do tenant que casa o filtro.
  */
-import { DEFAULT_TENANT, matches, tenantGraph, type EventEnvelope, type Filter, type ServerState } from "./state"
+import { DEFAULT_TENANT, nextSeq, tenantGraph, type EventEnvelope, type Filter, type ServerState } from "./state"
+import { isRecipient } from "./affinity"
+import { presenceSessionClosed } from "./tools/presence"
 
 /** "all" | "cell:<domain:level>" | "domain:<d>" | "event:<k1,k2>" | "changeset:<id>" */
 function parseFilterParam(raw: string | null): Filter[] {
@@ -38,8 +40,19 @@ function tenantOf(state: ServerState, token: string | null): string {
 export function handleEvents(state: ServerState, url: URL): Response {
   const since = Number(url.searchParams.get("since") ?? 0)
   const filters = parseFilterParam(url.searchParams.get("filter"))
-  const tenant = tenantOf(state, url.searchParams.get("token"))
-  const id = `s${++state.sessionCounter}`
+  const token = url.searchParams.get("token")
+  const tenant = tenantOf(state, token)
+  // Fase 3 §6.1: identidade do token (se houver) fica presa à Session p/ o router de afinidade rotear
+  // por USUÁRIO (holder, atacante de lock.denied) sem depender de presence.beat/focus ter sido chamado.
+  const userId = token ? state.tokens.get(token)?.userId ?? null : null
+  // Fase 3 §9.1: um token presente que o processo ATUAL não reconhece é o sinal pragmático de restart —
+  // tokens são em memória (spec §9), então um restart os apaga; um cliente que reconecta trazendo um
+  // token pré-restart cai aqui. Sem token nenhum (sessão nova, nunca teve nada a perder) não conta.
+  const restartPending = !!token && !state.tokens.has(token)
+  // Aleatório (não sequencial): o sessionId é uma capability opaca — só quem recebeu o frame
+  // session.created o conhece; um atacante não consegue mais adivinhar nem pré-registrar IDs de
+  // presença de vítimas (defense in depth com o binding sessionId→token em tools/presence.ts).
+  const id = `s_${crypto.randomUUID().slice(0, 12)}`
   const graphId = tenantGraph(state, tenant).graphId
 
   const stream = new ReadableStream<Uint8Array>({
@@ -51,22 +64,41 @@ export function handleEvents(state: ServerState, url: URL): Response {
           /* cliente desconectou entre o match e o enqueue */
         }
       }
-      state.sessions.set(id, { id, tenant, filters, push })
+      const session = { id, tenant, filters, push, userId, restartPending }
+      state.sessions.set(id, session)
       state.subscriptions.set(id, filters)
 
       controller.enqueue(frame("session.created", { sessionId: id, graphId, tenant }))
-      // tail do log do tenant desde `since`, filtrado pelo filtro corrente da sessão
+      // Fase 3 §9.1: broadcast de restart PRA ESTA sessão (não roteado — é per-connection, calculado
+      // acima). Efêmero (reusa o seq durável corrente, igual toda presença): não é replay de histórico,
+      // é um aviso "isto é uma conexão nova pós-restart". Web já trata este kind cru (Task 4); a versão
+      // texto pra non-web é emitida depois, em presence.ts `touch()`, quando o agentKind é conhecido.
+      if (restartPending) {
+        push({
+          schemaVersion: 1,
+          seq: nextSeq(state, tenant) - 1,
+          ephemeral: true,
+          ts: new Date().toISOString(),
+          kind: "server.restarted",
+          target: null,
+          payload: {},
+          graphId,
+        })
+      }
+      // tail do log do tenant desde `since` — roteado pela MESMA afinidade do live (não só o filtro cru):
+      // sem isto, um lock.denied histórico vazaria p/ qualquer reconexão cujo filtro casasse por acidente.
       const rows = state.db
         .query("SELECT seq, ts, kind, target_id, payload FROM events WHERE tenant_id = ? AND seq > ? ORDER BY seq")
         .all(tenant, since) as { seq: number; ts: string; kind: string; target_id: string | null; payload: string }[]
       for (const r of rows) {
         const env: EventEnvelope = { schemaVersion: 1, seq: r.seq, ts: r.ts, kind: r.kind, target: r.target_id, payload: JSON.parse(r.payload ?? "{}"), graphId }
-        if (matches(filters, env)) push(env)
+        if (isRecipient(env, session, state.presence, tenant)) push(env)
       }
     },
     cancel() {
       state.sessions.delete(id)
       state.subscriptions.delete(id)
+      presenceSessionClosed(state, id) // spec §9.2: sessão caiu → user.left reason "left" (se tinha presença)
     },
   })
 

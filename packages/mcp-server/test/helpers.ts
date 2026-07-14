@@ -39,10 +39,12 @@ export type SseClient = {
 }
 
 /** Cliente SSE cru (fetch + parser de frames) — sem depender de EventSource global. */
-export async function openSse(base: string, since = 0, token?: string): Promise<SseClient> {
+export async function openSse(base: string, since = 0, token?: string, filter?: string): Promise<SseClient> {
   const q = new URLSearchParams({ since: String(since) })
   if (token) q.set("token", token)
-  const res = await fetch(`${base}/events?${q}`)
+  if (filter) q.set("filter", filter)
+  const controller = new AbortController()
+  const res = await fetch(`${base}/events?${q}`, { signal: controller.signal })
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   const events: any[] = []
@@ -88,6 +90,9 @@ export async function openSse(base: string, since = 0, token?: string): Promise<
       })
     },
     close: () => {
+      // abort() actually tears down the underlying connection (server sees stream.cancel()); reader.cancel()
+      // alone only stops the local read loop — Bun's fetch doesn't propagate that to the server socket.
+      controller.abort()
       reader.cancel().catch(() => {})
     },
   }
