@@ -47,3 +47,46 @@ test("notifications/initialized round-trips as a no-op notification (no id, no r
     state.db.close()
   }
 })
+
+test("tools/call for an unknown tool name is a JSON-RPC protocol error, code -32602", () => {
+  const state = freshState()
+  try {
+    const res = handleRpc(state, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "not.a.real.tool", arguments: {} } })
+    expect(res?.result).toBeUndefined()
+    expect(res?.error).toMatchObject({ code: -32602 })
+    expect(res?.error?.message).toContain("not.a.real.tool")
+  } finally {
+    state.db.close()
+  }
+})
+
+test("tools/call for a known tool whose implementation throws surfaces as result.isError, not a JSON-RPC error", () => {
+  const state = freshState()
+  try {
+    // graph.query throws "not bootstrapped" when there's no graph yet for the tenant.
+    const res = handleRpc(state, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "graph.query", arguments: { terms: ["x"] } } })
+    expect(res?.error).toBeUndefined()
+    expect(res?.result).toMatchObject({ isError: true })
+    expect((res?.result as any)?.content?.[0]?.text).toContain("not bootstrapped")
+  } finally {
+    state.db.close()
+  }
+})
+
+test("tools/call for a known tool returning a business {ok:false} result is NOT reclassified as isError", () => {
+  const state = freshState()
+  try {
+    // authority.flip's invalid-cell check runs before token validation, so a bogus token is fine here.
+    const res = handleRpc(state, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "authority.flip", arguments: { token: "bogus", cell: "not-a-valid-cell", to: "graph" } },
+    })
+    expect(res?.error).toBeUndefined()
+    expect((res?.result as any)?.isError).toBeUndefined()
+    expect(res?.result).toMatchObject({ structuredContent: { ok: false } })
+  } finally {
+    state.db.close()
+  }
+})

@@ -169,8 +169,18 @@ function dispatch(state: ServerState, method: string, params: any): unknown {
     case "tools/list":
       return { tools: TOOLS }
     case "tools/call": {
-      const result = callTool(state, params.name, params.arguments ?? {})
-      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result }
+      try {
+        const result = callTool(state, params.name, params.arguments ?? {})
+        return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result }
+      } catch (err) {
+        // callTool's own `default: throw new Error("unknown tool: ...")` is the SINGLE source of
+        // truth for "is this a valid tool name" (vs. keeping a second TOOLS-array lookup in sync by
+        // hand). Re-throw that specific case so it escapes to handleRpc's outer catch → -32602
+        // (protocol error), instead of being swallowed here into isError:true like a normal
+        // tool-execution failure.
+        if (/^unknown tool:/.test((err as Error).message)) throw err
+        return { content: [{ type: "text", text: (err as Error).message }], isError: true }
+      }
     }
     case "resources/list":
       return { resources: RESOURCE_LIST }
@@ -197,7 +207,8 @@ export function handleRpc(state: ServerState, req: RpcRequest): RpcResponse | nu
   try {
     return { jsonrpc: "2.0", id, result: dispatch(state, req.method, req.params ?? {}) }
   } catch (err) {
-    const code = /method not found/.test((err as Error).message) ? -32601 : -32603
+    const msg = (err as Error).message
+    const code = /method not found/.test(msg) ? -32601 : /unknown tool/.test(msg) ? -32602 : -32603
     return { jsonrpc: "2.0", id, error: { code, message: (err as Error).message } }
   }
 }

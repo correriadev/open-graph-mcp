@@ -17,6 +17,7 @@ export async function rpc(base: string, method: string, params?: unknown): Promi
   })
   const body: any = await res.json()
   if (body.error) throw new Error(body.error.message)
+  if (body.result?.isError === true) throw new Error(body.result.content?.[0]?.text ?? "tool error")
   return body.result
 }
 

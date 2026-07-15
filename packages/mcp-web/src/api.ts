@@ -24,6 +24,7 @@ async function rpc(method: string, params: unknown): Promise<any> {
   if (!res.ok) throw new Error(`${method} → HTTP ${res.status}`)
   const body = await res.json()
   if (body.error) throw new Error(`${method} → ${body.error.message ?? "rpc error"}`)
+  if (body.result?.isError === true) throw new Error(`${method} → ${body.result.content?.[0]?.text ?? "tool error"}`)
   return body.result
 }
 
