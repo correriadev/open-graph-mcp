@@ -6,7 +6,7 @@
  * resources/subscribe NÃO é implementado de propósito: streaming é SÓ pelo SSE próprio /events
  * (ADR nota 2025). Métodos: initialize, tools/list, tools/call, resources/list, resources/read.
  */
-import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js"
+import { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from "@modelcontextprotocol/sdk/types.js"
 import { DEFAULT_TENANT, type Filter, type ServerState } from "./state"
 import { bootstrap, rebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
@@ -156,12 +156,16 @@ function callTool(state: ServerState, name: string, args: any): unknown {
 
 function dispatch(state: ServerState, method: string, params: any): unknown {
   switch (method) {
-    case "initialize":
+    case "initialize": {
+      const requested = params?.protocolVersion
+      const protocolVersion =
+        typeof requested === "string" && (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested) ? requested : LATEST_PROTOCOL_VERSION
       return {
-        protocolVersion: LATEST_PROTOCOL_VERSION,
+        protocolVersion,
         capabilities: { tools: {}, resources: {} },
         serverInfo: { name: "open-graph-mcp", version: "0.1.0" },
       }
+    }
     case "tools/list":
       return { tools: TOOLS }
     case "tools/call": {
