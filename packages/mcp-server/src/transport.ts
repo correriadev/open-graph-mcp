@@ -159,7 +159,7 @@ function dispatch(state: ServerState, method: string, params: any): unknown {
     case "initialize": {
       const requested = params?.protocolVersion
       const protocolVersion =
-        typeof requested === "string" && (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested) ? requested : LATEST_PROTOCOL_VERSION
+        typeof requested === "string" && SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : LATEST_PROTOCOL_VERSION
       return {
         protocolVersion,
         capabilities: { tools: {}, resources: {} },
