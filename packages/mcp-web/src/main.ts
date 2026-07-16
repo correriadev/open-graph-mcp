@@ -309,9 +309,14 @@ async function connectOg(): Promise<void> {
         if (event.type === "reregistered") {
           // Keep api.ts's own module-level token in sync — every non-presence tool call in this file
           // (openChangeset, claimDelta, commitChangeset, ...) still goes through api.toolCall(), which
-          // has its own token variable separate from og's internal one.
+          // has its own token variable separate from og's internal one. This is a known seam from the
+          // T4 refactor (SSE/presence moved into the lib, RPC+auth didn't) — a future pass should route
+          // api.ts's calls through og.call() directly and drop api.ts's own token entirely.
           api.setToken(event.creds.token)
           localStorage.setItem("og.userId", event.creds.userId)
+          // Can fire alongside the separate "Server reiniciou" toast below (applyEvent's server.restarted
+          // handler) for the same restart — two toasts for one event is intentional, not a dup bug: this
+          // one is the only user-visible proof the QA-1 auto-recovery actually ran.
           pushToast("reauth", "Sessão renovada automaticamente após reinício do servidor")
         } else {
           console.error("auto re-register failed", event.error)
