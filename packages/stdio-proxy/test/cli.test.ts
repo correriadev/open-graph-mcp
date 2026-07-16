@@ -5,7 +5,7 @@ import { startServer } from "@open-graph-mcp/mcp-server/index"
 const CLI = path.join(import.meta.dir, "..", "src", "cli.ts")
 
 type Proxy = {
-  proc: ReturnType<typeof Bun.spawn>
+  proc: Bun.Subprocess<"pipe", "pipe", "pipe">
   send: (message: unknown) => void
   readLine: (timeoutMs?: number) => Promise<string | null>
   readStderrLine: (timeoutMs?: number) => Promise<string | null>

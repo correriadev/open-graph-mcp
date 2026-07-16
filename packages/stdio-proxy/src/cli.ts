@@ -42,7 +42,8 @@ async function forward(server: string, message: JSONRPCMessage): Promise<void> {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     if (!isRequest) {
-      process.stderr.write(`stdio-proxy: failed to forward notification (${message.method}): ${reason}\n`)
+      const method = "method" in message ? message.method : "unknown"
+      process.stderr.write(`stdio-proxy: failed to forward notification (${method}): ${reason}\n`)
       return
     }
     const errorResponse = {
