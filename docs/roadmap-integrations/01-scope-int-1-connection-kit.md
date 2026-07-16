@@ -1,6 +1,7 @@
 # INT-1 — Escopo fechado (connection kit)
 
-> Status: **escopo p/ execução** — após INT-0.
+> Status: **implementado** (branch `int-1-connection-kit`) — 5/5 DoD
+> fechados.
 > Índice-pai: `README.md`.
 >
 > **Objetivo:** o caminho "sem plugin": QUALQUER agente MCP conecta em
@@ -17,26 +18,26 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] **Proxy stdio** `packages/stdio-proxy/`: binário `bunx
+- [x] **Proxy stdio** `packages/stdio-proxy/`: binário `bunx
       @open-graph-mcp/stdio --server http://host:8787` que fala MCP stdio
       com o cliente e repassa JSON-RPC pro `/mcp`. Sem estado próprio além
       do processo. Testes: initialize/tools/list/tools/call via stdio
       contra server real.
-- [ ] **Token bootstrap no proxy**: flag `--name Alice [--tenant t]` → na
+- [x] **Token bootstrap no proxy**: flag `--name Alice [--tenant t]` → na
       primeira chamada, o proxy chama `session.register`, persiste
       `{server, token, userId}` em `~/.open-graph-mcp/credentials.json`
       (0600) e **injeta `token` automaticamente** nos argumentos de toda
       tools/call que declare `token` no inputSchema e não o tenha recebido.
       Agente nem precisa saber que token existe.
-- [ ] **Auto re-register**: resposta `invalid or expired token` (restart
+- [x] **Auto re-register**: resposta `invalid or expired token` (restart
       do server, pré-D10) → proxy re-registra com o MESMO name/tenant,
       atualiza credentials, repete a chamada UMA vez. Log em stderr.
-- [ ] **Injeção de sessionId**: `presence.focus/beat` exigem sessionId da
+- [x] **Injeção de sessionId**: `presence.focus/beat` exigem sessionId da
       conexão SSE — que cliente vanilla não tem. Proxy: se INT-2 lib
       presente/embutida, mantém a sessão viva e injeta; sem SSE, essas
       tools respondem erro claro ("live layer requires companion — see
       docs") em vez de falha críptica. (A resolução completa é INT-2.)
-- [ ] **Quickstart** `docs/roadmap-integrations/quickstart.md`:
+- [x] **Quickstart** `docs/roadmap-integrations/quickstart.md`:
   - Genérico: URL do server, register, exemplo de query e de turno.
   - Por cliente (um bloco cada, com data de verificação):
     - Claude Code: `claude mcp add open-graph --transport http <url>/mcp`
@@ -47,9 +48,12 @@
     - Copilot (VS Code agent mode / CLI): formato vigente.
     - Zed: context server (stdio via proxy).
     - Gemini CLI: `settings.json` mcpServers.
-- [ ] Cada snippet TESTADO de verdade em pelo menos: Claude Code +
+- [x] Cada snippet TESTADO de verdade em pelo menos: Claude Code +
       mais um cliente disponível na máquina; os demais marcados
       "documentado, não verificado" com data (honestidade > cobertura).
+      Claude Code e opencode verificados de verdade contra server local
+      (2026-07-16); Cursor/Windsurf/Copilot/Zed/Gemini CLI documentados
+      não-verificados com data.
 
 ---
 
