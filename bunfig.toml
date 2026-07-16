@@ -1,0 +1,7 @@
+[test]
+# Default per-test timeout is 5000ms. packages/stdio-proxy's tests spawn real subprocesses + a real
+# HTTP server + (for retry-path tests) two round-trips, and helpers.ts's own readLine() default
+# timeout is already 5000ms — too tight a margin on a loaded CI runner. This applies to plain
+# `bun test` (what CI and every package actually run), unlike a per-package `--timeout` flag in one
+# package.json's "test" script, which nothing invokes.
+timeout = 15000
