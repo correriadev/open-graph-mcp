@@ -1,9 +1,10 @@
 import type { Graph, GraphNode } from "@open-graph-mcp/graph-core/build"
-import { dotColor, EventStream, PresenceStore, type Envelope, type PresenceEntry } from "@open-graph-mcp/client"
+import { connect, dotColor, PresenceStore, type Envelope, type OgHandle, type PresenceEntry, type ReauthEvent } from "@open-graph-mcp/client"
 import * as api from "./api"
 import { GhostStore, type GhostDelta } from "./ghosts"
 import { Renderer } from "./render"
 import { ToastQueue } from "./toasts"
+import { localStorageTokenStore } from "./token-store"
 
 const DRIFT_KINDS = new Set(["drift.node", "drift.cell"])
 const CS_KINDS = new Set([
@@ -79,36 +80,18 @@ function saveSettings() {
   sessionStorage.setItem("og.settings", JSON.stringify(settings))
 }
 
-let sseSessionId: string | null = null
+// og.presence.focus/beat (INT-2 T4, @open-graph-mcp/client) now own the SSE session id, the 15s beat
+// timer, and re-declaring presence on every (re)connect (spec §9.1) — including the focus-BEFORE-beat
+// ordering (stalker mode must be born silent, spec §9.4) and the QA-1 auto-re-register-on-dead-token
+// recovery. `focusedCell` stays local — it's still needed for maybeToast()'s "did I lose priority on the
+// cell I'm looking at" check and to re-send the same cell when the invisible-mode toggle changes.
 let focusedCell: string | null = null
 
-async function declareFocus(cell: string | null): Promise<void> {
+function setFocus(cell: string | null): void {
   focusedCell = cell
-  if (!sseSessionId || !api.getToken()) return // presence tools need an authenticated session
-  try {
-    // always explicit: the server only updates invisibility when the flag is a boolean, so an
-    // `undefined` here would leave a previously-invisible presence invisible after re-enabling
-    await api.presenceFocus(sseSessionId, cell, !settings.showPresence)
-  } catch (e) {
-    console.error("presence.focus failed", e)
-  }
-}
-
-/**
- * Registers this session + (re)declares current focus — called on every connect/reconnect (spec §9.1).
- * Focus goes FIRST: the server only suppresses `user.joined` for invisible users when the very first
- * presence-registering call already carries `invisible:true` (stalker mode is born silent, spec §9.4);
- * a beat-first order would announce a user who asked not to be shown.
- */
-async function declarePresence(): Promise<void> {
-  if (!sseSessionId || !api.getToken()) return
-  await declareFocus(focusedCell)
-  try {
-    await api.presenceBeat(sseSessionId, "web")
-  } catch (e) {
-    console.error("presence.beat failed", e)
-  }
-  pollWho()
+  // always explicit invisible: the server only updates invisibility when the flag is a boolean, so an
+  // `undefined` here would leave a previously-invisible presence invisible after re-enabling
+  og?.presence.focus(cell, { invisible: !settings.showPresence }).catch((e) => console.error("presence.focus failed", e))
 }
 
 async function pollWho(): Promise<void> {
@@ -124,11 +107,8 @@ async function pollWho(): Promise<void> {
   }
 }
 
-setInterval(() => {
-  if (sseSessionId && api.getToken())
-    api.presenceBeat(sseSessionId, "web").catch((e) => console.error("presence.beat failed", e))
-}, 15_000)
-
+// pollWho() is a SEPARATE polling loop the client lib doesn't cover yet (that's INT-2 T5's
+// `connect({live:false})` job) — left as-is per the T4 task brief.
 setInterval(pollWho, 10_000)
 
 // keep dot colors fresh even without new presence traffic
@@ -249,7 +229,7 @@ function openSettingsModal(): void {
   $<HTMLInputElement>("s_presence").onchange = (e) => {
     settings.showPresence = (e.target as HTMLInputElement).checked
     saveSettings()
-    declareFocus(focusedCell)
+    setFocus(focusedCell)
   }
   $<HTMLInputElement>("s_notify").onchange = (e) => {
     settings.notifyCommits = (e.target as HTMLInputElement).checked
@@ -259,64 +239,106 @@ function openSettingsModal(): void {
 $("settingsBtn").onclick = () => openSettingsModal()
 
 // ---- session / reconnect (spec §9) -----------------------------------------
-const tenant = new URLSearchParams(location.search).get("tenant") || "default"
+// connect() (INT-2 T4, @open-graph-mcp/client) now owns: register-if-needed, the SSE connection +
+// reconnect/backoff, re-declaring presence on every fresh session id, and — the QA-1 fix — auto
+// re-registering (with this SAME localStorage-persisted name) when a live call comes back "invalid or
+// expired token" (e.g. after a server restart wipes in-memory tokens), retrying once, and redeclaring
+// presence against the fresh token/session. None of that requires a manual page refresh anymore.
+let og: OgHandle | null = null
+const tokenStore = localStorageTokenStore()
+const tenant = new URLSearchParams(location.search).get("tenant") || undefined
 
-async function bootSession(): Promise<void> {
-  const saved = localStorage.getItem("og.token")
-  if (saved) {
-    api.setToken(saved)
-    $<HTMLInputElement>("name").value = localStorage.getItem("og.name") || ""
-    $("who").textContent = localStorage.getItem("og.name") || ""
-    await reattach()
-    return
+/**
+ * Recover any changesets this session still has open — fired by og's onReattach after every fresh SSE
+ * session id (spec §9), not just at initial boot (an improvement over the pre-refactor code, which only
+ * ever reattached once at boot and never after a reconnect). Also where `pollWho()` gets kicked
+ * immediately (rather than waiting for its 10s interval): old `declarePresence()` ran focus → beat →
+ * `pollWho()` on every `session.created`, and ephemeral `user.*` events are NOT replayed on a fresh SSE
+ * connection (the tail-of-log query only reads durable rows) — without an immediate poll here, a user
+ * already present-and-idle when we (re)connect would be invisible for up to ~10s.
+ *
+ * Doesn't overwrite `activeCsId` if the user already has a draft open in the UI — a reconnect (e.g. a
+ * brief network blip) shouldn't yank the currently-open draft panel out from under them.
+ */
+function applyReattach(res: any): void {
+  const mine: any[] = res?.changesets ?? res ?? []
+  for (const cs of mine) {
+    ghosts.track({
+      csId: cs.csId ?? cs.id,
+      intent: cs.intent ?? "",
+      cells: cs.cells ?? [],
+      byUser: cs.byUser ?? localStorage.getItem("og.name") ?? "",
+      openedAt: cs.openedAt ?? 0,
+      expiresAt: cs.expiresAt ?? 0,
+      deltaCount: 0,
+      deltas: [],
+    })
+    refetchDeltas(cs.csId ?? cs.id)
   }
-  const name = ($<HTMLInputElement>("name").value || localStorage.getItem("og.name") || "").trim()
-  if (!name) return // wait until the user types a name and blurs
-  try {
-    const s = await api.registerSession(name, tenant)
-    api.setToken(s.token)
-    localStorage.setItem("og.token", s.token)
-    localStorage.setItem("og.name", name)
-    localStorage.setItem("og.userId", s.userId)
-    $("who").textContent = name
-    await reattach()
-  } catch (e) {
-    console.error("register failed", e)
+  if (mine[0] && !activeCsId) {
+    activeCsId = mine[0].csId ?? mine[0].id
+    renderDraft()
   }
+  renderer.setGhosts(ghosts.changesets.values(), ghosts.locks.values())
+  pollWho()
 }
 
-/** Re-attach any open changeset owned by this session (spec §9). */
-async function reattach(): Promise<void> {
+/**
+ * (Re)connects. Called at boot, and again whenever the user types+blurs a name (fresh identity — the
+ * previous, possibly-anonymous connection is torn down and replaced). With no cached token and no name
+ * yet, `store`/`name` are omitted entirely so `connect()` still opens a live but unauthenticated SSE
+ * connection (mirrors the pre-refactor code's unconditional `stream.start()` — anonymous visitors still
+ * see the canvas + live graph events before registering an identity).
+ */
+async function connectOg(): Promise<void> {
+  const cached = tokenStore.get()
+  const name = ($<HTMLInputElement>("name").value || localStorage.getItem("og.name") || "").trim()
+
+  og?.close()
   try {
-    const res = await api.listMine()
-    const mine: any[] = res?.changesets ?? res ?? []
-    for (const cs of mine) {
-      ghosts.track({
-        csId: cs.csId ?? cs.id,
-        intent: cs.intent ?? "",
-        cells: cs.cells ?? [],
-        byUser: cs.byUser ?? localStorage.getItem("og.name") ?? "",
-        openedAt: cs.openedAt ?? 0,
-        expiresAt: cs.expiresAt ?? 0,
-        deltaCount: 0,
-        deltas: [],
-      })
-      refetchDeltas(cs.csId ?? cs.id)
-    }
-    if (mine[0]) {
-      activeCsId = mine[0].csId ?? mine[0].id
-      renderDraft()
-    }
-    renderer.setGhosts(ghosts.changesets.values(), ghosts.locks.values())
+    og = await connect({
+      server: api.serverBase(),
+      agentKind: "web",
+      tenant,
+      ...(cached || name ? { store: tokenStore, name: name || undefined } : {}),
+      onOpen: () => setConn(true),
+      onClose: () => setConn(false),
+      onReset: () => loadSnapshot(),
+      onReattach: applyReattach,
+      onReauth: (event: ReauthEvent) => {
+        if (event.type === "reregistered") {
+          // Keep api.ts's own module-level token in sync — every non-presence tool call in this file
+          // (openChangeset, claimDelta, commitChangeset, ...) still goes through api.toolCall(), which
+          // has its own token variable separate from og's internal one.
+          api.setToken(event.creds.token)
+          localStorage.setItem("og.userId", event.creds.userId)
+          pushToast("reauth", "Sessão renovada automaticamente após reinício do servidor")
+        } else {
+          console.error("auto re-register failed", event.error)
+        }
+      },
+    })
   } catch (e) {
-    console.error("list_mine failed", e)
+    console.error("connect failed", e)
+    og = null
+    return
+  }
+
+  og.on("*", applyEvent)
+
+  const creds = tokenStore.get()
+  if (creds) {
+    api.setToken(creds.token)
+    if (name) localStorage.setItem("og.name", name)
+    localStorage.setItem("og.userId", creds.userId)
+    $<HTMLInputElement>("name").value = localStorage.getItem("og.name") || ""
+    $("who").textContent = localStorage.getItem("og.name") || ""
   }
 }
 
 $<HTMLInputElement>("name").onchange = async () => {
-  if (localStorage.getItem("og.token")) return // already registered this session
-  await bootSession()
-  if (api.getToken()) stream.reset() // reopen SSE carrying the fresh token
+  if (tokenStore.get()) return // already registered this session
+  await connectOg()
 }
 
 // ---- drift badge (Phase 1) -------------------------------------------------
@@ -346,7 +368,7 @@ function showPanel(n: GraphNode, cell: string, authority: string, drift: string 
       ${lock ? `<dt>🔒 locked by</dt><dd>${esc(lock.holder)} · ${esc(lock.csId)}<br>expires ${new Date(lock.expiresAt).toLocaleTimeString()}</dd>` : ""}
     </dl>`
   $("close").onclick = () => (p.hidden = true)
-  declareFocus(cell) // clicking a node = focusing its cell (spec §7: client cell-focus concept)
+  setFocus(cell) // clicking a node = focusing its cell (spec §7: client cell-focus concept)
 }
 
 // ---- events sidebar --------------------------------------------------------
@@ -375,9 +397,10 @@ function applyEvent(env: Envelope) {
   if (env.kind === "graph.rebuilt" || env.kind === "graph.bootstrapped") loadSnapshot()
 
   if (env.kind === "server.restarted") {
-    // Task 5 event; presence lives in server memory only (spec §9.1) — redeclare ours and flag it.
+    // Presence lives in server memory only (spec §9.1) — flag it. Recovery itself (redeclaring presence,
+    // and — QA-1 fix — auto re-registering if the cached token is now dead) happens automatically inside
+    // og's own reconnect handling; nothing to trigger manually here anymore.
     pushToast("server", "Server reiniciou — sua presença foi resetada")
-    declarePresence()
   }
 
   if (PRESENCE_KINDS.has(env.kind)) {
@@ -705,28 +728,10 @@ const setConn = (up: boolean) => {
   el.textContent = up ? "● connected" : "● disconnected"
 }
 
-const stream = new EventStream(
-  {
-    onEvent: applyEvent,
-    onReset: loadSnapshot,
-    onOpen: () => setConn(true),
-    onClose: () => setConn(false),
-    // Every (re)connection mints a fresh SSE session id; presence is keyed to it (spec §3.3), so we
-    // re-register and re-declare the current focus each time (spec §9.1: no server-side auto-refocus).
-    onSessionId: (id) => {
-      sseSessionId = id
-      declarePresence()
-    },
-  },
-  // EventStream is decoupled from mcp-web's api.ts (see EventStreamOptions doc comment in
-  // @open-graph-mcp/client's subscribe.ts) — supply the same serverBase/getToken it used to import
-  // directly, so behavior (request URL, token query param) is unchanged.
-  { serverBase: api.serverBase, getToken: api.getToken },
-)
-
+// SSE connection, reconnect/backoff, event dispatch (og.on wired in connectOg), and presence lifecycle
+// are all owned by connect() now — see connectOg() above (spec §9 section).
 ;(async () => {
-  await bootSession()
+  await connectOg()
   await loadSnapshot()
   route()
-  stream.start()
 })()

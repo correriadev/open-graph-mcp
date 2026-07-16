@@ -20,4 +20,4 @@ export {
 
 export { type Credentials, type TokenStore } from "./store.ts"
 
-export { type ConnectOptions, type OgHandle, connect, registerSession } from "./connect.ts"
+export { type ConnectOptions, type OgHandle, type ReauthEvent, connect, registerSession } from "./connect.ts"
