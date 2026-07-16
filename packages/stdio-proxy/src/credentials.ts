@@ -4,9 +4,10 @@
  * memoization of the result. Everything here is the proxy's own bookkeeping — never relayed to the
  * calling MCP client, which never needs to know a token exists (see cli.ts's maybeInjectToken).
  *
- * Split out of cli.ts (Task 3) — a pure extraction, no behavior change — once code review on the
- * --name bootstrap flow flagged this as a natural module boundary distinct from cli.ts's
- * stdio-framing/injection-decision logic.
+ * Split out of cli.ts (Task 3) once the cluster grew a second caller of "get me a usable token":
+ * resolveCredentials for the normal opt-in bootstrap path, and reregisterCredentials for cli.ts's
+ * retry-on-expired-token path — same underlying I/O and memoization, so it belongs in one place
+ * rather than being duplicated or reached into from outside.
  */
 import * as fs from "node:fs"
 import * as os from "node:os"
@@ -100,6 +101,22 @@ export async function resolveCredentials(server: string, name: string, tenant: s
     cachedCredentials = existing
     return existing
   }
+  const fresh = await registerSession(server, name, tenant)
+  saveCredentials(fresh)
+  cachedCredentials = fresh
+  return fresh
+}
+
+/** Unconditionally registers a FRESH token and replaces whatever was memoized/on-disk — used by
+ * cli.ts's retry-on-expired-token path. Deliberately does NOT consult the on-disk file first (unlike
+ * resolveCredentials): the disk file almost certainly holds the SAME stale token that just failed (it
+ * was persisted by this process or a prior run against the same now-dead server session), so reusing
+ * it would just reproduce the failure that triggered this call in the first place. The stale in-memory
+ * cache is cleared before registering (rather than just overwritten after) so a concurrent/re-entrant
+ * read during registration can't observe the known-stale value as if it were still good — moot today
+ * since the stdin loop is strictly sequential (see the memoization note above), but cheap to get right. */
+export async function reregisterCredentials(server: string, name: string, tenant: string | undefined): Promise<Credentials> {
+  cachedCredentials = null
   const fresh = await registerSession(server, name, tenant)
   saveCredentials(fresh)
   cachedCredentials = fresh

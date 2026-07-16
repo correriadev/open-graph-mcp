@@ -294,3 +294,172 @@ test("a blank/malformed stdin line is dropped (logged to stderr) without crashin
 // ── --name token bootstrap ──────────────────────────────────────────────────────────────────────
 // (moved to credentials.test.ts alongside the src/credentials.ts extraction — Task 3)
 
+// ── auto re-register on expired token (Task 3) ──────────────────────────────────────────────────
+// Retry-on-expiry is scoped EXACTLY to tools/call requests where this proxy itself injected the
+// token (--name bootstrap). It must never trigger for a caller-supplied token, and must never retry
+// more than once under any circumstance.
+
+test("token expires (server restart, pre-D10) mid-session: proxy re-registers with the same name/tenant and retries once, succeeding", async () => {
+  const server = startServer()
+  const home = tmpHome()
+  const proxy = spawnProxy(server.url, { extraArgs: ["--name", "Alice"], home })
+  try {
+    await proxy.readStderrLine() // startup log
+
+    // First call: establishes a valid token, injected and persisted normally.
+    proxy.send({ jsonrpc: "2.0", id: 30, method: "tools/call", params: { name: "changeset.list_mine", arguments: {} } })
+    await proxy.readStderrLine() // "injected token ..." line
+    const first = JSON.parse((await proxy.readLine())!)
+    expect(first.result.isError).toBeUndefined()
+    const credsAfterFirst = readCredentials(home)
+
+    // Simulate a server restart: tokens live purely in-memory (pre-D10, see session.ts), so a
+    // restart wipes them while the SQLite-backed user persists. Clearing the in-memory map directly
+    // is a deterministic, in-process stand-in for "the server restarted" — the proxy is a black-box
+    // HTTP client either way, and the response it gets back is byte-identical to a real restart.
+    server.state.tokens.clear()
+
+    proxy.send({ jsonrpc: "2.0", id: 31, method: "tools/call", params: { name: "changeset.list_mine", arguments: {} } })
+
+    // The proxy still believes its memoized token is good, so maybeInjectToken injects it as usual
+    // BEFORE forwardInjectedToolCall discovers (from the server's response) that it's now stale.
+    const injectLine = await proxy.readStderrLine()
+    expect(injectLine).toContain("injected token for tools/call changeset.list_mine")
+
+    const expiredLine = await proxy.readStderrLine()
+    expect(expiredLine).toContain("token expired, re-registering and retrying tools/call changeset.list_mine")
+
+    // Exactly one retry: no second "token expired" (or third "injected token") line follows.
+    const anotherLine = await proxy.readStderrLine(500)
+    expect(anotherLine).toBeNull()
+
+    const retryResult = JSON.parse((await proxy.readLine())!)
+    expect(retryResult.id).toBe(31)
+    expect(retryResult.error).toBeUndefined()
+    expect(retryResult.result.isError).toBeUndefined()
+    expect(retryResult.result.structuredContent.changesets).toBeArray()
+
+    // The re-registration persisted a NEW token, different from the one that just failed.
+    const credsAfterRetry = readCredentials(home)
+    expect(credsAfterRetry.token).not.toBe(credsAfterFirst.token)
+  } finally {
+    proxy.kill()
+    server.stop()
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test("a caller-supplied token that comes back expired is NOT retried — passes through unmodified, no re-registration", async () => {
+  const server = startServer()
+  const home = tmpHome()
+  const proxy = spawnProxy(server.url, { extraArgs: ["--name", "Alice"], home })
+  try {
+    await proxy.readStderrLine() // startup log
+
+    proxy.send({
+      jsonrpc: "2.0",
+      id: 32,
+      method: "tools/call",
+      params: { name: "changeset.list_mine", arguments: { token: "not-a-real-token" } },
+    })
+
+    // No injection line (caller supplied their own token) and, crucially, no re-registration line
+    // either — this is the hard boundary: the proxy has no business re-registering on behalf of a
+    // caller-supplied identity it never issued.
+    const maybeLine = await proxy.readStderrLine(500)
+    expect(maybeLine).toBeNull()
+
+    const line = await proxy.readLine()
+    const parsed = JSON.parse(line!)
+    expect(parsed.id).toBe(32)
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toContain("invalid or expired token")
+
+    // No credentials file was ever created — the proxy never touched its own bootstrap identity.
+    expect(fs.existsSync(credentialsPathFor(home))).toBe(false)
+  } finally {
+    proxy.kill()
+    server.stop()
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test("when the retry itself fails for a reason other than token expiry, that failure is written to stdout as final — no second retry", async () => {
+  // A mock server driving the exact sequence: first tools/call succeeds (establishes credentials),
+  // second tools/call comes back "invalid or expired token" (triggering re-registration + retry),
+  // and the RETRY's own tools/call fails for a wholly unrelated reason. The proxy must surface that
+  // failure as-is, without attempting yet another retry.
+  let registerCalls = 0
+  let toolCalls = 0
+  const mock = Bun.serve({
+    port: 0,
+    fetch: async (req) => {
+      const body = (await req.json()) as { id?: string | number; method?: string; params?: { name?: string; arguments?: Record<string, unknown> } }
+      if (body.method === "tools/list") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "x",
+          result: { tools: [{ name: "changeset.list_mine", inputSchema: { type: "object", properties: { token: { type: "string" } } } }] },
+        })
+      }
+      if (body.method === "tools/call" && body.params?.name === "session.register") {
+        registerCalls++
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "x",
+          result: { structuredContent: { token: `token-${registerCalls}`, userId: "u_1", tenantId: "default" } },
+        })
+      }
+      if (body.method === "tools/call" && body.params?.name === "changeset.list_mine") {
+        toolCalls++
+        if (toolCalls === 1) {
+          return Response.json({ jsonrpc: "2.0", id: body.id, result: { structuredContent: { changesets: [] } } })
+        }
+        if (toolCalls === 2) {
+          return Response.json({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { content: [{ type: "text", text: "invalid or expired token — call session.register" }], isError: true },
+          })
+        }
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "boom: unrelated tool failure" }], isError: true } })
+      }
+      return Response.json({ jsonrpc: "2.0", id: "x", result: {} })
+    },
+  })
+  const home = tmpHome()
+  const proxy = spawnProxy(`http://localhost:${mock.port}`, { extraArgs: ["--name", "Alice"], home })
+  try {
+    await proxy.readStderrLine() // startup log
+
+    // First call: succeeds, establishes credentials in-process.
+    proxy.send({ jsonrpc: "2.0", id: 33, method: "tools/call", params: { name: "changeset.list_mine", arguments: {} } })
+    await proxy.readStderrLine() // injected line
+    const first = JSON.parse((await proxy.readLine())!)
+    expect(first.result.isError).toBeUndefined()
+
+    // Second call: reuses the memoized token (no new "injected" prerequisite beyond the log line),
+    // gets the expired-token response, re-registers, retries — and the retry itself fails.
+    proxy.send({ jsonrpc: "2.0", id: 34, method: "tools/call", params: { name: "changeset.list_mine", arguments: {} } })
+    await proxy.readStderrLine() // injected line (reused token)
+    const expiredLine = await proxy.readStderrLine()
+    expect(expiredLine).toContain("token expired, re-registering and retrying tools/call changeset.list_mine")
+
+    // No second "token expired" line — the retry's own failure does not trigger yet another retry.
+    const anotherLine = await proxy.readStderrLine(500)
+    expect(anotherLine).toBeNull()
+
+    const retryResult = JSON.parse((await proxy.readLine())!)
+    expect(retryResult.id).toBe(34)
+    expect(retryResult.result.isError).toBe(true)
+    expect(retryResult.result.content[0].text).toBe("boom: unrelated tool failure")
+    expect(retryResult.result.content[0].text).not.toContain("invalid or expired token")
+
+    expect(toolCalls).toBe(3) // success, expired, failed-retry — never a 4th attempt
+    expect(registerCalls).toBe(2) // initial bootstrap + exactly one re-registration
+  } finally {
+    proxy.kill()
+    mock.stop(true)
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})

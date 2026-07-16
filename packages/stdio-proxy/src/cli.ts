@@ -14,10 +14,16 @@
  * resolves credentials (reusing ~/.open-graph-mcp/credentials.json when it matches --server, else
  * calling session.register itself) and injects the token — the calling agent never needs to know a
  * token exists. Without --name, none of this activates: pure Task 1 pass-through.
+ *
+ * Auto re-register on expired token (Task 3): the server (pre-D10) keeps tokens in memory only, so a
+ * restart silently invalidates every previously-issued token. For a `tools/call` where THIS proxy
+ * injected the token (never for a caller-supplied one — see forwardInjectedToolCall), a response
+ * matching the server's `"invalid or expired token"` convention triggers exactly one re-registration
+ * (same --name/--tenant) and one retry of the original call, logged to stderr.
  */
 import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js"
 import { isJSONRPCRequest, type JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js"
-import { type Credentials, postMcp, resolveCredentials } from "./credentials"
+import { type Credentials, postMcp, reregisterCredentials, resolveCredentials } from "./credentials"
 
 function parseArgs(argv: string[]): { server: string; name?: string; tenant?: string } {
   const idx = argv.indexOf("--server")
@@ -66,10 +72,44 @@ function sendProxyToolError(id: string | number, text: string): void {
   process.stdout.write(serializeMessage(response))
 }
 
+/** POST `body` to `${server}/mcp` and parse the JSON-RPC response, correlated to `id` for error
+ * reporting. On ANY failure (network, or a non-JSON/malformed response body) a proxy-originated
+ * -32000 reply is written to stdout via sendProxyError and this returns `null` — the caller's only
+ * job on `null` is to stop, since the stdout reply has already happened. This is the one place that
+ * failure discipline lives; every request/response call site (forward()'s request path,
+ * forwardInjectedToolCall()'s initial send AND its retry) goes through here instead of repeating the
+ * postMcp→try/catch→.json()→try/catch shape inline. Request-shaped only — NOT for notifications,
+ * which have no response body to parse and use their own (stderr-only, no stdout reply) failure
+ * handling in forward(). */
+async function postAndParse(server: string, body: unknown, id: string | number): Promise<JSONRPCMessage | null> {
+  let httpResponse: Response
+  try {
+    httpResponse = await postMcp(server, body)
+  } catch (err) {
+    sendProxyError(id, `proxy: failed to reach server: ${errorReason(err)}`)
+    return null
+  }
+  try {
+    return (await httpResponse.json()) as JSONRPCMessage
+  } catch (err) {
+    sendProxyError(id, `proxy: invalid response from server: ${errorReason(err)}`)
+    return null
+  }
+}
+
+/** Clones `message` and sets `params.arguments.token` to `token`, leaving `message` itself untouched.
+ * Shared by maybeInjectToken (the initial injection) and forwardInjectedToolCall's retry (swapping in
+ * the freshly re-registered token) — both need the identical clone-and-stamp operation. */
+function withToken(message: JSONRPCMessage, token: string): JSONRPCMessage {
+  const cloned = structuredClone(message) as JSONRPCMessage & { params: { arguments?: Record<string, unknown> } }
+  cloned.params.arguments = { ...(cloned.params.arguments ?? {}), token }
+  return cloned
+}
+
 // ── token bootstrap (--name / --tenant) ─────────────────────────────────────────────────────────
 // Everything below only ever runs when --name was passed; see maybeInjectToken's early return.
 // Credential I/O + registration + memoization live in ./credentials — this file only decides WHEN
-// injection applies and does the actual stdio/HTTP relaying.
+// injection/retry applies and does the actual stdio/HTTP relaying.
 
 type ToolDefinition = { name: string; inputSchema?: { properties?: Record<string, unknown> } }
 
@@ -96,24 +136,33 @@ async function ensureToolSchemaCache(server: string): Promise<void> {
   }
 }
 
+/** Result of maybeInjectToken: `injected: true` tells the caller (main()'s loop) this specific
+ * outgoing message carries a proxy-injected token, so a subsequent "invalid or expired token"
+ * response is THIS proxy's own bootstrapped identity to re-register, not a caller-supplied token it
+ * has no business touching. Explicit rather than re-derived from the message, since "was this
+ * injected" isn't reliably recoverable from the outgoing JSON-RPC body alone (a caller-supplied token
+ * looks identical on the wire to an injected one). */
+type InjectionResult = { message: JSONRPCMessage; injected: boolean }
+
 /** Decides whether an incoming tools/call needs a token injected, and does so. Returns:
- *  - the SAME message reference, unmodified, when no injection is needed (tool unknown/not
- *    token-aware, or the caller already supplied a token) — the common/default case;
- *  - a CLONE of the message with `params.arguments.token` set, when injection applies and
- *    credential resolution succeeded;
+ *  - `{ message, injected: false }` with the SAME message reference, unmodified, when no injection is
+ *    needed (tool unknown/not token-aware, or the caller already supplied a token) — the common/
+ *    default case;
+ *  - `{ message, injected: true }` with a CLONE of the message with `params.arguments.token` set,
+ *    when injection applies and credential resolution succeeded;
  *  - `null` when injection applies but credential resolution failed — in that case a proxy-side
  *    isError response has ALREADY been written to stdout and the caller must not forward anything.
  * Only ever called when --name is set (see main()'s call site). */
-async function maybeInjectToken(server: string, name: string, tenant: string | undefined, message: JSONRPCMessage): Promise<JSONRPCMessage | null> {
+async function maybeInjectToken(server: string, name: string, tenant: string | undefined, message: JSONRPCMessage): Promise<InjectionResult | null> {
   const params = (message as { params?: { name?: string; arguments?: Record<string, unknown> } }).params
   const toolName = params?.name
-  if (!toolName) return message
+  if (!toolName) return { message, injected: false }
 
   await ensureToolSchemaCache(server)
   const tool = toolSchemaCache.get(toolName)
   const declaresToken = !!tool?.inputSchema?.properties && Object.prototype.hasOwnProperty.call(tool.inputSchema.properties, "token")
-  if (!declaresToken) return message
-  if (params?.arguments?.token) return message // caller already supplied one — never overwrite it
+  if (!declaresToken) return { message, injected: false }
+  if (params?.arguments?.token) return { message, injected: false } // caller already supplied one — never overwrite it
 
   let creds: Credentials
   try {
@@ -123,40 +172,75 @@ async function maybeInjectToken(server: string, name: string, tenant: string | u
     return null
   }
 
-  const cloned = structuredClone(message) as JSONRPCMessage & { params: { arguments?: Record<string, unknown> } }
-  cloned.params.arguments = { ...(cloned.params.arguments ?? {}), token: creds.token }
+  const cloned = withToken(message, creds.token)
   process.stderr.write(`stdio-proxy: injected token for tools/call ${toolName}\n`)
-  return cloned
+  return { message: cloned, injected: true }
 }
 
-async function forward(server: string, message: JSONRPCMessage): Promise<void> {
-  const isRequest = isJSONRPCRequest(message)
+/** True when `body` is a JSON-RPC result shaped like the server's tool-execution-failure convention
+ * (isError:true content) AND its message contains the server's exact "invalid or expired token"
+ * phrase (see packages/mcp-server/src/tools/session.ts's requireToken) — a substring match, not a
+ * full-string one, since the server message could in principle grow a suffix without changing meaning. */
+function isExpiredTokenError(body: JSONRPCMessage): boolean {
+  const result = (body as { result?: { isError?: boolean; content?: Array<{ text?: string }> } }).result
+  if (!result?.isError) return false
+  const text = result.content?.[0]?.text
+  return typeof text === "string" && text.includes("invalid or expired token")
+}
 
-  let httpResponse: Response
-  try {
-    httpResponse = await postMcp(server, message)
-  } catch (err) {
-    const reason = errorReason(err)
-    if (!isRequest) {
-      const method = "method" in message ? message.method : "unknown"
-      process.stderr.write(`stdio-proxy: failed to forward notification (${method}): ${reason}\n`)
-      return
-    }
-    sendProxyError(message.id, `proxy: failed to reach server: ${reason}`)
+/** Forwards a `tools/call` whose token THIS proxy injected (never a caller-supplied one — see
+ * InjectionResult), with auto re-register-and-retry-once on token expiry (Task 3's DoD). Mirrors
+ * forward()'s own failure discipline for the network/parse-failure cases (still must produce SOME
+ * stdout reply, via sendProxyError's -32000 convention) but additionally recognizes the
+ * "invalid or expired token" tool-execution failure and, for exactly that case: re-registers fresh
+ * (same name/tenant, never reusing the now-stale disk file), retries the ORIGINAL call once with the
+ * new token, and writes whatever the retry produces — success or failure — as final. No second retry
+ * under any circumstance, including another "invalid or expired token" from the retry itself. */
+async function forwardInjectedToolCall(server: string, message: JSONRPCMessage, name: string, tenant: string | undefined): Promise<void> {
+  const id = (message as JSONRPCMessage & { id: string | number }).id
+  const toolName = (message as JSONRPCMessage & { params: { name: string } }).params.name
+
+  const body = await postAndParse(server, message, id)
+  if (body === null) return // network/parse failure — postAndParse already replied with -32000
+
+  if (!isExpiredTokenError(body)) {
+    process.stdout.write(serializeMessage(body))
     return
   }
 
-  if (!isRequest) return // notification: server answers 204, nothing to relay to stdout
+  process.stderr.write(`stdio-proxy: token expired, re-registering and retrying tools/call ${toolName}\n`)
 
-  // Same reasoning as the fetch() catch above: this server always answers a request-with-id with a
-  // JSON body, but `--server` could point at something else entirely (wrong port, a plain web server,
-  // an empty body) — `.json()` rejecting must not escape uncaught and take the whole proxy down.
+  let fresh: Credentials
   try {
-    const body = await httpResponse.json()
-    process.stdout.write(serializeMessage(body as JSONRPCMessage))
+    fresh = await reregisterCredentials(server, name, tenant)
   } catch (err) {
-    sendProxyError(message.id, `proxy: invalid response from server: ${errorReason(err)}`)
+    sendProxyToolError(id, `proxy: token expired and re-registration failed: ${errorReason(err)}`)
+    return
   }
+
+  const retryBody = await postAndParse(server, withToken(message, fresh.token), id)
+  if (retryBody === null) return // network/parse failure on the retry — no second retry either way
+
+  process.stdout.write(serializeMessage(retryBody))
+}
+
+async function forward(server: string, message: JSONRPCMessage): Promise<void> {
+  if (!isJSONRPCRequest(message)) {
+    // Notifications get their own (lighter) failure handling: no `id` to correlate a stdout reply to,
+    // no response body to parse (the server answers 204), so a network failure here just gets logged
+    // to stderr — unlike postAndParse's -32000-to-stdout convention, which needs a request's `id`.
+    try {
+      await postMcp(server, message)
+    } catch (err) {
+      const method = "method" in message ? message.method : "unknown"
+      process.stderr.write(`stdio-proxy: failed to forward notification (${method}): ${errorReason(err)}\n`)
+    }
+    return
+  }
+
+  const body = await postAndParse(server, message, message.id)
+  if (body === null) return // network/parse failure — postAndParse already replied with -32000
+  process.stdout.write(serializeMessage(body))
 }
 
 async function main(): Promise<void> {
@@ -182,11 +266,19 @@ async function main(): Promise<void> {
 
       // Opt-in token bootstrap: only ever touches tools/call requests, and only when --name was
       // passed. Without --name this block is skipped entirely — pure Task 1 pass-through, unchanged.
-      let outgoing: JSONRPCMessage | null = message
+      let outgoing: JSONRPCMessage = message
       if (name && isJSONRPCRequest(message) && message.method === "tools/call") {
-        outgoing = await maybeInjectToken(server, name, tenant, message)
+        const injectionResult = await maybeInjectToken(server, name, tenant, message)
+        if (injectionResult === null) continue // injection failed; a proxy-side isError reply already went to stdout
+        if (injectionResult.injected) {
+          // Retry-on-expiry ONLY ever applies to calls where THIS proxy injected the token — a
+          // caller-supplied token's expiry is not this proxy's identity to re-register for, and must
+          // pass through forward()'s ordinary path unmodified (see forwardInjectedToolCall's doc).
+          await forwardInjectedToolCall(server, injectionResult.message, name, tenant)
+          continue
+        }
+        outgoing = injectionResult.message
       }
-      if (outgoing === null) continue // injection failed; a proxy-side isError reply already went to stdout
 
       // Deliberately sequential: awaiting each forward() before reading the next buffered message
       // means pipelined stdin requests are still processed one at a time, in order. Not an oversight —
