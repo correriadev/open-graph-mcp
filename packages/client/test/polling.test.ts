@@ -274,7 +274,60 @@ test("presence.who polling synthesizes user.joined/user.focused/user.left as the
   assert.equal(left[0].payload.userId, "u1")
 })
 
-// ---- 5. QA-1 re-register also recovers a polling-mode call ------------------------------------------
+// ---- 5b. a graphId change mid-poll-cycle triggers onReset, no stale-graphId events leak -------------
+
+test("pollHistoryOnce detects a graphId change (server re-bootstrapped) and fires onReset, dropping the stale batch", async () => {
+  // historyResourceResponse filters by `e.seq > since` using the client's own last-seen seq — which
+  // is stale/meaningless across a graphId change (the client's g1 cursor has no relationship to g2's
+  // seq numbering). Giving the post-rebuild event a seq well past any leftover `since` the client might
+  // still be sending avoids that filter accidentally hiding the very event this test needs to arrive —
+  // same as a real server having accumulated a few events under the new graphId before this poll lands.
+  let historyEvents: Envelope[] = [env({ seq: 1, kind: "drift.node", graphId: "g1" })]
+  let graphId = "g1"
+  respond = (call) => {
+    if (call.method === "resources/read") return historyResourceResponse(call, graphId, historyEvents)
+    return { result: { structuredContent: { ok: true, users: [] } } }
+  }
+
+  let resetCount = 0
+  const og = await make({ server: "http://x", agentKind: "web", live: false, pollIntervalMs: 20, onReset: () => resetCount++ })
+  const received: Envelope[] = []
+  og.on("*", (e) => received.push(e))
+
+  await tick(10) // first poll: seq 1 under g1, applied normally
+  assert.equal(received.length, 1)
+  assert.equal(resetCount, 0)
+
+  // server re-bootstrapped: fresh graphId, seq well past the client's stale g1 cursor (see comment above).
+  // NOTE: the poll interval (20ms) can fire more than once during the waits below, so this deliberately
+  // does NOT assert an exact received.length at any intermediate instant — the tick right after the
+  // reset is detected and the tick that re-polls the now-realigned cursor can legitimately land in either
+  // one wait window or the next depending on scheduler jitter. What must hold regardless of exactly which
+  // poll fire caught which event is the durable guarantee below: onReset fires exactly once (not once per
+  // extra fire against the same stale batch — classifyEnvelope only reports "reset" while the cursor is
+  // still misaligned), and each post-reset event is dispatched exactly once (no duplicate redelivery once
+  // the cursor catches up), never dropped for good.
+  graphId = "g2"
+  historyEvents = [env({ seq: 100, kind: "graph.rebuilt", graphId: "g2" }), env({ seq: 101, kind: "drift.node", graphId: "g2" })]
+  await delay(45)
+  await tick(10)
+  await delay(45)
+  await tick(10)
+
+  assert.equal(resetCount, 1, "onReset fired exactly once for the graphId change, not once per extra poll fire")
+  assert.equal(
+    received.filter((e) => e.kind === "graph.rebuilt").length,
+    1,
+    "graph.rebuilt dispatched exactly once, not redelivered",
+  )
+  assert.equal(
+    received.filter((e) => e.kind === "drift.node" && e.graphId === "g2").length,
+    1,
+    "the g2 drift.node dispatched exactly once, not redelivered",
+  )
+})
+
+// ---- 6. QA-1 re-register also recovers a polling-mode call ------------------------------------------
 
 test("an expired-token error on the polling-mode redeclare-on-connect triggers exactly one re-register RPC (shared QA-1 machinery, not reimplemented)", async () => {
   let registerCalls = 0
