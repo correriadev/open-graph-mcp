@@ -2,6 +2,7 @@ import { expect, test } from "bun:test"
 import { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from "@modelcontextprotocol/sdk/types.js"
 import { createState } from "../src/state"
 import { handleRpc } from "../src/transport"
+import { startServer } from "../src/index"
 
 function freshState() {
   return createState({ stateDir: ":memory:" })
@@ -88,5 +89,63 @@ test("tools/call for a known tool returning a business {ok:false} result is NOT 
     expect(res?.result).toMatchObject({ structuredContent: { ok: false } })
   } finally {
     state.db.close()
+  }
+})
+
+test("GET /mcp is 405 Method Not Allowed with an Allow header listing POST", async () => {
+  const s = startServer()
+  try {
+    const res = await fetch(`${s.url}/mcp`, { method: "GET" })
+    expect(res.status).toBe(405)
+    expect(res.headers.get("allow")).toContain("POST")
+  } finally {
+    s.stop()
+  }
+})
+
+test("POST /mcp initialize with no incoming MCP-Protocol-Version header echoes the negotiated protocolVersion", async () => {
+  const s = startServer()
+  try {
+    const res = await fetch(`${s.url}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+    })
+    const body: any = await res.json()
+    expect(body.result.protocolVersion).toBe(LATEST_PROTOCOL_VERSION)
+    expect(res.headers.get("mcp-protocol-version")).toBe(LATEST_PROTOCOL_VERSION)
+  } finally {
+    s.stop()
+  }
+})
+
+test("POST /mcp non-initialize request with an incoming MCP-Protocol-Version header echoes that same value back", async () => {
+  const s = startServer()
+  try {
+    const wanted = SUPPORTED_PROTOCOL_VERSIONS[1] ?? LATEST_PROTOCOL_VERSION
+    const res = await fetch(`${s.url}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "mcp-protocol-version": wanted },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers.get("mcp-protocol-version")).toBe(wanted)
+  } finally {
+    s.stop()
+  }
+})
+
+test("POST /mcp non-initialize request with no incoming header and no protocolVersion in the result omits the header", async () => {
+  const s = startServer()
+  try {
+    const res = await fetch(`${s.url}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers.get("mcp-protocol-version")).toBeNull()
+  } finally {
+    s.stop()
   }
 })

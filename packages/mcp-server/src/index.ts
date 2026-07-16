@@ -86,6 +86,10 @@ export function startServer(opts: StartOptions = {}): RunningServer {
 
       if (url.pathname === "/events" && req.method === "GET") return handleEvents(state, url)
 
+      if (url.pathname === "/mcp" && req.method === "GET") {
+        return new Response("method not allowed", { status: 405, headers: { ...CORS, allow: "POST" } })
+      }
+
       if (url.pathname === "/mcp" && req.method === "POST") {
         let body: any
         try {
@@ -95,7 +99,18 @@ export function startServer(opts: StartOptions = {}): RunningServer {
         }
         const res = handleRpc(state, body)
         if (res === null) return new Response(null, { status: 204, headers: CORS })
-        return Response.json(res, { headers: CORS })
+
+        // Stateless server (no Mcp-Session-Id — token lives in tool args, per D2): echo the
+        // negotiated protocol version rather than tracking it per-session. A well-behaved client
+        // sends MCP-Protocol-Version on every request after its initial `initialize` call, so echo
+        // that back. The `initialize` call itself has no such header yet (that's what it's
+        // negotiating) — for that one response, use the protocolVersion just negotiated in the
+        // result body. Otherwise omit the header rather than send a garbage/empty value.
+        const incomingVersion = req.headers.get("mcp-protocol-version")
+        const negotiatedVersion = (res?.result as { protocolVersion?: string } | undefined)?.protocolVersion
+        const protocolVersion = incomingVersion ?? negotiatedVersion
+        const headers = protocolVersion ? { ...CORS, "mcp-protocol-version": protocolVersion } : CORS
+        return Response.json(res, { headers })
       }
 
       if (url.pathname === "/") {
