@@ -8,6 +8,12 @@
  * resolveCredentials for the normal opt-in bootstrap path, and reregisterCredentials for cli.ts's
  * retry-on-expired-token path — same underlying I/O and memoization, so it belongs in one place
  * rather than being duplicated or reached into from outside.
+ *
+ * Do NOT import anything from ./cli here. cli.ts calls main() unconditionally at module top level
+ * (no `import.meta.main` guard) — importing it, even just for a helper like postMcp, would run the
+ * stdin proxy loop as a side effect of importing this module (e.g. a future standalone test of this
+ * file would hang reading stdin). postMcp lives here for that reason, even though cli.ts is its main
+ * caller — the dependency direction only works one way.
  */
 import * as fs from "node:fs"
 import * as os from "node:os"
