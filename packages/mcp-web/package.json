@@ -12,6 +12,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@open-graph-mcp/client": "workspace:*",
     "@open-graph-mcp/graph-core": "workspace:*"
   },
   "devDependencies": {

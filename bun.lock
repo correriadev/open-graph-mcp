@@ -44,6 +44,7 @@
       "name": "@open-graph-mcp/mcp-web",
       "version": "0.1.0",
       "dependencies": {
+        "@open-graph-mcp/client": "workspace:*",
         "@open-graph-mcp/graph-core": "workspace:*",
       },
       "devDependencies": {

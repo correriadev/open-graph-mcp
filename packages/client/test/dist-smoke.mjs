@@ -7,8 +7,9 @@
 //   node --test test/dist-smoke.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { ping } from "../dist/index.js"
+import { initials, dotColor } from "../dist/index.js"
 
-test("built dist output: ping returns pong", () => {
-  assert.equal(ping(), "pong")
+test("built dist output: presence helpers work", () => {
+  assert.equal(initials("Ada Lovelace"), "AL")
+  assert.equal(dotColor(Date.now()), "green")
 })

@@ -1,8 +1,8 @@
 import type { Graph, GraphNode } from "@open-graph-mcp/graph-core/build"
 import { seedLayout, lodForZoom, xForNode, yForLevel, type Point } from "@open-graph-mcp/graph-core/layout"
 import { Quadtree } from "@open-graph-mcp/graph-core/quadtree"
+import { initials, type PresenceEntry } from "@open-graph-mcp/client"
 import { colorForCsId, type Lock, type OpenChangeset } from "./ghosts"
-import { initials, type PresenceEntry } from "./presence-state"
 
 const BAND = 400 // domain column width in world units (mirrors layout.DOMAIN_BAND_WIDTH)
 const NODE_R = 3 // node dot radius, screen px

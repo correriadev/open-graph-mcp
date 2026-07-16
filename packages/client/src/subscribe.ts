@@ -1,5 +1,3 @@
-import { getToken, serverBase } from "./api"
-
 export type Envelope = {
   schemaVersion: 1
   seq: number
@@ -78,6 +76,23 @@ export type StreamHandlers = {
   onSessionId?: (sessionId: string) => void
 }
 
+/**
+ * Connection-level config, injected by the caller rather than imported from a fixed module.
+ *
+ * The original mcp-web implementation this class was extracted from (INT-2 T2) imported
+ * `getToken`/`serverBase` directly from mcp-web's local `./api` module. That module is app-specific
+ * (session/changeset/audit RPCs) and can't be a dependency of this zero-runtime-dep package without
+ * creating a cycle (mcp-web already depends on @open-graph-mcp/client). Threading them through the
+ * constructor instead keeps this class's behavior byte-for-byte identical — same URL, same token
+ * query param — while letting any consumer supply its own token/base-URL source.
+ */
+export type EventStreamOptions = {
+  /** Compute the SSE server base URL (no trailing slash) at connect time. */
+  serverBase: () => string
+  /** Return the current auth token, or null if unauthenticated. Omit if the caller has no auth concept. */
+  getToken?: () => string | null
+}
+
 export class EventStream {
   private abort: AbortController | null = null
   private backoff = 500
@@ -86,7 +101,10 @@ export class EventStream {
   graphId: string | null = null
   lastSeq = 0
 
-  constructor(private readonly h: StreamHandlers) {}
+  constructor(
+    private readonly h: StreamHandlers,
+    private readonly opts: EventStreamOptions,
+  ) {}
 
   start() {
     this.closed = false
@@ -111,10 +129,10 @@ export class EventStream {
     const gen = ++this.generation
     const ac = new AbortController()
     this.abort = ac
-    const token = getToken()
+    const token = this.opts.getToken?.() ?? null
     const tokenQ = token ? `&token=${encodeURIComponent(token)}` : ""
     try {
-      const res = await fetch(`${serverBase()}/events?since=${this.lastSeq}${tokenQ}`, {
+      const res = await fetch(`${this.opts.serverBase()}/events?since=${this.lastSeq}${tokenQ}`, {
         signal: ac.signal,
         headers: { accept: "text/event-stream" },
       })

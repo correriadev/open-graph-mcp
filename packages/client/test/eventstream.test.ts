@@ -1,5 +1,13 @@
-import { afterEach, beforeEach, expect, test } from "bun:test"
-import { EventStream } from "../src/subscribe"
+// Uses node:test + node:assert (not bun:test) deliberately — see ../README.md and index.test.ts.
+// Moved from packages/mcp-web/test/eventstream.test.ts (INT-2 T2 extraction). Only two things changed
+// from the original: (1) bun:test's expect() → node:assert/strict, and (2) EventStream now takes an
+// explicit `EventStreamOptions` (serverBase/getToken) instead of importing them from mcp-web's local
+// `./api` module — see the EventStreamOptions doc comment in ../src/subscribe.ts for why. That removes
+// the need to mock `globalThis.location` (serverBase is just a passed-in function now); everything else
+// — the fetch mock, the abort/generation assertions — is unchanged.
+import { test, beforeEach, afterEach } from "node:test"
+import assert from "node:assert/strict"
+import { EventStream } from "../src/subscribe.ts"
 
 // ---------------------------------------------------------------------------
 // Regression: a graphId reset must not leak an SSE connection. reset() aborts
@@ -17,12 +25,10 @@ let conns: Conn[] = []
 const enc = new TextEncoder()
 
 const origFetch = globalThis.fetch
-const origLocation = (globalThis as any).location
 
 beforeEach(() => {
   fetchCalls = 0
   conns = []
-  ;(globalThis as any).location = { search: "" }
   globalThis.fetch = ((_url: string, opts: any) => {
     fetchCalls++
     const signal: AbortSignal = opts.signal
@@ -47,8 +53,6 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = origFetch
-  if (origLocation === undefined) delete (globalThis as any).location
-  else (globalThis as any).location = origLocation
 })
 
 const tick = (n = 4) =>
@@ -61,15 +65,18 @@ const tick = (n = 4) =>
 test("a graphId reset reconnects once without the stale loop firing onClose (no leak)", async () => {
   let resets = 0
   let closes = 0
-  const stream = new EventStream({
-    onEvent: () => {},
-    onReset: () => resets++,
-    onOpen: () => {},
-    onClose: () => closes++,
-  })
+  const stream = new EventStream(
+    {
+      onEvent: () => {},
+      onReset: () => resets++,
+      onOpen: () => {},
+      onClose: () => closes++,
+    },
+    { serverBase: () => "http://localhost:8787" },
+  )
   stream.start()
   await tick()
-  expect(fetchCalls).toBe(1)
+  assert.equal(fetchCalls, 1)
 
   // establish graphId g1, then send a g2 envelope → classifyEnvelope returns "reset"
   const frame = (o: any) => `data: ${JSON.stringify(o)}\n\n`
@@ -78,25 +85,28 @@ test("a graphId reset reconnects once without the stale loop firing onClose (no 
   conns[0].push(frame({ ...base, seq: 2, graphId: "g2" }))
   await tick(8)
 
-  expect(resets).toBe(1)
-  expect(conns[0].aborted()).toBe(true) // old connection was aborted
-  expect(fetchCalls).toBe(2) // the single reconnect from reset()
+  assert.equal(resets, 1)
+  assert.equal(conns[0].aborted(), true) // old connection was aborted
+  assert.equal(fetchCalls, 2) // the single reconnect from reset()
   // The discriminator: onDisconnect() (→ onClose) must NOT fire on a reset. Without the abort-time
   // generation bump, the aborted read loop's catch passes its stale gen check and fires onClose,
   // scheduling a SECOND (backoff-delayed) reconnect that orphans a connection.
-  expect(closes).toBe(0)
+  assert.equal(closes, 0)
 
   stream.stop()
 })
 
 test("stop() suppresses the aborted read loop's reconnect", async () => {
   let closes = 0
-  const stream = new EventStream({ onEvent: () => {}, onReset: () => {}, onOpen: () => {}, onClose: () => closes++ })
+  const stream = new EventStream(
+    { onEvent: () => {}, onReset: () => {}, onOpen: () => {}, onClose: () => closes++ },
+    { serverBase: () => "http://localhost:8787" },
+  )
   stream.start()
   await tick()
-  expect(fetchCalls).toBe(1)
+  assert.equal(fetchCalls, 1)
   stream.stop()
   await tick(8)
-  expect(fetchCalls).toBe(1) // no reconnect after an explicit stop
-  expect(closes).toBe(0) // the aborted loop's catch is suppressed by the generation bump in stop()
+  assert.equal(fetchCalls, 1) // no reconnect after an explicit stop
+  assert.equal(closes, 0) // the aborted loop's catch is suppressed by the generation bump in stop()
 })

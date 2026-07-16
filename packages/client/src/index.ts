@@ -1,10 +1,19 @@
-// Placeholder entry point for the Bun/Node compatibility spike (INT-2 scaffold task).
-// Real extraction (EventStream, PresenceStore, envelope parsing, connect()) lands in a later task.
+export {
+  type Envelope,
+  parseEnvelope,
+  classifyEnvelope,
+  parseFrame,
+  type StreamHandlers,
+  type EventStreamOptions,
+  EventStream,
+} from "./subscribe.ts"
 
-/**
- * Trivial pure function used only to prove the package's module format,
- * build step, and test setup work under both Bun and plain Node.js.
- */
-export function ping(): string {
-  return "pong"
-}
+export {
+  type TypingState,
+  type PresenceEntry,
+  type DotColor,
+  dotColor,
+  initials,
+  type WhoUser,
+  PresenceStore,
+} from "./presence-state.ts"

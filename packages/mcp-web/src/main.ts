@@ -1,9 +1,8 @@
 import type { Graph, GraphNode } from "@open-graph-mcp/graph-core/build"
+import { dotColor, EventStream, PresenceStore, type Envelope, type PresenceEntry } from "@open-graph-mcp/client"
 import * as api from "./api"
 import { GhostStore, type GhostDelta } from "./ghosts"
-import { dotColor, PresenceStore, type PresenceEntry } from "./presence-state"
 import { Renderer } from "./render"
-import { EventStream, type Envelope } from "./subscribe"
 import { ToastQueue } from "./toasts"
 
 const DRIFT_KINDS = new Set(["drift.node", "drift.cell"])
@@ -706,18 +705,24 @@ const setConn = (up: boolean) => {
   el.textContent = up ? "● connected" : "● disconnected"
 }
 
-const stream = new EventStream({
-  onEvent: applyEvent,
-  onReset: loadSnapshot,
-  onOpen: () => setConn(true),
-  onClose: () => setConn(false),
-  // Every (re)connection mints a fresh SSE session id; presence is keyed to it (spec §3.3), so we
-  // re-register and re-declare the current focus each time (spec §9.1: no server-side auto-refocus).
-  onSessionId: (id) => {
-    sseSessionId = id
-    declarePresence()
+const stream = new EventStream(
+  {
+    onEvent: applyEvent,
+    onReset: loadSnapshot,
+    onOpen: () => setConn(true),
+    onClose: () => setConn(false),
+    // Every (re)connection mints a fresh SSE session id; presence is keyed to it (spec §3.3), so we
+    // re-register and re-declare the current focus each time (spec §9.1: no server-side auto-refocus).
+    onSessionId: (id) => {
+      sseSessionId = id
+      declarePresence()
+    },
   },
-})
+  // EventStream is decoupled from mcp-web's api.ts (see EventStreamOptions doc comment in
+  // @open-graph-mcp/client's subscribe.ts) — supply the same serverBase/getToken it used to import
+  // directly, so behavior (request URL, token query param) is unchanged.
+  { serverBase: api.serverBase, getToken: api.getToken },
+)
 
 ;(async () => {
   await bootSession()
