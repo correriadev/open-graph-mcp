@@ -17,3 +17,7 @@ export {
   type WhoUser,
   PresenceStore,
 } from "./presence-state.ts"
+
+export { type Credentials, type TokenStore } from "./store.ts"
+
+export { type ConnectOptions, type OgHandle, connect } from "./connect.ts"

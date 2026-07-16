@@ -7,9 +7,17 @@
 //   node --test test/dist-smoke.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { initials, dotColor } from "../dist/index.js"
+import { initials, dotColor, connect } from "../dist/index.js"
 
 test("built dist output: presence helpers work", () => {
   assert.equal(initials("Ada Lovelace"), "AL")
   assert.equal(dotColor(Date.now()), "green")
+})
+
+test("built dist output: connect() is exported and returns a call/close handle (INT-2 T3)", async () => {
+  assert.equal(typeof connect, "function")
+  const og = await connect({ server: "http://example.invalid", agentKind: "web", token: "tok" })
+  assert.equal(typeof og.call, "function")
+  assert.equal(typeof og.close, "function")
+  og.close()
 })
