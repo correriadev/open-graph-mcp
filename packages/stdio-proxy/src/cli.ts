@@ -93,8 +93,7 @@ async function main(): Promise<void> {
       try {
         message = readBuffer.readMessage()
       } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err)
-        process.stderr.write(`stdio-proxy: dropping malformed stdin line: ${reason}\n`)
+        process.stderr.write(`stdio-proxy: dropping malformed stdin line: ${errorReason(err)}\n`)
         continue
       }
       if (message === null) break
