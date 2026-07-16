@@ -1,6 +1,8 @@
 # INT-0 — Escopo fechado (compliance MCP do /mcp)
 
-> Status: **escopo p/ execução** — primeiro; destrava todos os clientes.
+> Status: **implementado** (branch `int-0-mcp-compliance`) — 6/7 DoD
+> fechados; falta só um humano rodar as 2 linhas pending-manual da
+> matriz (MCP Inspector, Claude Code CLI). Destrava todos os clientes.
 > Índice-pai: `README.md`.
 >
 > **Objetivo:** o `POST /mcp` atual (transport.ts, feito à mão) funciona,

@@ -29,7 +29,7 @@ Copilot permitem pouco → recipe + polling).
 
 | # | Arquivo | Função | Status |
 |---|---|---|---|
-| 0 | `00-scope-int-0-mcp-compliance.md` | `/mcp` compliant com clientes reais (matrix de validação). **Primeiro.** | proposto |
+| 0 | `00-scope-int-0-mcp-compliance.md` | `/mcp` compliant com clientes reais (matrix de validação). **Primeiro.** | implementado — 2 linhas da matriz (Inspector, Claude Code CLI) pending-manual |
 | 1 | `01-scope-int-1-connection-kit.md` | Proxy stdio, recipes de config por cliente, fluxo de token, quickstart. | proposto |
 | 2 | `02-scope-int-2-client-lib.md` | `@open-graph-mcp/client`: lib TS da camada viva (base de todos os plugins). | proposto |
 | 3 | `03-scope-int-3-claude-code-plugin.md` | Plugin Claude Code: MCP + skill + hooks + statusline. Integração de referência. | proposto |

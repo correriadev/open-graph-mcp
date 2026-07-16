@@ -206,6 +206,8 @@ export function startServer(opts: StartOptions = {}): RunningServer {
 
 if (import.meta.main) {
   const repoPath = process.env.GRAPH_REPO_PATH ?? process.env.WATCH_REPO_PATH
+  // Leave ALLOWED_ORIGINS unset for the open default (*). Setting it to "" is NOT the same as
+  // unsetting it — it filters down to [], which fails closed (every Origin rejected), not open.
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",")
     .map((s) => s.trim())
     .filter(Boolean)
