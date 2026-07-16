@@ -168,6 +168,25 @@ test("a request against an unreachable server gets a proxy-originated -32000 err
   }
 })
 
+test("a notification against an unreachable server is logged to stderr and produces no stdout output", async () => {
+  const server = startServer()
+  const deadUrl = server.url
+  server.stop()
+
+  const proxy = spawnProxy(deadUrl)
+  try {
+    await proxy.readStderrLine() // startup log line
+    proxy.send({ jsonrpc: "2.0", method: "notifications/initialized" })
+    const errLine = await proxy.readStderrLine()
+    expect(errLine).toContain("failed to forward notification")
+
+    const stdoutLine = await proxy.readLine(400)
+    expect(stdoutLine).toBeNull()
+  } finally {
+    proxy.kill()
+  }
+})
+
 test("stderr gets a startup log line, but stdout stays silent until an actual JSON-RPC response is due", async () => {
   const server = startServer()
   const proxy = spawnProxy(server.url)

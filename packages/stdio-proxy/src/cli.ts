@@ -12,7 +12,7 @@
  * No token/auth logic yet (a later task) and no --name/--tenant flags yet — only --server <url>.
  */
 import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js"
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js"
+import { isJSONRPCRequest, type JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js"
 
 function parseArgs(argv: string[]): { server: string } {
   const idx = argv.indexOf("--server")
@@ -29,8 +29,22 @@ function parseArgs(argv: string[]): { server: string } {
  * 204-for-notifications behavior. A network failure forwarding a REQUEST still needs a stdout reply
  * (else the calling client hangs forever) — synthesize a proxy-originated JSON-RPC error locally.
  * A network failure forwarding a NOTIFICATION just gets logged to stderr; still no stdout output. */
+function errorReason(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+/** Synthesize a proxy-originated JSON-RPC error reply to stdout, correlated to the failed request's id. */
+function sendProxyError(id: string | number, reason: string): void {
+  const errorResponse: JSONRPCMessage = {
+    jsonrpc: "2.0",
+    id,
+    error: { code: -32000, message: reason },
+  }
+  process.stdout.write(serializeMessage(errorResponse))
+}
+
 async function forward(server: string, message: JSONRPCMessage): Promise<void> {
-  const isRequest = "id" in message && message.id !== undefined
+  const isRequest = isJSONRPCRequest(message)
 
   let httpResponse: Response
   try {
@@ -40,18 +54,13 @@ async function forward(server: string, message: JSONRPCMessage): Promise<void> {
       body: JSON.stringify(message),
     })
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
+    const reason = errorReason(err)
     if (!isRequest) {
       const method = "method" in message ? message.method : "unknown"
       process.stderr.write(`stdio-proxy: failed to forward notification (${method}): ${reason}\n`)
       return
     }
-    const errorResponse = {
-      jsonrpc: "2.0" as const,
-      id: (message as { id: string | number }).id,
-      error: { code: -32000, message: `proxy: failed to reach server: ${reason}` },
-    }
-    process.stdout.write(serializeMessage(errorResponse as JSONRPCMessage))
+    sendProxyError(message.id, `proxy: failed to reach server: ${reason}`)
     return
   }
 
@@ -64,13 +73,7 @@ async function forward(server: string, message: JSONRPCMessage): Promise<void> {
     const body = await httpResponse.json()
     process.stdout.write(serializeMessage(body as JSONRPCMessage))
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
-    const errorResponse = {
-      jsonrpc: "2.0" as const,
-      id: (message as { id: string | number }).id,
-      error: { code: -32000, message: `proxy: invalid response from server: ${reason}` },
-    }
-    process.stdout.write(serializeMessage(errorResponse as JSONRPCMessage))
+    sendProxyError(message.id, `proxy: invalid response from server: ${errorReason(err)}`)
   }
 }
 
@@ -95,6 +98,9 @@ async function main(): Promise<void> {
         continue
       }
       if (message === null) break
+      // Deliberately sequential: awaiting each forward() before reading the next buffered message
+      // means pipelined stdin requests are still processed one at a time, in order. Not an oversight —
+      // don't parallelize this without checking whether later token/ordering logic depends on it.
       await forward(server, message)
     }
   }
