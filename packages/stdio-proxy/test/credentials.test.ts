@@ -1,7 +1,9 @@
 // credentials.test.ts — the --name token-bootstrap cluster: on-disk credentials.json (0600),
 // session.register bootstrapping, and in-process reuse/memoization. Split out of cli.test.ts
 // (Task 3) alongside the src/credentials.ts extraction — cli.test.ts keeps the pure stdio-framing/
-// pass-through behavior tests; this file owns everything that touches credential I/O or identity.
+// pass-through behavior tests, plus the retry-on-expiry orchestration tests (those exercise
+// forwardInjectedToolCall's retry decision, not credentials.ts's I/O primitives directly). This file
+// owns the credentials.json bootstrap/persistence/reuse behavior itself.
 //
 // Same real-subprocess-against-real-server pattern as cli.test.ts, with an isolated fake $HOME per
 // test so credentials.json reads/writes never touch (or race with) the real
@@ -11,94 +13,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { startServer } from "@open-graph-mcp/mcp-server/index"
-
-const CLI = path.join(import.meta.dir, "..", "src", "cli.ts")
-
-function tmpHome(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "ogmcp-proxy-test-"))
-}
-
-function credentialsPathFor(home: string): string {
-  return path.join(home, ".open-graph-mcp", "credentials.json")
-}
-
-function readCredentials(home: string): { server: string; token: string; userId: string; tenantId: string } {
-  return JSON.parse(fs.readFileSync(credentialsPathFor(home), "utf8"))
-}
-
-type Proxy = {
-  proc: Bun.Subprocess<"pipe", "pipe", "pipe">
-  send: (message: unknown) => void
-  readLine: (timeoutMs?: number) => Promise<string | null>
-  readStderrLine: (timeoutMs?: number) => Promise<string | null>
-  kill: () => void
-}
-
-/** Incrementally reads newline-delimited text off a ReadableStream, with a per-call timeout so tests
- * can assert "nothing arrived" without hanging forever. Crucially, a timed-out call must NOT abandon
- * its in-flight `reader.read()` — a fresh call to `.read()` cannot run concurrently with one still
- * pending, and worse, whichever of the two resolves first "steals" that chunk, silently dropping data
- * a later call expected to see. So the pending read is memoized and reused across timeouts instead of
- * being restarted. */
-function makeLineReader(stream: ReadableStream<Uint8Array>) {
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let buf = ""
-  let pendingRead: ReturnType<typeof reader.read> | null = null
-
-  async function readLine(timeoutMs: number): Promise<string | null> {
-    const nl = buf.indexOf("\n")
-    if (nl !== -1) {
-      const line = buf.slice(0, nl)
-      buf = buf.slice(nl + 1)
-      return line
-    }
-    if (!pendingRead) pendingRead = reader.read()
-    const timedOut = Symbol("timeout")
-    const result = await Promise.race([
-      pendingRead,
-      new Promise<typeof timedOut>((resolve) => setTimeout(() => resolve(timedOut), timeoutMs)),
-    ])
-    if (result === timedOut) return null
-    pendingRead = null
-    const { value, done } = result as ReadableStreamReadResult<Uint8Array>
-    if (done) return null
-    buf += decoder.decode(value, { stream: true })
-    return readLine(timeoutMs)
-  }
-
-  return { readLine }
-}
-
-function spawnProxy(serverUrl: string, opts: { extraArgs?: string[]; home?: string } = {}): Proxy {
-  const proc = Bun.spawn({
-    cmd: ["bun", "run", CLI, "--server", serverUrl, ...(opts.extraArgs ?? [])],
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-    // Overriding HOME (rather than the default full process.env) is what isolates credentials.json
-    // reads/writes to the test's own tmpHome() — os.homedir() on POSIX resolves from $HOME.
-    env: opts.home ? { ...process.env, HOME: opts.home } : process.env,
-  })
-  const stdout = makeLineReader(proc.stdout as ReadableStream<Uint8Array>)
-  const stderr = makeLineReader(proc.stderr as ReadableStream<Uint8Array>)
-  return {
-    proc,
-    send: (message: unknown) => {
-      proc.stdin.write(JSON.stringify(message) + "\n")
-    },
-    readLine: (timeoutMs = 5000) => stdout.readLine(timeoutMs),
-    readStderrLine: (timeoutMs = 5000) => stderr.readLine(timeoutMs),
-    kill: () => {
-      try {
-        proc.stdin.end()
-      } catch {
-        /* already closed */
-      }
-      proc.kill()
-    },
-  }
-}
+import { credentialsPathFor, readCredentials, spawnProxy, tmpHome } from "./helpers"
 
 // ── --name token bootstrap ──────────────────────────────────────────────────────────────────────
 
