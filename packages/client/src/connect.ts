@@ -183,13 +183,14 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
     return toolCall(server, tool, withToken)
   }
 
-  /** doc comment on OgHandle.call above covers the QA-1 retry-once contract this implements. */
-  async function call(tool: string, args: Record<string, unknown> = {}, _retried = false): Promise<unknown> {
+  /** doc comment on OgHandle.call above covers the QA-1 retry-once contract this implements. The retry
+   * calls `rawCall` directly (not `call`), so it structurally cannot loop — there's no flag to track. */
+  async function call(tool: string, args: Record<string, unknown> = {}): Promise<unknown> {
     if (closed) throw new Error("connect: this handle is closed")
     try {
       return await rawCall(tool, args)
     } catch (e) {
-      if (_retried || !isExpiredTokenError(e) || !opts.name || args.token !== undefined) throw e
+      if (!isExpiredTokenError(e) || !opts.name || args.token !== undefined) throw e
       await ensureReregistered()
       return rawCall(tool, args) // retry the one failed call, exactly once, using the now-fresh token
     }
