@@ -44,6 +44,19 @@ function errorReason(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
+/** POST a JSON-RPC body to `${server}/mcp`. Just the fetch-construction boilerplate shared by every
+ * call site (forward(), registerSession(), ensureToolSchemaCache()) — each caller still owns its own
+ * response-parsing and error handling, which genuinely diverge (forward() must special-case
+ * notifications' empty 204 body before ever calling .json(); the two internal bookkeeping calls
+ * don't). Not a full "post+parse" abstraction on purpose. */
+function postMcp(server: string, body: unknown): Promise<Response> {
+  return fetch(`${server}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  })
+}
+
 /** Synthesize a proxy-originated JSON-RPC error reply to stdout, correlated to the failed request's id. */
 function sendProxyError(id: string | number, reason: string): void {
   const errorResponse: JSONRPCMessage = {
@@ -117,15 +130,11 @@ function saveCredentials(creds: Credentials): void {
 async function registerSession(server: string, name: string, tenant: string | undefined): Promise<Credentials> {
   const args: Record<string, string> = { name }
   if (tenant) args.tenant = tenant
-  const httpResponse = await fetch(`${server}/mcp`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: "stdio-proxy-bootstrap-register",
-      method: "tools/call",
-      params: { name: "session.register", arguments: args },
-    }),
+  const httpResponse = await postMcp(server, {
+    jsonrpc: "2.0",
+    id: "stdio-proxy-bootstrap-register",
+    method: "tools/call",
+    params: { name: "session.register", arguments: args },
   })
   const body = (await httpResponse.json()) as { result?: { isError?: boolean; structuredContent?: Partial<Credentials> } }
   const structured = body?.result?.structuredContent
@@ -165,16 +174,16 @@ const toolSchemaCache = new Map<string, ToolDefinition>()
 async function ensureToolSchemaCache(server: string): Promise<void> {
   if (toolSchemaCache.size > 0) return
   try {
-    const httpResponse = await fetch(`${server}/mcp`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: "stdio-proxy-bootstrap-tools-list", method: "tools/list" }),
-    })
+    const httpResponse = await postMcp(server, { jsonrpc: "2.0", id: "stdio-proxy-bootstrap-tools-list", method: "tools/list" })
     const body = (await httpResponse.json()) as { result?: { tools?: ToolDefinition[] } }
     for (const tool of body?.result?.tools ?? []) {
       if (tool && typeof tool.name === "string") toolSchemaCache.set(tool.name, tool)
     }
   } catch (err) {
+    // Deliberately fails quiet, unlike resolveCredentials's loud isError reply: a tools/call arriving
+    // while the cache is empty just falls through as "not token-declaring" (see maybeInjectToken) and
+    // gets forwarded unmodified — the real server then rejects it for the missing token on its own,
+    // and the next call gets a fresh attempt at this fetch since nothing here is cached as failed.
     process.stderr.write(`stdio-proxy: failed to fetch tool schemas for token bootstrap: ${errorReason(err)}\n`)
   }
 }
@@ -217,11 +226,7 @@ async function forward(server: string, message: JSONRPCMessage): Promise<void> {
 
   let httpResponse: Response
   try {
-    httpResponse = await fetch(`${server}/mcp`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(message),
-    })
+    httpResponse = await postMcp(server, message)
   } catch (err) {
     const reason = errorReason(err)
     if (!isRequest) {
