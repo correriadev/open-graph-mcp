@@ -48,3 +48,12 @@ function unwrap(result: any): any {
 export function toolCall(server: string, name: string, args: Record<string, unknown> = {}): Promise<any> {
   return rpc(server, "tools/call", { name, arguments: args }).then(unwrap)
 }
+
+/** Call `{server}/mcp` `resources/read {uri, token?}` and unwrap the result (mirrors mcp-web's
+ * api.ts `resourceRead()`, generalized the same way `toolCall` already is — server passed as a param
+ * instead of read from `location.search`). No token injection beyond the param given here — that's
+ * `connect()`'s job, same split as `toolCall`. Used by `connect({live:false})` (T5) to poll
+ * `graph://history?since=N` instead of opening an SSE connection. */
+export function resourceRead(server: string, uri: string, token?: string): Promise<any> {
+  return rpc(server, "resources/read", token ? { uri, token } : { uri }).then(unwrap)
+}

@@ -5,13 +5,26 @@
 // call that fails with an expired/invalid token auto re-registers (same
 // `name` the caller originally connected with), persists the fresh token,
 // retries the failed call once, and redeclares presence against the new
-// token/session. See `OgHandle` and `resolveToken` below for the exact
-// contracts.
+// token/session.
+//
+// PLUS (T5) `connect({live:false})` — the ID2 polling fallback: same
+// `OgHandle` surface, but no SSE connection is ever opened. `on()` events are
+// synthesized from polling `graph://history?since=N` (durable graph events)
+// and `presence.who` (presence roster diff) on an interval instead of being
+// pushed over SSE. A caller writes `og.on(...)`/`og.presence.focus(...)`
+// once and it behaves the same regardless of `live` — see the doc comment on
+// `ConnectOptions.live` for the exact fidelity tradeoffs this makes, and
+// `onFreshSession`/`pollTick` below for where the two modes actually diverge
+// (deliberately kept to two small points — "how do I learn about new
+// envelopes" and "close() cleanup" — everything else, including the QA-1
+// re-register machinery, is shared).
+//
+// See `OgHandle` and `resolveToken` below for the exact contracts.
 // ---------------------------------------------------------------------------
 
 import type { Credentials, TokenStore } from "./store.ts"
-import { toolCall } from "./rpc.ts"
-import { EventStream, type Envelope } from "./subscribe.ts"
+import { toolCall, resourceRead } from "./rpc.ts"
+import { EventStream, classifyEnvelope, type Envelope } from "./subscribe.ts"
 
 /** Fired by `og`'s QA-1 auto-recovery path, so a caller can observe it happening (or failing) instead of
  * it being fully silent. If omitted, `connect()` falls back to `console.warn`/`console.error` so the
@@ -37,18 +50,55 @@ export type ConnectOptions = {
   /** Token persistence + lookup. Consulted only if `token` is not given. See `resolveToken`. Also where
    * a freshly auto-re-registered token (QA-1 fix) gets persisted, if given. */
   store?: TokenStore
+  /** `true` (default): open a live SSE connection (`EventStream`) — `on()` handlers and presence updates
+   * are pushed in near-real-time. `false` (ID2 — docs/roadmap-integrations/README.md's governing
+   * principle: "camada viva NUNCA vira requisito"): no SSE connection is opened at all. Instead:
+   *  - `on()` events for durable graph changes are synthesized by polling `graph://history?since=N`
+   *    (a resource read, not a tool call) on an interval and diffing against the last-seen seq/graphId
+   *    via the same `classifyEnvelope` SSE mode uses for reset/dedup — see `pollHistoryOnce` below.
+   *  - `on("user.*", …)` events are synthesized by polling `presence.who` and diffing the roster against
+   *    the previous poll's snapshot (join/left/focus-changed) — see `pollWhoOnce` below. This is a
+   *    DELIBERATE fidelity tradeoff over just exposing the raw `presence.who` snapshot (which
+   *    mcp-web's own `pollWho()` does today, feeding `PresenceStore.mergeWho()` directly): synthesizing
+   *    events keeps `og.on("user.joined", …)` / `PresenceStore.apply(env)` consumers working IDENTICALLY
+   *    in both modes (the whole point of this flag — a plugin writes `og.on(...)` once), at the cost of
+   *    losing `user.typing_state` entirely (presence.who carries no typing signal) and only detecting
+   *    joined/left/focus changes at poll granularity (`pollIntervalMs`), not SSE's near-real-time
+   *    debounced broadcasts.
+   *  - `presence.focus`/`presence.beat` are still plain RPCs via `og.call` (identical to live mode) —
+   *    only the locally-scoped session id they're sent against differs: live mode waits for the
+   *    server-minted SSE session id (`session.created`), polling mode mints its own opaque local one
+   *    immediately at connect() (there is no SSE connection to mint one server-side). Server-side,
+   *    `presence.beat`/`.focus` (mcp-server/src/tools/presence.ts `touch()`) key Presence purely off
+   *    that sessionId string plus token-derived identity — it doesn't need to correspond to a real SSE
+   *    `Session` object, so this works with no server changes.
+   *  - `og.subscribe(filters)` is a local no-op (see its doc comment below) — polling mode has no SSE
+   *    session for server-side filters to narrow; `graph.history` already delivers everything.
+   * Either way, the QA-1 auto-re-register-on-expired-token recovery applies equally (see `call`'s and
+   * `readHistory`'s shared `withReregister` wrapper) — a token can go stale in polling mode too (e.g. a
+   * server restart wiping in-memory tokens mid-poll-cycle). */
+  live?: boolean
+  /** Polling-mode-only: interval (ms) between `graph.history`/`presence.who` polls. Default 10_000,
+   * matching mcp-web's `pollWho()` reference cadence (packages/mcp-web/src/main.ts). Ignored when `live`
+   * is true (or left at its `true` default). Exposed mainly so tests don't have to wait out a real
+   * 10-second interval. */
+  pollIntervalMs?: number
   /** Fired once per SSE connection opening (mirrors EventStream's onOpen — e.g. drive a "connected" UI
-   * indicator). */
+   * indicator). Live mode only — polling mode has no connection to open. */
   onOpen?: () => void
-  /** Fired once per SSE disconnect (a backoff-then-reconnect follows automatically — mirrors onClose). */
+  /** Fired once per SSE disconnect (a backoff-then-reconnect follows automatically — mirrors onClose).
+   * Live mode only. */
   onClose?: () => void
-  /** Fired when the SSE stream detects a graphId reset (spec §6) — the server re-bootstrapped and any
-   * locally cached snapshot is stale; the caller should refetch it. */
+  /** Fired when a graphId reset is detected (spec §6) — the server re-bootstrapped and any locally
+   * cached snapshot is stale; the caller should refetch it. Fires in both modes: live mode detects it
+   * from the SSE stream, polling mode detects it from a `graph.history` poll landing on a different
+   * `graphId` than previously seen (see `pollHistoryOnce`). */
   onReset?: () => void
-  /** Fired with the `changeset.list_mine` result after every fresh SSE session id (spec §9 reattach) —
-   * lets the caller recover UI state for changesets it still has open. */
+  /** Fired with the `changeset.list_mine` result after every fresh "session" — every SSE reconnect in
+   * live mode (spec §9 reattach), or once at connect() in polling mode (a polling handle's session id
+   * never changes) — lets the caller recover UI state for changesets it still has open. */
   onReattach?: (result: unknown) => void
-  /** Fired by the QA-1 auto-re-register recovery path — see `ReauthEvent`. */
+  /** Fired by the QA-1 auto-re-register recovery path — see `ReauthEvent`. Shared by both modes. */
   onReauth?: (event: ReauthEvent) => void
 }
 
@@ -65,26 +115,31 @@ export type OgHandle = {
    * SAME name via `registerSession()`, persists it (if a store was given), updates the live token, and
    * retries this ONE call exactly once (never loops — a second failure propagates). With no `name`
    * available (e.g. a bare `token` was passed to `connect()`), there is nothing to re-register with, so
-   * the original error just propagates. */
+   * the original error just propagates. Identical in both `live` and polling mode — see `withReregister`. */
   call(tool: string, args?: Record<string, unknown>): Promise<unknown>
-  /** Register a handler for SSE envelope events of `kind` (or `"*"` for all kinds). Returns an
+  /** Register a handler for envelope events of `kind` (or `"*"` for all kinds) — pushed over SSE in live
+   * mode, synthesized from polling in `live:false` mode (see `ConnectOptions.live`). Returns an
    * unsubscribe function. */
   on(kind: string | "*", handler: (env: Envelope) => void): () => void
   /** `graph.subscribe` for this SSE session — replaces its server-side event filters (default
-   * `[{kind:"all"}]`). Requires a live session (a `session.created` frame must have arrived first). */
+   * `[{kind:"all"}]`). Requires a live session (a `session.created` frame must have arrived first). In
+   * `live:false` mode this is a local no-op that resolves `{ok:true}` without an RPC round trip — see
+   * `ConnectOptions.live`'s doc comment for why (no SSE session exists for server-side filters to
+   * narrow; polling already delivers everything via `graph.history`). */
   subscribe(filters: Array<Record<string, unknown>>): Promise<unknown>
   presence: {
-    /** Declare (or clear, if `cell` is null) this session's focus cell. A no-op (besides recording the
-     * intent locally) until an SSE session id exists — mirrors mcp-web's `declareFocus` guard. Once a
-     * session exists, an automatic `presence.beat` fires every 15s for as long as the connection stays
-     * open — no manual timer needed. */
+    /** Declare (or clear, if `cell` is null) this session's focus cell. In live mode this is a no-op
+     * (besides recording the intent locally) until an SSE session id exists — mirrors mcp-web's
+     * `declareFocus` guard. In polling mode a local session id exists immediately at connect(), so this
+     * takes effect right away. Once a session id exists, an automatic `presence.beat` fires every 15s
+     * for as long as the connection/handle stays open — no manual timer needed, in either mode. */
     focus(cell: string | null, opts?: { invisible?: boolean }): Promise<void>
   }
   /** Surfaces `system.message` kind envelopes — text-only presence/notification for non-web agentKinds
    * (spec §8, ID5). Thin wrapper over `on("system.message", handler)`. */
   systemMessages(handler: (env: Envelope) => void): () => void
-  /** Tears down the SSE connection and the beat timer, and marks the handle closed (further `call()`s
-   * throw). */
+  /** Tears down the SSE connection and beat timer (live mode), or the poll interval and beat timer
+   * (polling mode), and marks the handle closed (further `call()`s throw). */
   close(): void
 }
 
@@ -109,10 +164,9 @@ export type OgHandle = {
  *
  * Scope line vs the QA-1 re-register flow below: this function owns *initial* registration only (store
  * empty/mismatched → fresh token). Re-registration after an already-resolved token goes stale (e.g. a
- * server restart wiping in-memory tokens) is handled inside `connect()`'s `call()`/`redeclarePresence()`
- * — it shares this file's `registerSession()` the same way `resolveToken` does, rather than reinventing
- * the RPC call (mirrors stdio-proxy's `resolveCredentials`/`reregisterCredentials` sharing
- * `registerSession`).
+ * server restart wiping in-memory tokens) is handled inside `connect()`'s `withReregister()` — it shares
+ * this file's `registerSession()` the same way `resolveToken` does, rather than reinventing the RPC call
+ * (mirrors stdio-proxy's `resolveCredentials`/`reregisterCredentials` sharing `registerSession`).
  */
 async function resolveToken(server: string, opts: ConnectOptions): Promise<string | null> {
   if (opts.token) return opts.token
@@ -154,8 +208,21 @@ function isExpiredTokenError(e: unknown): boolean {
   return e instanceof Error && /invalid or expired token/i.test(e.message)
 }
 
+/** Mints an opaque, locally-unique session id for polling mode (`live:false`) — there is no SSE
+ * connection to mint one server-side (spec §3.3 session ids are UUIDs from mcp-server/src/sse.ts).
+ * `presence.beat`/`.focus` (mcp-server/src/tools/presence.ts `touch()`) only need this to be a stable,
+ * distinguishing string for the lifetime of the handle — they key Presence off it plus token-derived
+ * identity, and reject a mismatched-identity call on the same id (NOT_OWNED) rather than trusting the id
+ * alone — so `crypto.randomUUID()`'s collision odds are already generous for this use, not a security
+ * boundary the way a real SSE session id is. */
+function localSessionId(): string {
+  return `poll-${crypto.randomUUID()}`
+}
+
 export async function connect(opts: ConnectOptions): Promise<OgHandle> {
   const server = opts.server.replace(/\/$/, "")
+  const live = opts.live !== false
+  const pollIntervalMs = opts.pollIntervalMs ?? 10_000
   let token = await resolveToken(server, opts)
   let closed = false
   let sessionId: string | null = null
@@ -183,17 +250,42 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
     return toolCall(server, tool, withToken)
   }
 
-  /** doc comment on OgHandle.call above covers the QA-1 retry-once contract this implements. The retry
-   * calls `rawCall` directly (not `call`), so it structurally cannot loop — there's no flag to track. */
+  async function rawReadHistory(since: number): Promise<{ graphId: string; since: number; events: Envelope[] }> {
+    return resourceRead(server, `graph://history?since=${since}`, token ?? undefined)
+  }
+
+  /**
+   * Shared QA-1 retry-once wrapper: any RPC this handle makes — a `tools/call` (`call`) or a
+   * `resources/read` (`readHistory`, polling mode) — routes through here rather than each reimplementing
+   * the "expired token → re-register → retry once" dance. `tokenWasExplicit` mirrors `call`'s original
+   * `args.token !== undefined` guard (an explicitly-passed token is the caller's problem to refresh, not
+   * ours to silently override). The retry calls `exec` again directly (not through this wrapper), so it
+   * structurally cannot loop — there's no flag to track.
+   */
+  async function withReregister<T>(exec: () => Promise<T>, tokenWasExplicit: boolean): Promise<T> {
+    try {
+      return await exec()
+    } catch (e) {
+      if (!isExpiredTokenError(e) || !opts.name || tokenWasExplicit) throw e
+      await ensureReregistered()
+      return exec() // retry the one failed call, exactly once, using the now-fresh token
+    }
+  }
+
   async function call(tool: string, args: Record<string, unknown> = {}): Promise<unknown> {
     if (closed) throw new Error("connect: this handle is closed")
-    try {
-      return await rawCall(tool, args)
-    } catch (e) {
-      if (!isExpiredTokenError(e) || !opts.name || args.token !== undefined) throw e
-      await ensureReregistered()
-      return rawCall(tool, args) // retry the one failed call, exactly once, using the now-fresh token
-    }
+    return withReregister(() => rawCall(tool, args), args.token !== undefined)
+  }
+
+  /** Polling-mode read of `graph://history?since=N` (a resource, not a tool — see rpc.ts's
+   * `resourceRead`). Routed through the same `withReregister` machinery `call()` uses: today
+   * `resources/read` (mcp-server/src/transport.ts `tenantOf`) silently falls back to the default tenant
+   * on a bad/unknown token instead of throwing, so this path doesn't currently exercise the retry — but
+   * `presence.who` (a real `call()`, used by `pollWhoOnce` below) already does, and routing history reads
+   * the same way keeps both poll paths uniformly recoverable if that server behavior ever tightens. */
+  async function readHistory(since: number): Promise<{ graphId: string; since: number; events: Envelope[] }> {
+    if (closed) throw new Error("connect: this handle is closed")
+    return withReregister(() => rawReadHistory(since), false)
   }
 
   /** Dedupes concurrent re-register attempts (e.g. presence.focus and changeset.list_mine both failing
@@ -232,8 +324,14 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
     // connection with the now-current token, which re-binds Session.userId correctly server-side and
     // naturally triggers onSessionId → redeclarePresence() (the call()-based, retry-capable one) against
     // the new session — no separate redeclare call needed here.
-    stream.stop()
-    stream.start()
+    //
+    // `stream` is null in polling mode (no SSE connection exists), so this is a no-op there — and
+    // rightly so: polling mode has no server-side Session.userId binding to go stale in the first place
+    // (presence.beat/.focus resolve identity fresh from the token on every call, see `touch()` in
+    // mcp-server/src/tools/presence.ts), so the next poll tick picks up the refreshed `token` closure
+    // variable on its own with nothing extra to force.
+    stream?.stop()
+    stream?.start()
   }
 
   /**
@@ -241,9 +339,10 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
    * on mcp-web's old `declarePresence()`, preserved here verbatim: the server only suppresses
    * `user.joined` for invisible users when the very first presence-registering call already carries
    * `invisible:true`; a beat-first order would announce a user who asked not to be shown). Called after
-   * every fresh SSE session id (reconnect) — goes through `call()` so a dead token discovered right here
-   * (the QA-1 trigger path) still auto-recovers (see `doReregister`'s stream.stop()/start() for why that
-   * recovery forces a fresh SSE connection rather than redeclaring on the old one).
+   * every fresh session id — an SSE reconnect in live mode, or once at connect() in polling mode (see
+   * `onFreshSession`) — goes through `call()` so a dead token discovered right here (the QA-1 trigger
+   * path) still auto-recovers (see `doReregister`'s stream.stop()/start() for why that recovery forces a
+   * fresh SSE connection rather than redeclaring on the old one, live mode only).
    */
   async function redeclarePresence(): Promise<void> {
     if (!sessionId || !token) return
@@ -259,7 +358,7 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
   const presence = {
     async focus(cell: string | null, focusOpts?: { invisible?: boolean }): Promise<void> {
       focusState = { cell, invisible: focusOpts?.invisible ?? focusState.invisible }
-      if (!sessionId || !token) return // presence tools need a live SSE session + auth, same as mcp-web's guard
+      if (!sessionId || !token) return // presence tools need a live session + auth, same as mcp-web's guard
       await call("presence.focus", {
         sessionId,
         cell,
@@ -274,31 +373,147 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
   }
 
   async function subscribe(filters: Array<Record<string, unknown>>): Promise<unknown> {
+    if (!live) {
+      // ID2: polling mode never opens an SSE session, so there is nothing server-side for
+      // `graph.subscribe` filters to narrow — `graph.history` polling already delivers every durable
+      // event regardless of filters. A local no-op success (no RPC at all) keeps this callable
+      // identically in both modes without a caller having to branch on `live`.
+      return { ok: true }
+    }
     if (!sessionId) throw new Error("connect: subscribe() requires a live SSE session (no session.created received yet)")
     return call("graph.subscribe", { sessionId, filters })
   }
 
-  const stream = new EventStream(
-    {
-      onEvent: dispatch,
-      onReset: () => opts.onReset?.(),
-      onOpen: () => opts.onOpen?.(),
-      onClose: () => opts.onClose?.(),
-      // Every (re)connection mints a fresh SSE session id; presence is keyed to it (spec §3.3), so
-      // re-declare it each time (spec §9.1), and recover any changesets this session still has open
-      // (spec §9 reattach) via changeset.list_mine.
-      onSessionId: (id) => {
-        sessionId = id
-        redeclarePresence().catch((e) => console.error("connect: presence redeclare on reconnect failed", e))
-        if (token) {
-          call("changeset.list_mine", {})
-            .then((result) => opts.onReattach?.(result))
-            .catch((e) => console.error("connect: reattach (changeset.list_mine) failed", e))
-        }
+  /**
+   * Shared "a fresh session now exists" hook: a real SSE `session.created` frame in live mode (may fire
+   * again on every reconnect), or invoked once synchronously below at connect() in polling mode (a
+   * polling handle's local session id never changes for its lifetime). Either way: redeclare presence
+   * against the new session id, and reattach any changesets this identity still has open.
+   */
+  function onFreshSession(id: string): void {
+    sessionId = id
+    redeclarePresence().catch((e) => console.error("connect: presence redeclare on reconnect failed", e))
+    if (token) {
+      call("changeset.list_mine", {})
+        .then((result) => opts.onReattach?.(result))
+        .catch((e) => console.error("connect: reattach (changeset.list_mine) failed", e))
+    }
+  }
+
+  let stream: EventStream | null = null
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+
+  // ---- polling-mode-only state: local cursors for the two poll loops ------------------------------
+  let historyGraphId: string | null = null
+  let historyLastSeq = 0
+  const whoSnapshot = new Map<string, { name: string; agentKind: string; focusCell: string | null }>()
+
+  /** Polls `graph://history?since=N`, diffs against the local cursor via the SAME `classifyEnvelope`
+   * SSE mode uses (subscribe.ts) — reset detection (graphId changed → server re-bootstrapped, drop the
+   * cursor and let the next tick re-poll from since=0) and duplicate-skip come for free, no second parser. */
+  async function pollHistoryOnce(): Promise<void> {
+    const result = await readHistory(historyLastSeq)
+    for (const env of result.events ?? []) {
+      switch (classifyEnvelope(env, historyGraphId, historyLastSeq)) {
+        case "reset":
+          opts.onReset?.()
+          historyGraphId = null
+          historyLastSeq = 0
+          return // drop the rest of this batch; it was read against the now-stale graphId
+        case "duplicate":
+          continue
+        case "apply":
+          historyGraphId = env.graphId
+          if (!env.ephemeral) historyLastSeq = env.seq
+          dispatch(env)
+      }
+    }
+  }
+
+  /** Synthesizes a `user.*`-kind Envelope from a `presence.who` snapshot diff — see the doc comment on
+   * `ConnectOptions.live` for the design tradeoff. `seq`/`graphId` reuse the history cursor (ephemeral
+   * events are exempt from seq dedup per the `Envelope` contract, so this is just for shape-consistency
+   * with real SSE presence envelopes, not for any dedup logic of its own). */
+  function synthUserEnvelope(kind: string, userId: string, payload: Record<string, unknown>): Envelope {
+    return { schemaVersion: 1, seq: historyLastSeq, ts: Date.now(), kind, target: userId, payload, graphId: historyGraphId ?? "", ephemeral: true }
+  }
+
+  /** Polls `presence.who` (a tool call — goes through `call()`, so QA-1 re-register applies) and diffs
+   * the roster against the previous poll's snapshot, dispatching synthesized `user.joined`/
+   * `user.focused`/`user.left` envelopes for what changed. No `user.typing_state` — `presence.who`
+   * carries no typing signal (documented tradeoff, see `ConnectOptions.live`). */
+  async function pollWhoOnce(): Promise<void> {
+    const result = (await call("presence.who", {})) as {
+      users?: Array<{ id: string; name: string; agentKind: string; focusCell: string | null; lastSeen?: number }>
+    }
+    const users = result?.users ?? []
+    const seen = new Set<string>()
+    for (const u of users) {
+      seen.add(u.id)
+      const prev = whoSnapshot.get(u.id)
+      if (!prev) {
+        dispatch(synthUserEnvelope("user.joined", u.id, { userId: u.id, name: u.name, agentKind: u.agentKind, lastSeen: u.lastSeen }))
+        // A user.joined payload carries no cell (PresenceStore.apply's "user.joined" case doesn't set
+        // focusCell — mirrors the live SSE payload shape, presence.ts's emitJoined). If this user already
+        // had a focus cell the FIRST time we ever saw them (we connected mid-session, so there was no
+        // earlier poll to diff a change against), that focus would otherwise never be communicated at
+        // all — only a SUBSEQUENT change would hit the `prev.focusCell !== u.focusCell` branch below. So
+        // also emit an initial user.focused whenever a newly-seen user already has a non-null cell.
+        if (u.focusCell !== null) dispatch(synthUserEnvelope("user.focused", u.id, { userId: u.id, cell: u.focusCell, lastSeen: u.lastSeen }))
+      } else if (prev.focusCell !== u.focusCell) {
+        dispatch(synthUserEnvelope("user.focused", u.id, { userId: u.id, cell: u.focusCell, lastSeen: u.lastSeen }))
+      }
+      whoSnapshot.set(u.id, { name: u.name, agentKind: u.agentKind, focusCell: u.focusCell })
+    }
+    for (const id of [...whoSnapshot.keys()]) {
+      if (seen.has(id)) continue
+      dispatch(synthUserEnvelope("user.left", id, { userId: id }))
+      whoSnapshot.delete(id)
+    }
+  }
+
+  /** One polling tick: history and who are independent failure domains — one failing (e.g. a transient
+   * network blip) must not skip the other. */
+  async function pollTick(): Promise<void> {
+    try {
+      await pollHistoryOnce()
+    } catch (e) {
+      console.error("connect: graph.history poll failed", e)
+    }
+    try {
+      await pollWhoOnce()
+    } catch (e) {
+      console.error("connect: presence.who poll failed", e)
+    }
+  }
+
+  if (live) {
+    stream = new EventStream(
+      {
+        onEvent: dispatch,
+        onReset: () => opts.onReset?.(),
+        onOpen: () => opts.onOpen?.(),
+        onClose: () => opts.onClose?.(),
+        // Every (re)connection mints a fresh SSE session id; presence is keyed to it (spec §3.3), so
+        // re-declare it each time (spec §9.1), and recover any changesets this session still has open
+        // (spec §9 reattach) via changeset.list_mine — both handled by the shared `onFreshSession`.
+        onSessionId: (id) => onFreshSession(id),
       },
-    },
-    { serverBase: () => server, getToken: () => token },
-  )
+      { serverBase: () => server, getToken: () => token },
+    )
+    stream.start()
+  } else {
+    // Polling mode: mint a local session id immediately (no SSE handshake to wait for — see
+    // `localSessionId`'s doc comment), declare it via the same `onFreshSession` live mode uses on
+    // `session.created`, then start polling. The first tick fires immediately (not after waiting a full
+    // `pollIntervalMs`) so `on()` consumers see data promptly — mirrors mcp-web's `pollWho()` calling
+    // itself once before its `setInterval` (packages/mcp-web/src/main.ts).
+    onFreshSession(localSessionId())
+    pollTick().catch((e) => console.error("connect: initial poll tick failed", e))
+    pollTimer = setInterval(() => {
+      pollTick().catch((e) => console.error("connect: poll tick failed", e))
+    }, pollIntervalMs)
+  }
 
   const beatTimer = setInterval(() => {
     if (sessionId && token) {
@@ -311,10 +526,9 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
   function close(): void {
     closed = true
     clearInterval(beatTimer)
-    stream.stop()
+    if (pollTimer) clearInterval(pollTimer)
+    stream?.stop()
   }
-
-  stream.start()
 
   return { server, agentKind: opts.agentKind, call, on, subscribe, presence, systemMessages, close }
 }
