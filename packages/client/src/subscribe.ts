@@ -101,10 +101,13 @@ export class EventStream {
   graphId: string | null = null
   lastSeq = 0
 
-  constructor(
-    private readonly h: StreamHandlers,
-    private readonly opts: EventStreamOptions,
-  ) {}
+  private readonly h: StreamHandlers
+  private readonly opts: EventStreamOptions
+
+  constructor(h: StreamHandlers, opts: EventStreamOptions) {
+    this.h = h
+    this.opts = opts
+  }
 
   start() {
     this.closed = false
