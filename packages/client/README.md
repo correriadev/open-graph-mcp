@@ -26,6 +26,11 @@ exports one placeholder function (`ping()`); real extraction lands in a later ta
   `allowImportingTsExtensions` + `rewriteRelativeImportExtensions` (TS 5.7+) let source import
   siblings as `./foo.ts` (so Bun/Node's native TS runner can resolve them unmodified) while
   `tsc` rewrites those to `./foo.js` in the emitted `dist/` output.
+- **A green `bun test` is not evidence the `dist` build is healthy.** Bun's runtime resolver
+  silently accepts things `tsc` rejects (e.g. an extensionless relative import like
+  `./foo` instead of `./foo.ts`) — `bun test` will stay green while `bun run build` fails.
+  No CI step type-checks/builds this package yet (planned for a later INT-2 task), so run
+  `bun run build` locally after any source change, don't rely on `bun test` alone.
 
 ## Verified Node version floor
 
