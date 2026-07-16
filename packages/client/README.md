@@ -1,8 +1,9 @@
 # @open-graph-mcp/client
 
-Zero-runtime-dependency TypeScript client library. Must run under both Bun and
-Node.js >=20. This package is currently a scaffold spike (INT-2): `src/index.ts`
-exports one placeholder function (`ping()`); real extraction lands in a later task.
+Zero-runtime-dependency TypeScript client library for the live layer of
+open-graph-mcp (SSE event streaming, presence tracking). Must run under both
+Bun and Node.js >=20. Consumed by `packages/mcp-web` today; `connect()` and a
+Node-friendly token store land in later INT-2 tasks.
 
 ## Module / build approach
 
