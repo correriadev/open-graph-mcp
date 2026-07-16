@@ -1,9 +1,8 @@
 // ---------------------------------------------------------------------------
 // Pure presence state (unit-tested). Folds the ephemeral `user.*` events
 // (spec §6/§7.1) plus periodic `presence.who` polls into the per-user roster
-// the topbar and canvas avatar overlay render. Mirrors the GhostStore idiom
-// in ghosts.ts: a small mutable store with `apply(env)` folding one envelope
-// at a time, kept deliberately dumb — no network, no DOM.
+// consumers render presence UI from. A small mutable store with `apply(env)`
+// folding one envelope at a time, kept deliberately dumb — no network, no DOM.
 // ---------------------------------------------------------------------------
 
 export type TypingState = "typing" | "idle" | "quiet"

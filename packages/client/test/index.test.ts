@@ -5,7 +5,8 @@
 // covers the true Node >=20 floor (built JS, no type-stripping involved).
 //
 // Smoke test only — proves the barrel (`src/index.ts`) actually re-exports the real API surface
-// under both runtimes. Full behavioral coverage lives in subscribe.test.ts / presence-state.test.ts.
+// under both runtimes. Full behavioral coverage lives in subscribe.test.ts, eventstream.test.ts,
+// and presence-state.test.ts.
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { dotColor, initials, PresenceStore, EventStream, parseEnvelope } from "../src/index.ts"
