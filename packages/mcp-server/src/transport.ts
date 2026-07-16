@@ -208,7 +208,7 @@ export function handleRpc(state: ServerState, req: RpcRequest): RpcResponse | nu
     return { jsonrpc: "2.0", id, result: dispatch(state, req.method, req.params ?? {}) }
   } catch (err) {
     const msg = (err as Error).message
-    const code = /method not found/.test(msg) ? -32601 : /unknown tool/.test(msg) ? -32602 : -32603
+    const code = /^method not found:/.test(msg) ? -32601 : /^unknown tool:/.test(msg) ? -32602 : -32603
     return { jsonrpc: "2.0", id, error: { code, message: (err as Error).message } }
   }
 }
