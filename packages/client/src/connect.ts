@@ -68,8 +68,8 @@ export type OgHandle = {
  * (this is also why EventStream.open()'s onClose() has no failure-reason argument yet — see subscribe.ts
  * review note; T4 is expected to thread one through). The two flows share the same underlying
  * primitive though (`tools/call session.register`), exactly like stdio-proxy's `reregisterCredentials`
- * shares `registerSession` with `resolveCredentials` — T4 can and should reuse `toolCall` from ./rpc.ts
- * the same way this function does, rather than reinventing the RPC call.
+ * shares `registerSession` with `resolveCredentials` — T4 shares this file's own `registerSession`
+ * below the same way, rather than reinventing the RPC call.
  */
 async function resolveToken(server: string, opts: ConnectOptions): Promise<string | null> {
   if (opts.token) return opts.token
@@ -84,13 +84,23 @@ async function resolveToken(server: string, opts: ConnectOptions): Promise<strin
     )
   }
 
-  const registered = (await toolCall(server, "session.register", { name: opts.name })) as Partial<Credentials> | null
+  const creds = await registerSession(server, opts.name)
+  opts.store.set(creds)
+  return creds.token
+}
+
+/** Calls `session.register` and returns validated Credentials (throws on an unusable response shape).
+ * Exported so T4's re-registration-after-expiry flow can share this instead of reimplementing the
+ * validate+shape step — mirrors stdio-proxy's `registerSession()` being shared by both
+ * `resolveCredentials()` (initial) and `reregisterCredentials()` (post-expiry) in credentials.ts.
+ * Persistence (`store.set()`) is deliberately NOT done here — each caller owns when/whether to persist,
+ * same split stdio-proxy uses. */
+export async function registerSession(server: string, name: string): Promise<Credentials> {
+  const registered = (await toolCall(server, "session.register", { name })) as Partial<Credentials> | null
   if (!registered?.token || !registered.userId || !registered.tenantId) {
     throw new Error("session.register returned no usable token")
   }
-  const creds: Credentials = { server, token: registered.token, userId: registered.userId, tenantId: registered.tenantId }
-  opts.store.set(creds)
-  return creds.token
+  return { server, token: registered.token, userId: registered.userId, tenantId: registered.tenantId }
 }
 
 export async function connect(opts: ConnectOptions): Promise<OgHandle> {

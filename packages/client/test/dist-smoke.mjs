@@ -7,7 +7,11 @@
 //   node --test test/dist-smoke.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import * as os from "node:os"
+import * as path from "node:path"
+import * as fs from "node:fs"
 import { initials, dotColor, connect } from "../dist/index.js"
+import { fileTokenStore } from "../dist/node-store.js"
 
 test("built dist output: presence helpers work", () => {
   assert.equal(initials("Ada Lovelace"), "AL")
@@ -20,4 +24,17 @@ test("built dist output: connect() is exported and returns a call/close handle (
   assert.equal(typeof og.call, "function")
   assert.equal(typeof og.close, "function")
   og.close()
+})
+
+test("built dist output: node-store round-trips credentials through a real file", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "og-client-dist-smoke-"))
+  try {
+    const store = fileTokenStore({ path: path.join(dir, "credentials.json") })
+    assert.equal(store.get(), null)
+    const creds = { server: "http://example.invalid", token: "tok", userId: "u1", tenantId: "t1" }
+    store.set(creds)
+    assert.deepEqual(store.get(), creds)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
