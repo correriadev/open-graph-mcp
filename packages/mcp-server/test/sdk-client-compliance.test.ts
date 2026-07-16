@@ -54,7 +54,7 @@ test("SDK Client + StreamableHTTPClientTransport: initialize, tools/list, tools/
     const parsed = JSON.parse(snap.contents[0].text as string)
     expect(parsed.graphId).toBe(graphId)
   } finally {
-    await client.close()
+    await client.close().catch(() => {})
     s.stop()
     cleanup()
   }

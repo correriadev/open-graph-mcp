@@ -19,11 +19,11 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] **Negociação de protocolVersion**: `initialize` hoje devolve
+- [x] **Negociação de protocolVersion**: `initialize` hoje devolve
       `LATEST_PROTOCOL_VERSION` incondicional (transport.ts:161). Spec:
       responder a versão do CLIENTE se suportada, senão a mais recente
       suportada. Implementar eco/negociação.
-- [ ] **Erros de execução de tool → `result.isError`**: hoje `callTool`
+- [x] **Erros de execução de tool → `result.isError`**: hoje `callTool`
       que lança vira JSON-RPC error -32603 (transport.ts:196). Spec MCP:
       erro de PROTOCOLO é JSON-RPC error; erro de EXECUÇÃO da tool é
       `result: { content: [...], isError: true }`. Corrigir dispatch de
@@ -31,22 +31,28 @@
       Nota: muitos tools já devolvem `{ok:false, reasons}` como resultado
       normal — ESSES continuam assim (não são erro); isError é p/ throw
       (token inválido, tool desconhecida vira -32602/-32601).
-- [ ] **`notifications/initialized`**: já cai no caminho de notification
+- [x] **`notifications/initialized`**: já cai no caminho de notification
       (204) — adicionar teste pinando.
-- [ ] **GET /mcp → 405** (spec Streamable HTTP: server sem stream de
+- [x] **GET /mcp → 405** (spec Streamable HTTP: server sem stream de
       server→client responde 405 Method Not Allowed ao GET). Hoje cai no
       404 genérico.
-- [ ] **Header `MCP-Protocol-Version`** em respostas (spec 2025+) — eco
+- [x] **Header `MCP-Protocol-Version`** em respostas (spec 2025+) — eco
       da versão negociada.
-- [ ] **Validação de Origin** configurável (`ALLOWED_ORIGINS` env;
+- [x] **Validação de Origin** configurável (`ALLOWED_ORIGINS` env;
       default atual `*` documentado como D2 single-org).
 - [ ] **Matriz de validação** `docs/roadmap-integrations/compliance-matrix.md`:
       linhas = MCP Inspector, SDK TS `Client` + `StreamableHTTPClientTransport`,
       Claude Code (`claude mcp add --transport http`), curl cru; colunas =
       initialize, tools/list, tools/call ok, tools/call erro (isError),
       resources/read. Cada célula ✅/❌ + data + versão do cliente.
-- [ ] Testes bun p/ cada item acima (protocol-compliance.test.ts).
-- [ ] Suíte inteira verde.
+      **Status:** doc criado; linhas curl e SDK TS Client rodadas de
+      verdade e ✅; linhas MCP Inspector e Claude Code CLI ficaram
+      pending-manual (não dá p/ rodar headless nesta sandbox / rodar
+      `claude mcp add` de verdade mutaria a config persistente do usuário
+      sem autorização) — instruções de reprodução exata no próprio doc.
+      Falta um humano rodar essas duas p/ fechar o checkbox.
+- [x] Testes bun p/ cada item acima (protocol-compliance.test.ts).
+- [x] Suíte inteira verde.
 
 ---
 
