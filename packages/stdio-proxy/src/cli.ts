@@ -15,11 +15,9 @@
  * calling session.register itself) and injects the token — the calling agent never needs to know a
  * token exists. Without --name, none of this activates: pure Task 1 pass-through.
  */
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
 import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js"
 import { isJSONRPCRequest, type JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js"
+import { type Credentials, postMcp, resolveCredentials } from "./credentials"
 
 function parseArgs(argv: string[]): { server: string; name?: string; tenant?: string } {
   const idx = argv.indexOf("--server")
@@ -42,19 +40,6 @@ function parseArgs(argv: string[]): { server: string; name?: string; tenant?: st
  * A network failure forwarding a NOTIFICATION just gets logged to stderr; still no stdout output. */
 function errorReason(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
-}
-
-/** POST a JSON-RPC body to `${server}/mcp`. Just the fetch-construction boilerplate shared by every
- * call site (forward(), registerSession(), ensureToolSchemaCache()) — each caller still owns its own
- * response-parsing and error handling, which genuinely diverge (forward() must special-case
- * notifications' empty 204 body before ever calling .json(); the two internal bookkeeping calls
- * don't). Not a full "post+parse" abstraction on purpose. */
-function postMcp(server: string, body: unknown): Promise<Response> {
-  return fetch(`${server}/mcp`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  })
 }
 
 /** Synthesize a proxy-originated JSON-RPC error reply to stdout, correlated to the failed request's id. */
@@ -83,92 +68,15 @@ function sendProxyToolError(id: string | number, text: string): void {
 
 // ── token bootstrap (--name / --tenant) ─────────────────────────────────────────────────────────
 // Everything below only ever runs when --name was passed; see maybeInjectToken's early return.
+// Credential I/O + registration + memoization live in ./credentials — this file only decides WHEN
+// injection applies and does the actual stdio/HTTP relaying.
 
-type Credentials = { server: string; token: string; userId: string; tenantId: string }
 type ToolDefinition = { name: string; inputSchema?: { properties?: Record<string, unknown> } }
 
-function credentialsPath(): string {
-  return path.join(os.homedir(), ".open-graph-mcp", "credentials.json")
-}
-
-/** Reads+validates the on-disk credentials file. Any problem at all (missing, unreadable, corrupt
- * JSON, wrong shape) is treated the same way: "no usable credentials on disk" — caller falls back to
- * registering fresh. This is deliberately permissive about the failure mode; it's not this function's
- * job to distinguish "file doesn't exist" from "file is garbage". */
-function loadCredentials(): Credentials | null {
-  try {
-    const raw = fs.readFileSync(credentialsPath(), "utf8")
-    const parsed = JSON.parse(raw)
-    if (
-      parsed &&
-      typeof parsed.server === "string" &&
-      typeof parsed.token === "string" &&
-      typeof parsed.userId === "string" &&
-      typeof parsed.tenantId === "string"
-    ) {
-      return parsed as Credentials
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
-/** Persists credentials at 0600, regardless of whether the file previously existed. `writeFileSync`'s
- * `mode` option only reliably applies via the underlying open() flags on FIRST creation — an existing
- * file's mode is NOT guaranteed to be reset by a plain overwrite — so `chmodSync` is called explicitly
- * every time as a belt-and-suspenders guarantee of the 0600 invariant regardless of prior state. */
-function saveCredentials(creds: Credentials): void {
-  const file = credentialsPath()
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(creds, null, 2), { mode: 0o600 })
-  fs.chmodSync(file, 0o600)
-}
-
-/** Calls session.register itself via the same raw-fetch-to-/mcp pattern forward() uses — this is the
- * proxy's own internal bookkeeping call, never relayed to the client (the client didn't ask for it). */
-async function registerSession(server: string, name: string, tenant: string | undefined): Promise<Credentials> {
-  const args: Record<string, string> = { name }
-  if (tenant) args.tenant = tenant
-  const httpResponse = await postMcp(server, {
-    jsonrpc: "2.0",
-    id: "stdio-proxy-bootstrap-register",
-    method: "tools/call",
-    params: { name: "session.register", arguments: args },
-  })
-  const body = (await httpResponse.json()) as { result?: { isError?: boolean; structuredContent?: Partial<Credentials> } }
-  const structured = body?.result?.structuredContent
-  if (body?.result?.isError || !structured?.token || !structured?.userId || !structured?.tenantId) {
-    throw new Error("session.register returned no usable token")
-  }
-  return { server, token: structured.token, userId: structured.userId, tenantId: structured.tenantId }
-}
-
-// Memoized for the process lifetime — but ONLY once resolution actually succeeds. A failed attempt is
-// deliberately NOT cached as a permanent failure: a transient network blip on the first call shouldn't
-// wedge every subsequent tools/call in this process into failing forever with no way to recover short
-// of a restart. (This is separate from Task 3's retry-on-expired-token; this is just "don't poison the
-// cache with a failure".) Safe without extra locking because the main stdin loop awaits each message's
-// handling — including this — before reading the next, so calls here are never concurrent.
-let cachedCredentials: Credentials | null = null
-
-async function resolveCredentials(server: string, name: string, tenant: string | undefined): Promise<Credentials> {
-  if (cachedCredentials) return cachedCredentials
-  const existing = loadCredentials()
-  if (existing && existing.server === server) {
-    cachedCredentials = existing
-    return existing
-  }
-  const fresh = await registerSession(server, name, tenant)
-  saveCredentials(fresh)
-  cachedCredentials = fresh
-  return fresh
-}
-
 // Tool-schema cache, populated lazily (first tools/call that needs it) from an internal tools/list —
-// NOT relayed to the client, same "proxy's own bookkeeping" idea as registerSession above. Cached for
-// the process lifetime: schemas don't change mid-session. Left empty (rather than a "already tried"
-// flag) on fetch failure, so a later call naturally retries instead of getting permanently stuck.
+// NOT relayed to the client, same "proxy's own bookkeeping" idea as ./credentials's registerSession.
+// Cached for the process lifetime: schemas don't change mid-session. Left empty (rather than a
+// "already tried" flag) on fetch failure, so a later call naturally retries instead of getting stuck.
 const toolSchemaCache = new Map<string, ToolDefinition>()
 
 async function ensureToolSchemaCache(server: string): Promise<void> {
