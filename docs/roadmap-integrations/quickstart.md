@@ -10,6 +10,20 @@ Isso significa que **qualquer cliente MCP genérico já funciona sem plugin
 nenhum** — os blocos por cliente abaixo são só o "como aponto meu cliente
 pra cá", não pré-requisito pra usar o server.
 
+**Índice** — [1. Quickstart genérico](#1-quickstart-genérico-qualquer-cliente-mcp) ·
+[2. Por cliente](#2-por-cliente):
+[2.1 Claude Code](#21-claude-code) (testado) ·
+[2.2 opencode](#22-opencode) (testado) ·
+[2.3 Cursor](#23-cursor--documentado-não-verificado-2026-07-16) ·
+[2.4 Windsurf](#24-windsurf--documentado-não-verificado-2026-07-16) ·
+[2.5 Copilot](#25-github-copilot-vs-code-agent-mode--cli--documentado-não-verificado-2026-07-16) ·
+[2.6 Zed](#26-zed--documentado-não-verificado-2026-07-16) ·
+[2.7 Gemini CLI](#27-gemini-cli--documentado-não-verificado-2026-07-16) ·
+[3. Resumo de verificação](#3-resumo-de-verificação)
+
+Só quer conectar um cliente específico? Pule direto pro bloco dele em §2 —
+a §1 é só necessária se você quer entender o protocolo por baixo do plugin.
+
 ---
 
 ## 1. Quickstart genérico (qualquer cliente MCP)
@@ -20,9 +34,13 @@ Da raiz do monorepo:
 
 ```bash
 cd packages/mcp-server
-GRAPH_REPO_PATH=/caminho/do/seu/repo PORT=8787 bun run dev
+GRAPH_REPO_PATH=/caminho/do/seu/repo PORT=8799 bun run dev
 # ou, direto: bun run src/index.ts
 ```
+
+(Porta `8799` acima é só pra bater com os exemplos abaixo, que foram
+capturados contra essa porta — use qualquer porta livre, é só trocar `8799`
+em todos os `curl`/configs deste documento pela sua.)
 
 `GRAPH_REPO_PATH` é opcional — sem ele o server sobe "pure-knowledge" (sem
 bootstrap automático; chame `graph.bootstrap` manualmente depois). Com ele
@@ -208,6 +226,16 @@ stdio contra um server real, incluindo o caminho de injeção e re-registro).
 
 ## 2. Por cliente
 
+| Cliente | Status |
+|---|---|
+| Claude Code | ✅ testado 2026-07-16 |
+| opencode | ✅ testado 2026-07-16 |
+| Cursor | documentado, não verificado |
+| Windsurf | documentado, não verificado |
+| Copilot (VS Code) | documentado, não verificado |
+| Zed | documentado, não verificado |
+| Gemini CLI | documentado, não verificado |
+
 Cada bloco mostra o formato de config vigente na data indicada. Onde
 aplicável, a alternativa **stdio via proxy** (`@open-graph-mcp/stdio`)
 também é mostrada — ela ainda **não está publicada no npm** (isso é
@@ -228,9 +256,9 @@ claude mcp add --transport http open-graph http://localhost:8799/mcp
 ```
 
 `claude mcp list` confirmou `open-graph: http://localhost:8799/mcp (HTTP) -
-✔ Connected` logo em seguida. Removido após o teste com
-`claude mcp remove open-graph -s local` — `~/.claude.json` conferido
-byte-a-byte (md5sum) contra o estado anterior ao teste, idêntico.
+✔ Connected` logo em seguida, e foi removido depois com
+`claude mcp remove open-graph -s local` (config conferido idêntico ao
+estado anterior ao teste).
 
 Para o server publicado (não localhost), o comando é o mesmo trocando a URL:
 
@@ -246,13 +274,13 @@ por trás dele, sim — é exercitado pela suíte de testes de
 via stdio contra um server real, incluindo `--name`):
 
 ```bash
-claude mcp add open-graph -- bun run /path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts --server https://<seu-host> --name Alice
+claude mcp add open-graph -- bun run /path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts --server https://<seu-host> --name <você>
 ```
 
 Depois de publicado (INT-6), isso vira:
 
 ```bash
-claude mcp add open-graph -- bunx @open-graph-mcp/stdio --server https://<seu-host> --name Alice
+claude mcp add open-graph -- bunx @open-graph-mcp/stdio --server https://<seu-host> --name <você>
 ```
 
 ### 2.2 opencode
@@ -281,9 +309,8 @@ Isso grava em `~/.config/opencode/opencode.jsonc`:
 `opencode mcp list` confirmou `✓ open-graph connected`. **Importante:** a
 CLI do opencode (na versão testada, 1.17.18) não tem um subcomando de
 remoção (`opencode mcp --help` só lista `add`, `list`, `auth`, `logout`,
-`debug` — sem `remove`/`rm`). A limpeza foi manual: o arquivo de config foi
-restaurado pro conteúdo exato de antes do teste (confirmado por md5sum
-idêntico ao snapshot pré-teste).
+`debug` — sem `remove`/`rm`); pra desfazer o teste, o arquivo de config foi
+restaurado manualmente pro conteúdo exato de antes.
 
 Para o server publicado:
 
@@ -300,7 +327,7 @@ manual em `opencode.jsonc` seria:
   "mcp": {
     "open-graph": {
       "type": "local",
-      "command": ["bun", "run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "Alice"]
+      "command": ["bun", "run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "<você>"]
     }
   }
 }
@@ -324,7 +351,7 @@ Via proxy stdio (funciona em qualquer versão):
   "mcpServers": {
     "open-graph": {
       "command": "bun",
-      "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "Alice"]
+      "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "<você>"]
     }
   }
 }
@@ -354,7 +381,7 @@ Claude Desktop):
   "mcpServers": {
     "open-graph": {
       "command": "bun",
-      "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "Alice"]
+      "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "<você>"]
     }
   }
 }
@@ -385,7 +412,7 @@ Alternativa stdio (via proxy), mesmo arquivo:
     "open-graph": {
       "type": "stdio",
       "command": "bun",
-      "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "Alice"]
+      "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "<você>"]
     }
   }
 }
@@ -402,7 +429,7 @@ chave `context_servers`. Zed fala stdio para context servers — use o proxy:
     "open-graph": {
       "command": {
         "path": "bun",
-        "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "Alice"]
+        "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "<você>"]
       }
     }
   }
@@ -437,7 +464,7 @@ Alternativa stdio (via proxy):
   "mcpServers": {
     "open-graph": {
       "command": "bun",
-      "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "Alice"]
+      "args": ["run", "/path/to/open-graph-mcp/packages/stdio-proxy/src/cli.ts", "--server", "https://<seu-host>", "--name", "<você>"]
     }
   }
 }
