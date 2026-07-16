@@ -1,0 +1,14 @@
+// Proves the package's real Node compatibility floor: Node >=20, no TS/type-stripping involved
+// at all, because this imports the plain-JS build output (dist/), not TS source.
+//
+// Deliberately named without ".test." so bun's default test-file glob (*.test.{js,jsx,ts,tsx} etc.)
+// never auto-discovers it — `bun test` at the repo root must stay green without a prior build step.
+// Run explicitly, after `bun run build`:
+//   node --test test/dist-smoke.mjs
+import { test } from "node:test"
+import assert from "node:assert/strict"
+import { ping } from "../dist/index.js"
+
+test("built dist output: ping returns pong", () => {
+  assert.equal(ping(), "pong")
+})
