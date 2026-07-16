@@ -126,6 +126,13 @@ function withToken(message: JSONRPCMessage, token: string): JSONRPCMessage {
 // before, and is entirely independent of, the --name token-bootstrap logic below: the sessionId gap
 // is structural to the stdio transport itself, not a token-availability problem, and the two
 // concerns must not get tangled.
+//
+// NOTE for whoever adds a tool later: graph.subscribe also requires sessionId (same structural gap)
+// but is deliberately NOT in this set — the INT-1 DoD scopes this interception to presence.focus/beat
+// only, and graph.subscribe's failure mode without a real sessionId is a silent no-op (writes a
+// subscription entry nobody reads), not the cryptic-throw problem this stub exists to avoid. If a
+// FUTURE tool structurally requires sessionId AND fails loudly/cryptically without one, check whether
+// it belongs here too — don't assume this set is exhaustive over "every tool needing sessionId".
 const LIVE_LAYER_TOOLS = new Set(["presence.focus", "presence.beat"])
 
 /** True for a `tools/call` request whose target tool is one of LIVE_LAYER_TOOLS. Notifications and
