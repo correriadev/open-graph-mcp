@@ -200,6 +200,136 @@ test("a blank/malformed stdin line is dropped (logged to stderr) without crashin
   }
 })
 
+// ── live-layer session interception (presence.focus / presence.beat) — Task 4 ──────────────────
+// presence.focus/presence.beat require a sessionId sourced from the server's SSE /events
+// connection, which a vanilla stdio-connected client never has. The proxy intercepts calls to
+// these two SPECIFIC tools unconditionally — before any token-bootstrap decision, whether or not
+// --name was passed — and answers with a clear proxy-originated error, without ever forwarding to
+// the server.
+
+test("tools/call for presence.focus is intercepted with a clear proxy error, never reaching the server", async () => {
+  // Point at an unreachable server: if the proxy accidentally forwarded this call, the failure
+  // would surface as a -32000 "failed to reach server" error, NOT the clear proxy message —
+  // proving (indirectly) that no network attempt was made.
+  const server = startServer()
+  const deadUrl = server.url
+  server.stop()
+
+  const proxy = spawnProxy(deadUrl)
+  try {
+    proxy.send({
+      jsonrpc: "2.0",
+      id: 40,
+      method: "tools/call",
+      params: { name: "presence.focus", arguments: { token: "whatever", sessionId: "whatever" } },
+    })
+    const line = await proxy.readLine()
+    expect(line).not.toBeNull()
+    const parsed = JSON.parse(line!)
+    expect(parsed.id).toBe(40)
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toBe("live layer requires companion — see docs")
+  } finally {
+    proxy.kill()
+  }
+})
+
+test("tools/call for presence.beat is intercepted with a clear proxy error, never reaching the server", async () => {
+  const server = startServer()
+  const deadUrl = server.url
+  server.stop()
+
+  const proxy = spawnProxy(deadUrl)
+  try {
+    proxy.send({
+      jsonrpc: "2.0",
+      id: 41,
+      method: "tools/call",
+      params: { name: "presence.beat", arguments: { token: "whatever", sessionId: "whatever" } },
+    })
+    const line = await proxy.readLine()
+    expect(line).not.toBeNull()
+    const parsed = JSON.parse(line!)
+    expect(parsed.id).toBe(41)
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toBe("live layer requires companion — see docs")
+  } finally {
+    proxy.kill()
+  }
+})
+
+test("tools/call for presence.who (no sessionId required) is unaffected — forwarded normally to a real server", async () => {
+  const server = startServer()
+  const proxy = spawnProxy(server.url)
+  try {
+    proxy.send({
+      jsonrpc: "2.0",
+      id: 42,
+      method: "tools/call",
+      params: { name: "session.register", arguments: { name: "bob" } },
+    })
+    const registerLine = await proxy.readLine()
+    const token = JSON.parse(registerLine!).result.structuredContent.token as string
+
+    proxy.send({
+      jsonrpc: "2.0",
+      id: 43,
+      method: "tools/call",
+      params: { name: "presence.who", arguments: { token } },
+    })
+    const line = await proxy.readLine()
+    expect(line).not.toBeNull()
+    const parsed = JSON.parse(line!)
+    expect(parsed.id).toBe(43)
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.result.isError).toBeUndefined()
+    expect(parsed.result.structuredContent).toBeDefined()
+  } finally {
+    proxy.kill()
+    server.stop()
+  }
+})
+
+test("presence.focus/presence.beat are intercepted even with --name passed — not routed through token injection first", async () => {
+  // Point at an unreachable server AND pass --name: if maybeInjectToken ran first, it would try
+  // (and fail) to fetch the tool-schema cache, fall through as "not token-declaring", and hand off
+  // to forward()'s ordinary pass-through — which would surface as a -32000 "failed to reach server"
+  // error, NOT the clear live-layer message. Getting back the live-layer message instead proves the
+  // interception check ran first and short-circuited before token bootstrap ever engaged (confirmed
+  // below by the absence of an "injected token" line and of a credentials file).
+  const server = startServer()
+  const deadUrl = server.url
+  server.stop()
+
+  const home = tmpHome()
+  const proxy = spawnProxy(deadUrl, { extraArgs: ["--name", "Alice"], home })
+  try {
+    await proxy.readStderrLine() // startup log
+
+    proxy.send({
+      jsonrpc: "2.0",
+      id: 44,
+      method: "tools/call",
+      params: { name: "presence.focus", arguments: { sessionId: "whatever" } },
+    })
+    const line = await proxy.readLine()
+    const parsed = JSON.parse(line!)
+    expect(parsed.id).toBe(44)
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toBe("live layer requires companion — see docs")
+
+    // No "injected token" stderr line and no credentials file — token bootstrap never engaged.
+    const maybeLine = await proxy.readStderrLine(500)
+    expect(maybeLine).toBeNull()
+    expect(fs.existsSync(credentialsPathFor(home))).toBe(false)
+  } finally {
+    proxy.kill()
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
+
 // ── --name token bootstrap ──────────────────────────────────────────────────────────────────────
 // (moved to credentials.test.ts alongside the src/credentials.ts extraction — Task 3)
 

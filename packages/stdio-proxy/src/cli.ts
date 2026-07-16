@@ -20,6 +20,12 @@
  * injected the token (never for a caller-supplied one — see forwardInjectedToolCall), a response
  * matching the server's `"invalid or expired token"` convention triggers exactly one re-registration
  * (same --name/--tenant) and one retry of the original call, logged to stderr.
+ *
+ * Live-layer session interception (Task 4): `presence.focus`/`presence.beat` require a `sessionId`
+ * sourced from the server's SSE `/events` connection, which a vanilla stdio client never has. Rather
+ * than forward those calls and let them fail cryptically, the proxy intercepts them unconditionally
+ * (independent of --name) and replies with a clear proxy-originated error — see
+ * isLiveLayerToolCall/LIVE_LAYER_TOOLS below. Full support is INT-2's job.
  */
 import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js"
 import { isJSONRPCRequest, type JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js"
@@ -104,6 +110,30 @@ function withToken(message: JSONRPCMessage, token: string): JSONRPCMessage {
   const cloned = structuredClone(message) as JSONRPCMessage & { params: { arguments?: Record<string, unknown> } }
   cloned.params.arguments = { ...(cloned.params.arguments ?? {}), token }
   return cloned
+}
+
+// ── live-layer session interception (presence.focus / presence.beat) ───────────────────────────
+// These two tools require a `sessionId` sourced from the server's SSE `/events` connection (see
+// packages/mcp-server/src/tools/presence.ts's presenceBeat/presenceFocus inline sessionId checks and
+// packages/mcp-server/src/transport.ts's TOOLS entries for presence.focus/presence.beat) — a vanilla
+// stdio-connected client has no SSE channel and thus no way to obtain one. Forwarding such a call
+// to the server would fail with a
+// cryptic "sessionId required" (or, if a caller somehow supplied a bogus sessionId, something even
+// less obvious). Full support is INT-2's job (a companion live-layer library that keeps an SSE
+// session alive and injects sessionId automatically); until that exists, this proxy intercepts
+// calls to these two SPECIFIC tools unconditionally — with or without --name — and answers with an
+// unambiguous proxy-originated error, WITHOUT ever attempting to reach the server. This is checked
+// before, and is entirely independent of, the --name token-bootstrap logic below: the sessionId gap
+// is structural to the stdio transport itself, not a token-availability problem, and the two
+// concerns must not get tangled.
+const LIVE_LAYER_TOOLS = new Set(["presence.focus", "presence.beat"])
+
+/** True for a `tools/call` request whose target tool is one of LIVE_LAYER_TOOLS. Notifications and
+ * every other method/tool are unaffected. */
+function isLiveLayerToolCall(message: JSONRPCMessage): boolean {
+  if (!isJSONRPCRequest(message) || message.method !== "tools/call") return false
+  const toolName = (message as JSONRPCMessage & { params?: { name?: string } }).params?.name
+  return typeof toolName === "string" && LIVE_LAYER_TOOLS.has(toolName)
 }
 
 // ── token bootstrap (--name / --tenant) ─────────────────────────────────────────────────────────
@@ -263,6 +293,14 @@ async function main(): Promise<void> {
         continue
       }
       if (message === null) break
+
+      // Live-layer session interception (presence.focus / presence.beat): checked FIRST, before any
+      // token-bootstrap decision, and regardless of whether --name was passed — see
+      // isLiveLayerToolCall's doc. Never forwarded to the server; no fetch is ever attempted.
+      if (isLiveLayerToolCall(message)) {
+        sendProxyToolError((message as JSONRPCMessage & { id: string | number }).id, "live layer requires companion — see docs")
+        continue
+      }
 
       // Opt-in token bootstrap: only ever touches tools/call requests, and only when --name was
       // passed. Without --name this block is skipped entirely — pure Task 1 pass-through, unchanged.
