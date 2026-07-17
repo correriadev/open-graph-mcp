@@ -747,6 +747,10 @@ const setConn = (up: boolean) => {
   // e2e can assert the DOM-rendering side (cap, overflow, coalesced text) without re-timing the network.
   pushToast,
   getCamera: () => renderer.getCamera(),
+  // Going invisible is a silent transition server-side (presence.ts: no broadcast at all while
+  // invisible) — other clients only learn about it on the next 10s pollWho() poll. Real function,
+  // just triggered sooner than the interval would.
+  pollWho,
 }
 
 // SSE connection, reconnect/backoff, event dispatch (og.on wired in connectOg), and presence lifecycle
