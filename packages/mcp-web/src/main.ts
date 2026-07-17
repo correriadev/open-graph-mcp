@@ -269,7 +269,7 @@ function applyReattach(res: any): void {
       cells: cs.cells ?? [],
       byUser: cs.byUser ?? localStorage.getItem("og.name") ?? "",
       openedAt: cs.openedAt ?? 0,
-      expiresAt: cs.expiresAt ?? 0,
+      expiresAt: cs.expiresAt ?? "",
       deltaCount: 0,
       deltas: [],
     })
@@ -479,7 +479,7 @@ async function loadOpenChangesets() {
         cells: cs.cells ?? [],
         byUser: cs.byUser ?? "?",
         openedAt: cs.openedAt ?? 0,
-        expiresAt: cs.expiresAt ?? 0,
+        expiresAt: cs.expiresAt ?? "",
         deltaCount: 0,
         deltas: [],
       })
@@ -551,7 +551,7 @@ function openTurnModal() {
         cells: picked,
         byUser: localStorage.getItem("og.name") ?? "",
         openedAt: Date.now(),
-        expiresAt: res.expiresAt ?? 0,
+        expiresAt: res.expiresAt ?? "",
         deltaCount: 0,
         deltas: [],
       })
