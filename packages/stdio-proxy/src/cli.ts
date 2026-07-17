@@ -21,17 +21,20 @@
  * matching the server's `"invalid or expired token"` convention triggers exactly one re-registration
  * (same --name/--tenant) and one retry of the original call, logged to stderr.
  *
- * Live-layer session interception (Task 4): `presence.focus`/`presence.beat` require a `sessionId`
- * sourced from the server's SSE `/events` connection, which a vanilla stdio client never has. Rather
- * than forward those calls and let them fail cryptically, the proxy intercepts them unconditionally
- * (independent of --name) and replies with a clear proxy-originated error — see
- * isLiveLayerToolCall/LIVE_LAYER_TOOLS below. Full support is INT-2's job.
+ * Live-layer session interception (Task 4) / --live (INT-2): `presence.focus`/`presence.beat` require
+ * a `sessionId` sourced from the server's SSE `/events` connection, which a vanilla stdio client never
+ * has. Without --live, the proxy intercepts them unconditionally (independent of --name) and replies
+ * with a clear proxy-originated error — see isLiveLayerToolCall/LIVE_LAYER_TOOLS below. WITH --live,
+ * the proxy instead keeps a real `@open-graph-mcp/client` `OgHandle` alive for the process lifetime
+ * (see main()'s `og` variable) and routes these two calls through it — see routeLiveLayerCall.
  */
 import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js"
 import { isJSONRPCRequest, type JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js"
+import { connect, type OgHandle } from "@open-graph-mcp/client"
+import { fileTokenStore } from "@open-graph-mcp/client/node-store"
 import { type Credentials, postMcp, reregisterCredentials, resolveCredentials } from "./credentials"
 
-function parseArgs(argv: string[]): { server: string; name?: string; tenant?: string } {
+function parseArgs(argv: string[]): { server: string; name?: string; tenant?: string; live: boolean } {
   const idx = argv.indexOf("--server")
   const value = idx === -1 ? undefined : argv[idx + 1]
   if (!value) {
@@ -42,7 +45,14 @@ function parseArgs(argv: string[]): { server: string; name?: string; tenant?: st
   const name = nameIdx === -1 ? undefined : argv[nameIdx + 1]
   const tenantIdx = argv.indexOf("--tenant")
   const tenant = tenantIdx === -1 ? undefined : argv[tenantIdx + 1]
-  return { server: value.replace(/\/+$/, ""), name, tenant }
+  const live = argv.includes("--live")
+  if (live && !name) {
+    process.stderr.write(
+      "stdio-proxy: --live requires --name <name> (a live SSE session needs an identity to register/reconnect under)\n",
+    )
+    process.exit(1)
+  }
+  return { server: value.replace(/\/+$/, ""), name, tenant, live }
 }
 
 /** Forward one JSON-RPC message over HTTP to `${server}/mcp`. Requests (have `id`) get their response
@@ -74,6 +84,22 @@ function sendProxyToolError(id: string | number, text: string): void {
     jsonrpc: "2.0",
     id,
     result: { content: [{ type: "text", text }], isError: true },
+  } as JSONRPCMessage
+  process.stdout.write(serializeMessage(response))
+}
+
+/** Synthesize a proxy-originated JSON-RPC success reply shaped like the server's own tool-execution
+ * SUCCESS convention (structuredContent + a text mirror, isError omitted) — the --live counterpart to
+ * sendProxyToolError above. Used by routeLiveLayerCall: the real server's presence.focus/beat tools
+ * return `{ok:true}` (or `{ok:true, serverTs}` for beat) on success (packages/mcp-server/src/tools/
+ * presence.ts), but `OgHandle.presence.focus`/`.beat()` deliberately discard that payload (Promise<void>
+ * — see connect.ts), so this synthesizes the same `{ok:true}` shape rather than fabricating a serverTs
+ * this proxy never actually saw. */
+function sendProxyToolSuccess(id: string | number, structuredContent: Record<string, unknown>): void {
+  const response: JSONRPCMessage = {
+    jsonrpc: "2.0",
+    id,
+    result: { content: [{ type: "text", text: JSON.stringify(structuredContent) }], structuredContent },
   } as JSONRPCMessage
   process.stdout.write(serializeMessage(response))
 }
@@ -117,15 +143,20 @@ function withToken(message: JSONRPCMessage, token: string): JSONRPCMessage {
 // packages/mcp-server/src/tools/presence.ts's presenceBeat/presenceFocus inline sessionId checks and
 // packages/mcp-server/src/transport.ts's TOOLS entries for presence.focus/presence.beat) — a vanilla
 // stdio-connected client has no SSE channel and thus no way to obtain one. Forwarding such a call
-// to the server would fail with a
-// cryptic "sessionId required" (or, if a caller somehow supplied a bogus sessionId, something even
-// less obvious). Full support is INT-2's job (a companion live-layer library that keeps an SSE
-// session alive and injects sessionId automatically); until that exists, this proxy intercepts
-// calls to these two SPECIFIC tools unconditionally — with or without --name — and answers with an
-// unambiguous proxy-originated error, WITHOUT ever attempting to reach the server. This is checked
-// before, and is entirely independent of, the --name token-bootstrap logic below: the sessionId gap
-// is structural to the stdio transport itself, not a token-availability problem, and the two
-// concerns must not get tangled.
+// to the server would fail with a cryptic "sessionId required" (or, if a caller somehow supplied a
+// bogus sessionId, something even less obvious).
+//
+// WITHOUT --live: this proxy intercepts calls to these two SPECIFIC tools unconditionally — with or
+// without --name — and answers with an unambiguous proxy-originated error, WITHOUT ever attempting to
+// reach the server. This is checked before, and is entirely independent of, the --name token-bootstrap
+// logic below: the sessionId gap is structural to the stdio transport itself, not a token-availability
+// problem, and the two concerns must not get tangled. This is the INT-1-scoped placeholder behavior,
+// unchanged since Task 4.
+//
+// WITH --live (INT-2): main() keeps a real `OgHandle` (`@open-graph-mcp/client`'s connect()) alive for
+// the process, and routes calls to these two tools through it instead — see routeLiveLayerCall below.
+// isLiveLayerToolCall/LIVE_LAYER_TOOLS themselves are unchanged; only what main() DOES once it
+// recognizes one of these calls depends on --live.
 //
 // NOTE for whoever adds a tool later: graph.subscribe also requires sessionId (same structural gap)
 // but is deliberately NOT in this set — the INT-1 DoD scopes this interception to presence.focus/beat
@@ -141,6 +172,48 @@ function isLiveLayerToolCall(message: JSONRPCMessage): boolean {
   if (!isJSONRPCRequest(message) || message.method !== "tools/call") return false
   const toolName = (message as JSONRPCMessage & { params?: { name?: string } }).params?.name
   return typeof toolName === "string" && LIVE_LAYER_TOOLS.has(toolName)
+}
+
+/** --live's real fulfillment of a presence.focus/presence.beat tools/call (see isLiveLayerToolCall) —
+ * only ever called when `og` is a live OgHandle (main()'s `--live` branch).
+ *
+ * Design Decision A (INT-2 task brief): `og.presence.focus(cell, opts)` is the natural fit for an
+ * incoming `presence.focus` call — it already handles sessionId injection internally, exactly what a
+ * vanilla stdio client structurally lacks. `presence.beat` had no equivalent exposed primitive before
+ * this task (the automatic 15s beat was fully internal to connect()); rather than (a) silently no-op'ing
+ * an explicit beat call from a real MCP client — wrong, per the task brief, since beat has a real
+ * observable effect (the client's own liveness signal) it's entitled to expect — or (b) duplicating the
+ * {sessionId, agentKind} argument-shape construction here, `OgHandle` gained a minimal `presence.beat()`
+ * method (packages/client/src/connect.ts) that reuses the exact same `beatOnce()` internal the automatic
+ * timer already calls. So both tools now route through real `OgHandle` methods, symmetrically.
+ *
+ * Success reply: `presence.focus` (Promise<void> — no server payload to relay) gets a synthesized
+ * `{ok:true}` via sendProxyToolSuccess. `presence.beat` resolves to the server's REAL unwrapped result
+ * (`{ok:true, serverTs}` — see OgHandle.presence.beat's doc comment) which is forwarded as-is, so the
+ * calling client sees genuine server content, not a proxy fabrication. Failure (thrown by either method
+ * — e.g. og.presence.beat()'s "no session id yet" error, or the underlying og.call()'s own RPC failure)
+ * becomes an isError:true reply via sendProxyToolError, matching this file's existing failure-
+ * translation convention (maybeInjectToken's resolveCredentials-failure branch does the identical
+ * translation) rather than an uncaught rejection that would hang the stdio loop for this message. */
+async function routeLiveLayerCall(og: OgHandle, message: JSONRPCMessage): Promise<void> {
+  const req = message as JSONRPCMessage & { id: string | number; params: { name: string; arguments?: Record<string, unknown> } }
+  const toolName = req.params.name
+  const args = req.params.arguments ?? {}
+  try {
+    if (toolName === "presence.focus") {
+      const cell = typeof args.cell === "string" ? args.cell : null
+      await og.presence.focus(cell, { invisible: args.invisible === true })
+      sendProxyToolSuccess(req.id, { ok: true })
+    } else {
+      // toolName === "presence.beat" — the only other member of LIVE_LAYER_TOOLS (isLiveLayerToolCall
+      // guarantees this at the one call site in main()'s loop).
+      const result = await og.presence.beat()
+      const structuredContent = result && typeof result === "object" ? (result as Record<string, unknown>) : { ok: true }
+      sendProxyToolSuccess(req.id, structuredContent)
+    }
+  } catch (err) {
+    sendProxyToolError(req.id, `proxy: live layer call failed: ${errorReason(err)}`)
+  }
 }
 
 // ── token bootstrap (--name / --tenant) ─────────────────────────────────────────────────────────
@@ -281,8 +354,50 @@ async function forward(server: string, message: JSONRPCMessage): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const { server, name, tenant } = parseArgs(process.argv.slice(2))
+  const { server, name, tenant, live } = parseArgs(process.argv.slice(2))
   process.stderr.write(`stdio-proxy: proxying stdio <-> ${server}/mcp\n`)
+
+  // --live (INT-2): open a real live-layer session at startup and keep it alive for the process
+  // lifetime, so presence.focus/presence.beat calls arriving over stdio can be routed through it
+  // instead of hitting the LIVE_LAYER_TOOLS stub (see routeLiveLayerCall / main()'s loop below).
+  // parseArgs already guarantees `name` is set whenever `live` is true (fails fast otherwise).
+  //
+  // agentKind: "unknown" — ID5 (docs/roadmap-integrations/README.md) lists agentKind as a closed
+  // contract (web, claude-code, opencode, cursor, windsurf, copilot, zed, gemini-cli, unknown) that
+  // "plugins DEVEM declarar o seu" (each plugin should declare its own). This generic stdio proxy has
+  // no way to know which of those it's actually wrapping — it's a transport-level shim any MCP client
+  // can point at it — so claiming a specific kind (e.g. "claude-code") would be a guess this proxy
+  // cannot back up, and "unknown" is exactly the value ID5 reserves for precisely this case (it exists
+  // in the enum for a reason). A `--agent-kind` flag was considered but rejected as over-engineering
+  // for this task: nothing here currently depends on getting a MORE specific value than "unknown" (it
+  // only affects system.message routing/UI labeling for non-web agents, per ID5), and a flag can be
+  // added later without breaking this default if a concrete need shows up.
+  let og: OgHandle | null = null
+  if (live) {
+    try {
+      og = await connect({
+        server,
+        agentKind: "unknown",
+        name,
+        tenant,
+        store: fileTokenStore(),
+        onReattach: () => process.stderr.write("stdio-proxy: live layer session ready\n"),
+        onReauth: (event) => {
+          if (event.type === "reregistered") {
+            process.stderr.write("stdio-proxy: live layer auto re-registered after an expired/invalid token\n")
+          } else {
+            process.stderr.write(`stdio-proxy: live layer re-registration failed: ${errorReason(event.error)}\n`)
+          }
+        },
+      })
+    } catch (err) {
+      // Startup-time failure (e.g. session.register itself unreachable/broken) — fail fast rather than
+      // limping into the stdin loop with a null `og` that would silently fall back to the non-live stub
+      // for every presence.focus/beat call, contradicting what --live promised the caller.
+      process.stderr.write(`stdio-proxy: failed to establish live layer session: ${errorReason(err)}\n`)
+      process.exit(1)
+    }
+  }
 
   const readBuffer = new ReadBuffer()
   for await (const chunk of process.stdin) {
@@ -303,9 +418,16 @@ async function main(): Promise<void> {
 
       // Live-layer session interception (presence.focus / presence.beat): checked FIRST, before any
       // token-bootstrap decision, and regardless of whether --name was passed — see
-      // isLiveLayerToolCall's doc. Never forwarded to the server; no fetch is ever attempted.
+      // isLiveLayerToolCall's doc. WITHOUT --live (`og` is null), this is still the unchanged
+      // INT-1-scoped stub: never forwarded to the server, no fetch ever attempted. WITH --live, it's
+      // routed through the real OgHandle instead — see routeLiveLayerCall.
       if (isLiveLayerToolCall(message)) {
-        sendProxyToolError((message as JSONRPCMessage & { id: string | number }).id, "live layer requires companion — see docs")
+        const id = (message as JSONRPCMessage & { id: string | number }).id
+        if (og) {
+          await routeLiveLayerCall(og, message)
+        } else {
+          sendProxyToolError(id, "live layer requires companion — see docs")
+        }
         continue
       }
 
@@ -331,6 +453,7 @@ async function main(): Promise<void> {
       await forward(server, outgoing)
     }
   }
+  og?.close()
   process.exit(0)
 }
 

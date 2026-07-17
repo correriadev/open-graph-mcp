@@ -58,6 +58,7 @@
       "bin": "./src/cli.ts",
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.29.0",
+        "@open-graph-mcp/client": "workspace:*",
       },
       "devDependencies": {
         "@open-graph-mcp/mcp-server": "workspace:*",

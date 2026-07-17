@@ -134,6 +134,20 @@ export type OgHandle = {
      * takes effect right away. Once a session id exists, an automatic `presence.beat` fires every 15s
      * for as long as the connection/handle stays open — no manual timer needed, in either mode. */
     focus(cell: string | null, opts?: { invisible?: boolean }): Promise<void>
+    /** Send ONE explicit `presence.beat` immediately, reusing the exact same RPC the automatic 15s
+     * timer sends (see `beatOnce` below — the timer and this method both call it, so the argument
+     * shape lives in exactly one place). Added for INT-2's stdio `--live` proxy: an incoming
+     * `presence.beat` tools/call from a real MCP client has an observable effect the client is
+     * entitled to expect (its own liveness signal) and must not be silently swallowed just because
+     * this handle already beats automatically in the background — see cli.ts's routeLiveLayerCall.
+     * Unlike `focus`, this THROWS (rather than silently no-op'ing) if no session id exists yet, so a
+     * caller relying on its effect finds out immediately rather than being told "ok" for a beat that
+     * never reached the server. Unlike `focus` (Promise<void>), this resolves to the server's raw
+     * unwrapped `tools/call` result (e.g. `{ok:true, serverTs}` — packages/mcp-server/src/tools/
+     * presence.ts's `presenceBeat`) rather than discarding it, specifically so a caller relaying this
+     * over another transport (the stdio proxy) can forward genuine server content instead of
+     * fabricating one. The automatic timer ignores this return value; only the explicit caller needs it. */
+    beat(): Promise<unknown>
   }
   /** Surfaces `system.message` kind envelopes — text-only presence/notification for non-web agentKinds
    * (spec §8, ID5). Thin wrapper over `on("system.message", handler)`. */
@@ -355,6 +369,19 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
     await call("presence.beat", { sessionId, agentKind: opts.agentKind })
   }
 
+  /** The one place `presence.beat`'s argument shape is built — shared by the automatic 15s timer below
+   * and the explicit `presence.beat()` method exposed on `OgHandle` (Design Decision A, INT-2's stdio
+   * `--live` proxy). Throws (doesn't silently return) when no session id exists yet: the automatic
+   * timer only ever calls this once `sessionId && token` are already known-true (see its own guard), so
+   * this throw path is only ever reachable via the explicit method, where a caller with an observable
+   * expectation ("did my beat land?") deserves to know it didn't, rather than a lying "ok". */
+  async function beatOnce(): Promise<unknown> {
+    if (!sessionId || !token) {
+      throw new Error("connect: presence.beat() requires a live session (no session id yet)")
+    }
+    return call("presence.beat", { sessionId, agentKind: opts.agentKind })
+  }
+
   const presence = {
     async focus(cell: string | null, focusOpts?: { invisible?: boolean }): Promise<void> {
       focusState = { cell, invisible: focusOpts?.invisible ?? focusState.invisible }
@@ -366,6 +393,7 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
         agentKind: opts.agentKind,
       })
     },
+    beat: beatOnce,
   }
 
   function systemMessages(handler: (env: Envelope) => void): () => void {
@@ -517,9 +545,7 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
 
   const beatTimer = setInterval(() => {
     if (sessionId && token) {
-      call("presence.beat", { sessionId, agentKind: opts.agentKind }).catch((e) =>
-        console.error("connect: presence.beat failed", e),
-      )
+      beatOnce().catch((e) => console.error("connect: presence.beat failed", e))
     }
   }, 15_000)
 

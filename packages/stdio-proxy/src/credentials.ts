@@ -14,10 +14,26 @@
  * stdin proxy loop as a side effect of importing this module (e.g. a future standalone test of this
  * file would hang reading stdin). postMcp lives here for that reason, even though cli.ts is its main
  * caller — the dependency direction only works one way.
+ *
+ * INT-2 consolidation decision: `loadCredentials`/`saveCredentials`' file I/O now DELEGATES to
+ * `@open-graph-mcp/client/node-store`'s `fileTokenStore()` (same 0600-on-every-write, same
+ * any-problem-at-all→null-on-read permissiveness — `fileTokenStore` was explicitly written to mirror
+ * this file's original behavior, see its doc comment) instead of duplicating the fs glue here. This is
+ * a PARTIAL consolidation, not a full file-level replacement: `postMcp`/`registerSession`/
+ * `resolveCredentials`/`reregisterCredentials` stay put, because they're RPC-level bootstrap concerns
+ * (raw `${server}/mcp` POSTs, `session.register` calls, in-process memoization) that have nothing to do
+ * with credential storage specifically — `postMcp` in particular is reused by cli.ts for schema-list
+ * bootstrap and notification forwarding, neither of which is about credentials at all. A full swap to
+ * `@open-graph-mcp/client`'s `connect()`/`registerSession()` would need to absorb or re-home all of
+ * that, which isn't a clean type-swap the way the storage half was. `--live`'s own `connect()` call
+ * (cli.ts) already depends on `@open-graph-mcp/client`, so reusing its `/node-store` subpath here adds
+ * no new dependency — just removes ~15 lines of duplicated fs/chmod logic that would otherwise drift
+ * from `fileTokenStore`'s copy over time. `credentialsPath()` stays a plain path computation (not I/O),
+ * so it's left as-is rather than routed through the store.
  */
-import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import { fileTokenStore } from "@open-graph-mcp/client/node-store"
 
 export type Credentials = { server: string; token: string; userId: string; tenantId: string }
 
@@ -37,38 +53,25 @@ export function credentialsPath(): string {
   return path.join(os.homedir(), ".open-graph-mcp", "credentials.json")
 }
 
+// Single store instance for this process — `fileTokenStore()` itself does no eager I/O (only
+// `get()`/`set()` touch disk), so building it once at module load, pointed at the same path
+// `credentialsPath()` always computed, is equivalent to the old per-call `fs` access below.
+const store = fileTokenStore({ path: credentialsPath() })
+
 /** Reads+validates the on-disk credentials file. Any problem at all (missing, unreadable, corrupt
  * JSON, wrong shape) is treated the same way: "no usable credentials on disk" — caller falls back to
  * registering fresh. This is deliberately permissive about the failure mode; it's not this function's
- * job to distinguish "file doesn't exist" from "file is garbage". */
+ * job to distinguish "file doesn't exist" from "file is garbage". Delegates to `fileTokenStore().get()`
+ * — see the file-level doc comment for why. */
 export function loadCredentials(): Credentials | null {
-  try {
-    const raw = fs.readFileSync(credentialsPath(), "utf8")
-    const parsed = JSON.parse(raw)
-    if (
-      parsed &&
-      typeof parsed.server === "string" &&
-      typeof parsed.token === "string" &&
-      typeof parsed.userId === "string" &&
-      typeof parsed.tenantId === "string"
-    ) {
-      return parsed as Credentials
-    }
-    return null
-  } catch {
-    return null
-  }
+  return store.get()
 }
 
-/** Persists credentials at 0600, regardless of whether the file previously existed. `writeFileSync`'s
- * `mode` option only reliably applies via the underlying open() flags on FIRST creation — an existing
- * file's mode is NOT guaranteed to be reset by a plain overwrite — so `chmodSync` is called explicitly
- * every time as a belt-and-suspenders guarantee of the 0600 invariant regardless of prior state. */
+/** Persists credentials at 0600, regardless of whether the file previously existed. Delegates to
+ * `fileTokenStore().set()`, which does the identical mkdir+writeFileSync(mode:0600)+chmodSync
+ * belt-and-suspenders dance this function used to do inline — see the file-level doc comment. */
 export function saveCredentials(creds: Credentials): void {
-  const file = credentialsPath()
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(creds, null, 2), { mode: 0o600 })
-  fs.chmodSync(file, 0o600)
+  store.set(creds)
 }
 
 /** Calls session.register itself via the same raw-fetch-to-/mcp pattern cli.ts's forward() uses —
