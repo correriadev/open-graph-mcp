@@ -385,6 +385,11 @@ export class Renderer {
     }
   }
 
+  /** Camera state, for e2e (QA-2): confirms a toast click actually jumped the viewport (focusTarget). */
+  getCamera(): Cam {
+    return { ...this.cam }
+  }
+
   /** Screen position of a presence avatar badge, for e2e (QA-2): hover/tooltip assertions need a real
    * mouse move to the actual drawn position, which — being canvas, not DOM — has no other query path. */
   avatarScreenPos(userId: string): { x: number; y: number; locked: boolean } | null {
