@@ -9,13 +9,16 @@
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "test": "bun test"
+    "test": "bun test",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@open-graph-mcp/client": "workspace:*",
     "@open-graph-mcp/graph-core": "workspace:*"
   },
   "devDependencies": {
+    "@open-graph-mcp/mcp-server": "workspace:*",
+    "@playwright/test": "^1.61.1",
     "@types/bun": "1.3.13",
     "vite": "7.1.4"
   }
