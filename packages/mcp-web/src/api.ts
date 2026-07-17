@@ -54,7 +54,7 @@ export function resourceRead(uri: string): Promise<any> {
   return rpc("resources/read", token ? { uri, token } : { uri }).then(unwrap)
 }
 
-export const readSnapshot = (): Promise<Graph> => resourceRead("graph://snapshot")
+export const readSnapshot = (): Promise<Graph> => resourceRead("graph://snapshot").then((r) => r.graph)
 export const rebuild = (): Promise<any> => toolCall("graph.rebuild", {})
 export const bootstrap = (repoPath: string): Promise<any> => toolCall("graph.bootstrap", { repoPath })
 
