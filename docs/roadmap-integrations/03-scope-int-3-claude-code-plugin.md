@@ -63,9 +63,17 @@ Um plugin instalável (`/plugin install open-graph`) contendo:
       silêncio (zero falso alarme).
 - [ ] **Statusline** (opcional ligável): `og: 3 online · turno cs_ab12
       (auth:P4)` — lê do estado do proxy.
-- [ ] **Comandos**: `/og:who`, `/og:turno <cells> <intent>`, `/og:commit`,
-      `/og:abort` — atalhos humanos pros tools (o agente usa tools
-      direto; comandos são pro HUMANO no loop).
+- [x] **Comandos**: `/open-graph:who`, `/open-graph:turno <cells> <intent>`,
+      `/open-graph:commit`, `/open-graph:abort` — atalhos humanos pros
+      tools (o agente usa tools direto; comandos são pro HUMANO no loop).
+      Correção empírica ao escopo: plugin commands são namespaced pelo
+      NOME DO PLUGIN (`open-graph/skills|commands`), não por um prefixo
+      arbitrário — `/og:*` não é alcançável sem renomear o plugin
+      inteiro pra "og" (colidiria com `/plugin install open-graph`, já
+      fixado). Confirmado empiricamente via
+      `claude --plugin-dir packages/claude-plugin -p "..."` listando os
+      4 comandos com o namespace real. `disable-model-invocation: true`
+      em todos (só o humano invoca, spec §3 do escopo).
 - [ ] **Validação real**: sessão de Claude Code com o plugin, executando
       o fluxo completo contra server real, com um segundo usuário na web
       UI vendo presença/turno do agente. Roteiro + resultado registrados
