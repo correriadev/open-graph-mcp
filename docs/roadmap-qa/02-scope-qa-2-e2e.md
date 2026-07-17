@@ -1,6 +1,12 @@
 # QA-2 — Escopo fechado (e2e web automatizado)
 
-> Status: **escopo p/ execução** — após QA-0 verde; QA-1 executada.
+> Status: **quase implementado** — 6/8 itens do DoD fechados (harness +
+> as 5 specs + job CI); falta confirmar o job `e2e` rodando de verdade no
+> GitHub (nenhum push feito ainda) e o tempo real da suíte lá. QA-0 não
+> está 100% verde (falta branch protection — bloqueado por acesso, ver
+> `00-scope-qa-0-ci.md`) nem QA-1 foi executada (roteiro escrito, nunca
+> rodado — ver `smoke-checklist.md`); ambos eram pré-requisitos
+> declarados aqui e não bloquearam a execução na prática.
 > Índice-pai: `README.md`.
 >
 > **Objetivo:** fechar o buraco §10.7 do scope da Fase 3
@@ -61,8 +67,17 @@
       perder a corrida e precisar de um retry de backoff antes do hop de
       reauth, observado como 3 (mesma classe do Finding 3 do
       `int-3-validation-run.md`: contenção transitória de máquina, não bug).
-- [ ] Job CI `e2e` (chromium headless), bloqueante em PR p/ main.
-- [ ] Suíte inteira < 2 min no CI.
+- [x] Job CI `e2e` (chromium headless), bloqueante em PR p/ main
+      (`.github/workflows/ci.yml`, sem `if:`/`continue-on-error`, mesmo
+      padrão do job `test`). Não verificado rodando de verdade no GitHub
+      ainda — sem push feito; YAML validado localmente (`yaml.safe_load`),
+      comandos (`playwright install`/`playwright test`) validados localmente
+      sem `--with-deps` (sudo sem senha no ambiente de dev; runner do GitHub
+      Actions roda como root, deve funcionar lá).
+- [ ] Suíte inteira < 2 min no CI. Localmente: ~24s p/ 11 testes com 6
+      workers — mas runners do GitHub Actions têm menos cores por padrão
+      (2-4), então o paralelismo real e o tempo total ainda não estão
+      confirmados até rodar de verdade lá.
 
 ---
 

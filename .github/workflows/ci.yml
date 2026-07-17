@@ -44,6 +44,34 @@ jobs:
       - run: node --test packages/client/test/*.test.ts
       - run: node --test packages/client/test/dist-smoke.mjs
 
+  # QA-2: mcp-web e2e (chromium headless) — real mcp-server subprocess + vite preview build, see
+  # packages/mcp-web/e2e/fixture.ts. Blocking (no `if:`/continue-on-error), same as `test` — a broken
+  # presence/toast/reconnect flow is exactly the class of regression unit tests can't see (the DOM/canvas
+  # layer had zero coverage before this). setup-node alongside bun: Playwright's test runner forks real
+  # Node worker processes for the actual test files regardless of what invoked the CLI.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+        working-directory: packages/mcp-web
+      - run: bunx playwright test --project=chromium
+        working-directory: packages/mcp-web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: packages/mcp-web/test-results/
+          retention-days: 7
+
   load:
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
