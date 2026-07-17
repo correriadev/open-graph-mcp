@@ -29,3 +29,26 @@ co-located inside the `open-graph-mcp` monorepo. Once INT-6 publishes
 `@open-graph-mcp/stdio` to npm, this should switch to `bunx
 @open-graph-mcp/stdio`, dropping the relative-path dependency on the
 monorepo layout.
+
+## Statusline (opt-in)
+
+`scripts/statusline.sh` prints `og: N online · turno <csId> (<cells>)` when
+you have an open turn (just `og: N online` otherwise) — same
+stateless-poll pattern as the hooks. A plugin **cannot** auto-install a
+main statusline: Claude Code's plugin `settings.json` only supports the
+`agent` and `subagentStatusLine` keys, not `statusLine` itself (verified
+against the plugin reference docs — the roadmap's "opcional ligável"
+assumed otherwise). To turn it on, add to your own
+`~/.claude/settings.json` (or project `.claude/settings.json`):
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "${CLAUDE_PLUGIN_ROOT}/scripts/statusline.sh"
+  }
+}
+```
+
+`${CLAUDE_PLUGIN_ROOT}` only expands inside a plugin-provided config; in
+your own `settings.json` use the plugin's actual installed path instead.

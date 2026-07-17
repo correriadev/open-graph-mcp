@@ -61,8 +61,15 @@ Um plugin instalável (`/plugin install open-graph`) contendo:
       D2 trust; bloqueio é decisão da Fase 4/authz). Mapeamento
       arquivo→cell via graph.query por path; se o grafo não mapeia,
       silêncio (zero falso alarme).
-- [ ] **Statusline** (opcional ligável): `og: 3 online · turno cs_ab12
-      (auth:P4)` — lê do estado do proxy.
+- [x] **Statusline** (opcional ligável): `og: N online · turno <csId>
+      (<cells>)` — não lê do estado do proxy (mesma razão do hook de
+      system messages: processo novo por invocação, sem acesso à SSE em
+      memória), poll stateless via `presence.who` +
+      `changeset.list_mine`. Correção empírica: plugin NÃO consegue
+      auto-instalar `statusLine` (só `agent`/`subagentStatusLine` são
+      suportados em `settings.json` de plugin) — "opcional ligável"
+      virou "usuário cola 4 linhas no próprio settings.json" (documentado
+      no README do plugin), não um toggle que o plugin controla sozinho.
 - [x] **Comandos**: `/open-graph:who`, `/open-graph:turno <cells> <intent>`,
       `/open-graph:commit`, `/open-graph:abort` — atalhos humanos pros
       tools (o agente usa tools direto; comandos são pro HUMANO no loop).
