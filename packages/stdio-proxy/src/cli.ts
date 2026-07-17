@@ -187,14 +187,17 @@ function isLiveLayerToolCall(message: JSONRPCMessage): boolean {
  * method (packages/client/src/connect.ts) that reuses the exact same `beatOnce()` internal the automatic
  * timer already calls. So both tools now route through real `OgHandle` methods, symmetrically.
  *
- * Success reply: `presence.focus` (Promise<void> — no server payload to relay) gets a synthesized
- * `{ok:true}` via sendProxyToolSuccess. `presence.beat` resolves to the server's REAL unwrapped result
- * (`{ok:true, serverTs}` — see OgHandle.presence.beat's doc comment) which is forwarded as-is, so the
- * calling client sees genuine server content, not a proxy fabrication. Failure (thrown by either method
- * — e.g. og.presence.beat()'s "no session id yet" error, or the underlying og.call()'s own RPC failure)
- * becomes an isError:true reply via sendProxyToolError, matching this file's existing failure-
- * translation convention (maybeInjectToken's resolveCredentials-failure branch does the identical
- * translation) rather than an uncaught rejection that would hang the stdio loop for this message. */
+ * Success reply: `presence.focus` resolves `true`/`false` (did this specific call reach the server, or
+ * only get recorded locally because no SSE session exists yet — see OgHandle.presence.focus's doc); a
+ * stdio caller has no visibility into "recorded for later" the way mcp-web's UI does, so `false` becomes
+ * an honest isError reply here rather than a fabricated `{ok:true}` for a focus that didn't land yet.
+ * `presence.beat` resolves to the server's REAL unwrapped result (`{ok:true, serverTs}` — see
+ * OgHandle.presence.beat's doc comment) which is forwarded as-is, so the calling client sees genuine
+ * server content, not a proxy fabrication. Failure (thrown by either method — e.g. og.presence.beat()'s
+ * "no session id yet" error, or the underlying og.call()'s own RPC failure) becomes an isError:true reply
+ * via sendProxyToolError, matching this file's existing failure-translation convention (maybeInjectToken's
+ * resolveCredentials-failure branch does the identical translation) rather than an uncaught rejection
+ * that would hang the stdio loop for this message. */
 async function routeLiveLayerCall(og: OgHandle, message: JSONRPCMessage): Promise<void> {
   const req = message as JSONRPCMessage & { id: string | number; params: { name: string; arguments?: Record<string, unknown> } }
   const toolName = req.params.name
@@ -202,8 +205,12 @@ async function routeLiveLayerCall(og: OgHandle, message: JSONRPCMessage): Promis
   try {
     if (toolName === "presence.focus") {
       const cell = typeof args.cell === "string" ? args.cell : null
-      await og.presence.focus(cell, { invisible: args.invisible === true })
-      sendProxyToolSuccess(req.id, { ok: true })
+      const reached = await og.presence.focus(cell, { invisible: args.invisible === true })
+      if (!reached) {
+        sendProxyToolError(req.id, "proxy: live layer call failed: no live session yet (SSE handshake still in progress)")
+      } else {
+        sendProxyToolSuccess(req.id, { ok: true })
+      }
     } else {
       // toolName === "presence.beat" — the only other member of LIVE_LAYER_TOOLS (isLiveLayerToolCall
       // guarantees this at the one call site in main()'s loop).

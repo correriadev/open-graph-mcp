@@ -130,23 +130,19 @@ export type OgHandle = {
   presence: {
     /** Declare (or clear, if `cell` is null) this session's focus cell. In live mode this is a no-op
      * (besides recording the intent locally) until an SSE session id exists — mirrors mcp-web's
-     * `declareFocus` guard. In polling mode a local session id exists immediately at connect(), so this
-     * takes effect right away. Once a session id exists, an automatic `presence.beat` fires every 15s
-     * for as long as the connection/handle stays open — no manual timer needed, in either mode. */
-    focus(cell: string | null, opts?: { invisible?: boolean }): Promise<void>
+     * `declareFocus` guard; the recorded intent still takes effect once a session forms, via
+     * onFreshSession's redeclare. In polling mode a local session id exists immediately at connect(),
+     * so this takes effect right away. Once a session id exists, an automatic `presence.beat` fires
+     * every 15s for as long as the connection/handle stays open — no manual timer needed, in either
+     * mode. Resolves `true` if this call actually reached the server, `false` if it was only recorded
+     * locally (no session yet) — most callers can ignore the return value (mcp-web does); it exists for
+     * a caller that needs to know whether THIS call landed, not just that the intent is remembered. */
+    focus(cell: string | null, opts?: { invisible?: boolean }): Promise<boolean>
     /** Send ONE explicit `presence.beat` immediately, reusing the exact same RPC the automatic 15s
-     * timer sends (see `beatOnce` below — the timer and this method both call it, so the argument
-     * shape lives in exactly one place). Added for INT-2's stdio `--live` proxy: an incoming
-     * `presence.beat` tools/call from a real MCP client has an observable effect the client is
-     * entitled to expect (its own liveness signal) and must not be silently swallowed just because
-     * this handle already beats automatically in the background — see cli.ts's routeLiveLayerCall.
-     * Unlike `focus`, this THROWS (rather than silently no-op'ing) if no session id exists yet, so a
-     * caller relying on its effect finds out immediately rather than being told "ok" for a beat that
-     * never reached the server. Unlike `focus` (Promise<void>), this resolves to the server's raw
-     * unwrapped `tools/call` result (e.g. `{ok:true, serverTs}` — packages/mcp-server/src/tools/
-     * presence.ts's `presenceBeat`) rather than discarding it, specifically so a caller relaying this
-     * over another transport (the stdio proxy) can forward genuine server content instead of
-     * fabricating one. The automatic timer ignores this return value; only the explicit caller needs it. */
+     * timer sends (see `beatOnce` below for the shared implementation and why this THROWS on no session
+     * — unlike `focus`'s `false` return — rather than silently no-op'ing). Resolves to the server's raw
+     * unwrapped result (e.g. `{ok:true, serverTs}`) rather than discarding it, so a caller relaying this
+     * over another transport (the stdio `--live` proxy) can forward genuine server content. */
     beat(): Promise<unknown>
   }
   /** Surfaces `system.message` kind envelopes — text-only presence/notification for non-web agentKinds
@@ -383,15 +379,23 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
   }
 
   const presence = {
-    async focus(cell: string | null, focusOpts?: { invisible?: boolean }): Promise<void> {
+    async focus(cell: string | null, focusOpts?: { invisible?: boolean }): Promise<boolean> {
       focusState = { cell, invisible: focusOpts?.invisible ?? focusState.invisible }
-      if (!sessionId || !token) return // presence tools need a live session + auth, same as mcp-web's guard
+      // presence tools need a live session + auth, same as mcp-web's guard. Deliberately NOT a throw
+      // (unlike beat()): the recorded focusState above still takes effect via onFreshSession's
+      // redeclarePresence() once a session forms, so "no session yet" isn't a failure for THIS handle —
+      // see ConnectOptions.live's doc and connect.test.ts's redeclare-on-fresh-session coverage. The
+      // boolean return lets a caller that DOES care whether this specific call reached the server (e.g.
+      // cli.ts's stdio --live proxy, relaying an honest result to its own caller) tell the difference,
+      // without forcing every caller (mcp-web discards the return value today) to handle a rejection.
+      if (!sessionId || !token) return false
       await call("presence.focus", {
         sessionId,
         cell,
         invisible: focusState.invisible,
         agentKind: opts.agentKind,
       })
+      return true
     },
     beat: beatOnce,
   }
