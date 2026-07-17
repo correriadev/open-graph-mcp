@@ -18,32 +18,49 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] Playwright instalado SÓ em `packages/mcp-web` (devDependency) —
+- [x] Playwright instalado SÓ em `packages/mcp-web` (devDependency) —
       única dependência de teste nova do roadmap QA inteiro.
-- [ ] Fixture compartilhada: sobe `startServer({stateDir: tmp})` +
-      `vite preview` (build real, não dev server), N `browser.newPage()`
-      com `sessionStorage` isolado (1 sessão por página, spec §3.3).
-- [ ] `e2e/presence-bar.e2e.ts` — contagem "Conectados (N)"; dots: forçar
+- [x] Fixture compartilhada (`e2e/fixture.ts`): mcp-server real (deterministic
+      knobs) + `vite preview` (build real, não dev server), N `openSession()`
+      = N `BrowserContext`s isolados (spec §3.3). Correção empírica ao
+      escopo: `startServer()` roda como subprocesso Bun spawnado
+      (`e2e/server-runner.ts`), não `import` direto — Playwright's Node test
+      workers não conseguem importar `bun:sqlite`/`Bun.serve`. Acabou sendo o
+      formato certo de qualquer forma: `reconnect.e2e.ts` precisa matar/subir
+      um processo OS real, não um handle in-process.
+- [x] `e2e/presence-bar.e2e.ts` — contagem "Conectados (N)"; dots: forçar
       amarelo/cinza via `lastSeen` do server (campo já existe no
       presence.who desde a Task 5); expand/collapse.
-- [ ] `e2e/avatar-overlay.e2e.ts` — badge sólido em cell locked; avatar
+- [x] `e2e/avatar-overlay.e2e.ts` — badge sólido em cell locked; avatar
       semi-transparente em focus sem turno; tooltip hover (nome +
       agentKind + última atividade).
-- [ ] `e2e/typing-indicator.e2e.ts` — aparece durante claims; some em
+- [x] `e2e/typing-indicator.e2e.ts` — aparece durante claims; some em
       transição p/ quiet; some quando o usuário vira invisible (fix da
       Task 3 exercitado ponta-a-ponta).
-- [ ] `e2e/toast-notifications.e2e.ts` — **§10.7 literal**: S1 commita,
+- [x] `e2e/toast-notifications.e2e.ts` — **§10.7 literal**: S1 commita,
       S2 vê toast "S1 commitou cs_X em cell Y"; click → canvas jump.
       Coalescência (burst mesmo cs_id → "N eventos"); cap 5 na tela +
       "(+N)"; hover mostra timestamp.
-- [ ] `e2e/settings-invisible.e2e.ts` — checkbox invisible → some da barra
+- [x] `e2e/settings-invisible.e2e.ts` — checkbox invisible → some da barra
       da outra página, zero user.focused; checkbox de notificação de
       commit off → sem toast de commit; persistência sessionStorage POR
       ABA (duas páginas, settings independentes).
-- [ ] `e2e/reconnect.e2e.ts` — **§10.9 lado web**: derrubar server, subir
+- [x] `e2e/reconnect.e2e.ts` — **§10.9 lado web**: derrubar server, subir
       de novo (mesmo stateDir); toast "Server reiniciou"; foco redeclarado
-      automaticamente (avatar reaparece na outra página); exatamente UMA
-      reconexão (regressão do leak de SSE da review da Task 4).
+      automaticamente (avatar reaparece na outra página). Correção empírica
+      ao escopo: "exatamente UMA reconexão" estava errado — um restart real
+      invalida o token cacheado (em memória, nunca persistido), então
+      `connect.ts`'s `doReregister()` SEMPRE força um segundo `stop()+start()`
+      depois que o reconnect natural falha a auth (o `Session.userId` do
+      lado servidor do primeiro socket não tem outro jeito de ser corrigido)
+      — 2 conexões `/events` é o comportamento correto e documentado, não o
+      leak que a regressão da Task 4 (`reset()` em troca de graphId, caminho
+      diferente) previne. O teste asserta ≥2 e <6 (limite generoso contra
+      loop de reconexão descontrolado), não um número fixo — sob carga
+      paralela (suíte inteira rodando) o primeiro reconnect natural pode
+      perder a corrida e precisar de um retry de backoff antes do hop de
+      reauth, observado como 3 (mesma classe do Finding 3 do
+      `int-3-validation-run.md`: contenção transitória de máquina, não bug).
 - [ ] Job CI `e2e` (chromium headless), bloqueante em PR p/ main.
 - [ ] Suíte inteira < 2 min no CI.
 
