@@ -341,7 +341,9 @@ export class Renderer {
       ctx.fillStyle = "#e6e6eb"
       ctx.fillText(label, sx - w / 2 + 5, sy + 3)
       if (c.domain === this.hoverDomain && lock.expiresAt) {
-        const mins = Math.max(0, Math.round((lock.expiresAt - Date.now()) / 60000))
+        // lock.expiresAt is an ISO string (server: new Date(...).toISOString()), not epoch ms — found
+        // live during QA-1's smoke checklist: this rendered "expires in NaNm" every time.
+        const mins = Math.max(0, Math.round((new Date(lock.expiresAt).getTime() - Date.now()) / 60000))
         ctx.fillStyle = "#8a8f98"
         ctx.fillText(`expires in ${mins}m`, sx - w / 2 + 5, sy + 18)
       }

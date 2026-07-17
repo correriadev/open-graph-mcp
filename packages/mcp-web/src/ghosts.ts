@@ -24,12 +24,12 @@ export type OpenChangeset = {
   cells: string[]
   byUser: string
   openedAt: number
-  expiresAt: number
+  expiresAt: string
   deltaCount: number
   deltas: GhostDelta[]
 }
 
-export type Lock = { cell: string; csId: string; holder: string; expiresAt: number }
+export type Lock = { cell: string; csId: string; holder: string; expiresAt: string }
 
 /** Deterministic color for a changeset id — stable across reloads, distinct per csId (spec §7.1). */
 export function colorForCsId(csId: string): string {
@@ -58,7 +58,7 @@ export class GhostStore {
           cells: p.cells ?? [],
           byUser: p.byUser ?? "?",
           openedAt: p.openedAt ?? 0,
-          expiresAt: p.expiresAt ?? 0,
+          expiresAt: p.expiresAt ?? "",
           deltaCount: 0,
           deltas: [],
         })

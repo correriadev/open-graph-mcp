@@ -1,6 +1,9 @@
 # QA-1 — Escopo fechado (smoke browser manual-assistido)
 
-> Status: **escopo p/ execução** — paralelo à QA-0, imediato.
+> Status: **implementado** — roteiro executado 2026-07-17 (`95c71c6`),
+> 9/12 ✅, 3/12 inconclusivos por limitação da automação (não do
+> produto — ver `smoke-checklist.md` §3). Um bug real achado e fixado
+> na mesma rodada (item 4 — lock countdown "expires in NaNm").
 > Índice-pai: `README.md`.
 >
 > **Objetivo:** validar AGORA, em browser real, o que a Fase 3 entregou —
@@ -18,7 +21,7 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] `docs/roadmap-qa/smoke-checklist.md` com o roteiro:
+- [x] `docs/roadmap-qa/smoke-checklist.md` com o roteiro:
   1. `bun run dev` (server) + `bun run dev:web`; abrir 2 abas.
   2. Presence bar mostra "Conectados (2)"; dots verdes.
   3. Aba A foca cell → avatar semi-transparente aparece na aba B.
@@ -32,8 +35,11 @@
       (verificar na B que o avatar de A voltou).
   11. Aba B para de "pingar" (throttle da aba/devtools) → 60s → some da barra da A.
   12. Tooltip hover no avatar (nome + agentKind + última atividade).
-- [ ] Cada item com resultado ✅/❌ + observação, data e commit no rodapé.
-- [ ] ❌s viram issues (ou fixes imediatos se triviais) antes de QA-2.
+- [x] Cada item com resultado ✅/❌ + observação, data e commit no rodapé.
+- [x] ❌s viram issues (ou fixes imediatos se triviais) antes de QA-2 —
+      nenhum ❌ franco nesta rodada (9 ✅, 3 inconclusivos documentados,
+      não falhas de produto); o único bug real (item 4) foi fixado
+      imediatamente na mesma sessão, por ser trivial.
 
 ---
 

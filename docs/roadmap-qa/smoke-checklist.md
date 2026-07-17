@@ -1,6 +1,9 @@
 # Smoke checklist — QA-1 (browser manual-assistido)
 
-> Status: **pronto para execução**.
+> Status: **executado 2026-07-17** (`95c71c6`) — 9/12 ✅, 3/12 inconclusivos
+> por limitação da automação (não do produto, ver registro §3). Achou e
+> corrigiu 1 bug real (item 4 — `expiresAt` como string ISO tratado como
+> número, "expires in NaNm").
 > Índice-pai: `README.md`. Escopo: `01-scope-qa-1-smoke.md`.
 >
 > Este roteiro é autocontido: quem for executar (humano ou agente
@@ -433,19 +436,19 @@ falhar).
 
 | Data | Commit | Executor |
 |---|---|---|
-| _(vazio)_ | _(vazio)_ | _(vazio)_ |
+| 2026-07-17 | `95c71c6` (rodado sobre) | Claude (claude-in-chrome, 2 abas reais localhost:5175 / 127.0.0.1:5175) |
 
 | Item | ✅/❌ | Observação |
 |---|---|---|
-| 1 |  |  |
-| 2 |  |  |
-| 3 |  |  |
-| 4 |  |  |
-| 5 |  |  |
-| 6 |  |  |
-| 7 |  |  |
-| 8 |  |  |
-| 9 |  |  |
-| 10 |  |  |
-| 11 |  |  |
-| 12 |  |  |
+| 1 | ✅ | Ambas as abas carregaram, `● connected`, 3 towers (auth/billing/notify) com 2 nodes cada. |
+| 2 | ✅ | "Conectados (2)", dots verdes, `(web)` como agentKind. |
+| 3 | ✅ | Avatar semi-transparente "AL" apareceu na Aba B após foco da A, sem badge de lock. |
+| 4 | ✅ | Badge sólido + etiqueta `🔒 cs_... @ u_...` corretos. **Bug real achado**: a sub-linha "expires in Nm" mostrava sempre **"NaNm"** — `lock.expiresAt`/`OpenChangeset.expiresAt` chegam do server como string ISO (`new Date(...).toISOString()`), mas `render.ts::drawLocks` fazia `lock.expiresAt - Date.now()` (aritmética direta numa string). **Fixado nesta rodada**: `render.ts` agora parseia via `new Date(lock.expiresAt).getTime()`; tipos `Lock.expiresAt`/`OpenChangeset.expiresAt` corrigidos de `number` pra `string` em `ghosts.ts` (e os `?? 0` defaults em `main.ts` pra `?? ""`) pra não mentir sobre o shape. Confirmado ao vivo pós-fix: "expires in 30m". `bunx tsc --noEmit` e `bun test` (18/18) verdes depois do fix. |
+| 5 | ✅ | Indicador "digitando…" visível (inclusive no próprio client de quem digita — indicador é global, não por-cell, comportamento correto). Log de eventos mostrou as 3 transições `user.typing_state` (typing→idle→quiet) mesmo quando o screenshot ao vivo perdeu a janela. O claim em si foi recusado pelo gate (`missing required fields (id/subject/domain)`) — gap **já conhecido** desta sessão (form simples de claim nunca envia `id`; não é um achado novo do smoke, `touchDelta` roda antes do gate então o typing funciona mesmo com o claim recusado). |
+| 6 | ✅ | Toast "Alice commitou cs_... em [cell]" apareceu na Aba B; badge de lock sumiu do canvas no commit. |
+| 7 | ⚠️ inconclusivo | Em 3 tentativas reais (incl. uma com clique via JS direto no elemento, sem depender de coordenada), a latência de round-trip da automação (várias chamadas de ferramenta separadas, cada uma com overhead de permissão/rede) sempre excedeu a janela de 8s do toast antes que o clique chegasse. **Não é bug do produto** — o mesmo fluxo (commit real → toast real → clique real → `camera.zoom` vira 0.8) já está coberto e passando de forma determinística em `packages/mcp-web/e2e/toast-notifications.e2e.ts` (rodado várias vezes nesta mesma sessão, sem flake). Limitação da metodologia manual-via-agente, não do app. |
+| 8 | ⚠️ inconclusivo | Mesma causa do item 7. Uma tentativa (open+commit no mesmo `browser_batch`, sem round-trip entre as duas ações) produziu os 4 eventos server-side (open/lock/commit/release) no MESMO segundo — sinal de que o burst client-side também deve ter ficado dentro da janela de 500ms — mas o toast já tinha sumido antes de eu conseguir ler o texto coalescido. **O próprio roteiro já previa este resultado como válido** (nota de risco original do item 8). Coalescência já é unit-testada em `toasts.test.ts`. |
+| 9 | ✅ | Aba A ficou invisible → Aba B (após `pollWho()` forçado, equivalente ao poll real de 10s) mostrou "Conectados (1)", Alice sumiu de `#plist` e do avatar no canvas. Reativado depois. |
+| 10 | ✅ | Servidor morto (`kill`) e resubido com o MESMO comando/env/stateDir. Ambas as abas voltaram a `● connected` sozinhas, evento `server.restarted` no log, foco de ambas redeclarado automaticamente (avatares reapareceram) sem refresh manual. Texto exato dos dois toasts ("Server reiniciou..."/"Sessão renovada...") não capturado ao vivo pela mesma limitação de latência dos itens 7/8, mas o mecanismo duplo já foi verificado deterministicamente em `packages/mcp-web/e2e/reconnect.e2e.ts` nesta mesma sessão. |
+| 11 | ⚠️ inconclusivo | ~50s reais de espera sem interação na Aba B: o dot passou de verde→amarelo uma vez, mas o beat automático de 15s continuou batendo (voltou a verde) — a aba controlada pela extensão do Chrome não throttlou o suficiente pra produzir `heartbeat_expired` dentro da janela testada. **Resultado antecipado pelo próprio roteiro** ("se o browser não throttlar... o teste não é conclusivo por causa do navegador, não do produto"). |
+| 12 | ✅ | Tooltip "Bob · web · última atividade HH:MM:SS" no formato exato esperado; sumiu ao tirar o mouse. |

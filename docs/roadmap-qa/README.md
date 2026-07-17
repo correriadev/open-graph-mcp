@@ -10,7 +10,7 @@
 | # | Arquivo | Função | Status |
 |---|---|---|---|
 | 0 | `00-scope-qa-0-ci.md` | CI GitHub Actions: gate de push/PR. **Primeiro.** | parcial — workflow+load+badge implementados (`164f2f0`, `bc494de`); falta branch protection + PR de quebra proposital |
-| 1 | `01-scope-qa-1-smoke.md` | Smoke browser manual-assistido da Fase 3 (roteiro versionado). | proposto |
+| 1 | `01-scope-qa-1-smoke.md` | Smoke browser manual-assistido da Fase 3 (roteiro versionado). | implementado — executado 2026-07-17, 9/12 ✅, 1 bug real fixado |
 | 2 | `02-scope-qa-2-e2e.md` | e2e Playwright: UI web inteira, fecha §10.7/§10.9-web da Fase 3. | quase implementado — harness + 5 specs + job CI (6/8 DoD); falta rodar de verdade no GitHub |
 | 3 | `03-scope-qa-3-multi-client.md` | Web + não-web sobre o mesmo evento (contrato §8). | proposto |
 | 4 | `04-scope-qa-4-graph-core.md` | Rede de segurança mínima + regra "tocou → testa". | regra contínua |
