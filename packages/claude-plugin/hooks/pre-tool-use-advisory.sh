@@ -90,13 +90,18 @@ printf '%s' "$query_resp" | jq -e '.result and (.result.isError != true)' >/dev/
 # Exactly one distinct (domain,layer) pair among candidates whose file matches
 # → confident mapping. Zero or >1 → ambiguous/absent → silence (accepted per
 # roadmap risk #3: "mapeamento arquivo→cell é heurístico... advisory com baixa
-# confiança fica calado").
+# confiança fica calado"). domain: null is NOT ambiguous — it's the common case
+# for a node nobody has claimed a domain for yet, and render.ts's cellKey()
+# maps it to the literal string "unassigned" (`n.domain ?? "unassigned"`), not
+# "no mapping". Found live during INT-3 validation: excluding null-domain
+# candidates here made the advisory silently no-op on every fresh/unclaimed
+# node — the common case right after graph.bootstrap, before any claims land.
 pairs="$(printf '%s' "$query_resp" | jq -c --arg fp "$file_path" '
   (.result.structuredContent.candidates // [])
   | [ .[] as $c
-      | select($c.file != null and $c.domain != null and $c.layer != null)
+      | select($c.file != null and $c.layer != null)
       | select(($fp == $c.file) or ($fp | endswith("/" + $c.file)))
-      | {domain: $c.domain, layer: $c.layer}
+      | {domain: ($c.domain // "unassigned"), layer: $c.layer}
     ]
   | unique
 ' 2>/dev/null)"
