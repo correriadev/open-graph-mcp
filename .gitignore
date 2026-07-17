@@ -4,3 +4,5 @@ dist/
 .DS_Store
 .graph-server/
 dev-repo/
+test-results/
+playwright-report/
