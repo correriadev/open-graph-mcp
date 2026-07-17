@@ -738,7 +738,16 @@ const setConn = (up: boolean) => {
 // unrelated to what avatar-overlay.e2e.ts actually verifies (overlay rendering + tooltip content).
 // `setFocus` here is the real production call (og.presence.focus), not a bypass; `avatarScreenPos` is
 // query-only. No production behavior depends on this object.
-;(window as any).__og_e2e = { setFocus, avatarScreenPos: (userId: string) => renderer.avatarScreenPos(userId) }
+;(window as any).__og_e2e = {
+  setFocus,
+  avatarScreenPos: (userId: string) => renderer.avatarScreenPos(userId),
+  // Real commit/lock/abort bursts on the same csId within toasts.ts's coalescing window are
+  // impractical to produce deterministically over a real network — coalescing itself is already
+  // unit-tested (toasts.test.ts). This drives the same production pushToast the real handlers call, so
+  // e2e can assert the DOM-rendering side (cap, overflow, coalesced text) without re-timing the network.
+  pushToast,
+  getCamera: () => renderer.getCamera(),
+}
 
 // SSE connection, reconnect/backoff, event dispatch (og.on wired in connectOg), and presence lifecycle
 // are all owned by connect() now — see connectOg() above (spec §9 section).
