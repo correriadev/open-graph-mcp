@@ -23,12 +23,12 @@ Um plugin instalável (`/plugin install open-graph`) contendo:
 
 **Definição de pronto (DoD):**
 
-- [ ] **Estrutura de plugin** (marketplace local ou repo git):
+- [x] **Estrutura de plugin** (marketplace local ou repo git):
       `.claude-plugin/` com MCP server config apontando pro connection
       kit (`bunx @open-graph-mcp/stdio --live --agent-kind claude-code`),
       de modo que instalar o plugin = tools disponíveis, token e beat
       resolvidos sem passo manual (só `--server` na primeira vez ou env).
-- [ ] **Skill `using-open-graph`** (a peça mais importante): ensina o
+- [x] **Skill `using-open-graph`** (a peça mais importante): ensina o
       agente QUANDO e COMO usar as tools —
       - antes de implementar: `graph.query` pelos termos da tarefa;
         tratar `gaps` como sinal de conhecimento faltante;
@@ -39,18 +39,24 @@ Um plugin instalável (`/plugin install open-graph`) contendo:
         open-graph: humano nos pontos irreversíveis);
       - o que fazer ao receber `lock.denied` (esperar/negociar/focar
         outra cell — NUNCA martelar retry).
-- [ ] **Hook SessionStart**: injeta contexto curto — "grafo X conectado,
+- [x] **Hook SessionStart**: injeta contexto curto — "grafo X conectado,
       N cells, você é <name>, M usuários presentes" + changesets abertos
       do usuário (`changeset.list_mine`) p/ retomar turno esquecido.
-- [ ] **Hook de system messages**: eventos relevantes (via lib INT-2,
+- [x] **Hook de system messages**: eventos relevantes (via lib INT-2,
       `agentKind: claude-code` já recebe `system.message` do server §8)
       viram mensagens visíveis na sessão — no mínimo os prioritários:
-      seu cs abortado por TTL, lock.denied, authority.flipped. Mecanismo:
-      o processo do proxy `--live` acumula; hook (PreToolUse ou
-      UserPromptSubmit additionalContext) drena e injeta. Validar o
-      mecanismo exato na execução (pesquisa: qual hook entrega melhor
-      UX sem poluir).
-- [ ] **Hook PreToolUse (Edit/Write) — advisory**: se o arquivo editado
+      seu cs abortado por TTL, lock.denied, authority.flipped. Mecanismo
+      real implementado (diferente do previsto): o processo `--live`
+      nunca chamava `og.systemMessages()` e o server nunca persistia
+      `system.message` (sempre `ephemeral: true`, fora do `since` de
+      replay) — não havia nada pra um processo separado drenar. Fix do
+      lado servidor: tool nova `system.pending { token }` +
+      tabela-índice-vivo `system_messages` (mesma classe de `locks`, não
+      espelhada em JSONL). Hook `UserPromptSubmit` (não `PreToolUse` —
+      evita poluir a cada Edit/Write, ver Riscos #2) drena uma vez por
+      turno humano, mesmo padrão stateless-curl dos outros dois hooks.
+      Ver commit `dd1616b`.
+- [x] **Hook PreToolUse (Edit/Write) — advisory**: se o arquivo editado
       mapeia pra cell com lock de OUTRO usuário, avisar (não bloquear —
       D2 trust; bloqueio é decisão da Fase 4/authz). Mapeamento
       arquivo→cell via graph.query por path; se o grafo não mapeia,
