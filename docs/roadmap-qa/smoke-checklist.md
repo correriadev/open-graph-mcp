@@ -357,26 +357,26 @@ escolhido no dropdown "Cells" do modal "Open Turn".
 - **Resultado esperado:** `#conn` volta a `● connected` nas duas abas.
   Como as duas abas reconectam trazendo um token que o processo NOVO
   não reconhece (tokens são em memória, somem no restart —
-  `sse.ts::restartPending`), cada aba deve receber um toast **"Server
+  `sse.ts::restartPending`), cada aba deve receber o toast **"Server
   reiniciou — sua presença foi resetada"**.
-- **⚠️ Nota de risco (achado real na leitura do código, verificar com
-  atenção):** depois do restart, o token salvo em `localStorage`
-  continua sendo enviado pelas chamadas subsequentes
-  (`presence.beat`/`presence.focus`/etc.), mas o server novo não tem
-  esse token no seu `state.tokens` (`session.register` nunca foi
-  rechamado) — `requireToken` lança `"invalid or expired token"` pra
-  QUALQUER chamada de tool depois disso. Não existe, no código atual,
-  nenhum caminho que re-registre a sessão automaticamente após detectar
-  `server.restarted` — o handler só rechama `declarePresence()`, que
-  usa o MESMO token inválido e falha silenciosamente (`console.error`,
-  sem UI). **Portanto, o esperado plausível aqui é que o avatar de
-  Alice NÃO volte a aparecer na Aba B** (o `presence.focus` da
-  redeclaração falha) até que a Aba A recarregue a página com
-  `localStorage` limpo (ou digite o nome de novo). Se isso for
-  observado, **não é erro do executor** — é um achado real: registrar
-  como ❌, com a observação exata do console (`presence.focus failed`
-  / `invalid or expired token`), e abrir issue antes da QA-2 (o DoD
-  deste roteiro pede exatamente isso).
+- **Fixado no INT-2 (T4) — comportamento atual, verificado ao vivo em
+  browser real durante essa fase:** `og.presence.focus`/`beat`
+  (`@open-graph-mcp/client`, `connect.ts`) agora detectam o erro
+  `"invalid or expired token"`, re-registram a sessão automaticamente
+  com o MESMO `name`/`tenant`, gravam o token novo em `localStorage` e
+  forçam a reconexão SSE (`stream.stop()`/`stream.start()`, não só
+  redeclarar presença — necessário porque `Session.userId` no server é
+  vinculado uma vez por conexão) — **sem precisar recarregar a página**.
+  Resultado esperado agora: cada aba recebe um SEGUNDO toast, **"Sessão
+  renovada automaticamente após reinício do servidor"** (a única prova
+  visível de que a auto-recuperação rodou), e o avatar da Aba A volta a
+  aparecer na Aba B automaticamente, dentro de alguns segundos, sem
+  refresh manual em nenhuma das duas abas. Se o avatar NÃO voltar sem
+  refresh, ou o segundo toast não aparecer, ISSO é uma regressão real —
+  registrar como ❌ com a observação exata do console.
+  (Referência: `packages/mcp-web/src/main.ts`'s `applyReattach`/
+  `onReauth` handler; `docs/roadmap-integrations/02-scope-int-2-client-lib.md`'s
+  DoD item 3 — "beneficia web e plugins de uma vez".)
 
 ### Item 11 — Aba B para de "pingar" → 60s → some da barra da A
 
