@@ -9,7 +9,7 @@
 
 | # | Arquivo | Função | Status |
 |---|---|---|---|
-| 0 | `00-scope-qa-0-ci.md` | CI GitHub Actions: gate de push/PR. **Primeiro.** | proposto |
+| 0 | `00-scope-qa-0-ci.md` | CI GitHub Actions: gate de push/PR. **Primeiro.** | parcial — workflow+load+badge implementados (`164f2f0`, `bc494de`); falta branch protection + PR de quebra proposital |
 | 1 | `01-scope-qa-1-smoke.md` | Smoke browser manual-assistido da Fase 3 (roteiro versionado). | proposto |
 | 2 | `02-scope-qa-2-e2e.md` | e2e Playwright: UI web inteira, fecha §10.7/§10.9-web da Fase 3. | proposto |
 | 3 | `03-scope-qa-3-multi-client.md` | Web + não-web sobre o mesmo evento (contrato §8). | proposto |
@@ -26,7 +26,7 @@
 | mcp-web DOM/UI (main.ts ~17K, render.ts ~13K) | **ZERO** — nunca renderizado por teste |
 | graph-core (~50 módulos vendorados) | **ZERO direto** — só via integração do server |
 | Performance | 1 burst (`presence-load.ts`: 50 sessões, p100=54ms) |
-| CI | **NÃO EXISTE** |
+| CI | `.github/workflows/ci.yml` roda `test`/`client-node`/`load` em push+PR; falta branch protection em `main` |
 | Segurança | Regressões pinadas, mas espalhadas/anônimas |
 
 ## Decisões tomadas (QD)
