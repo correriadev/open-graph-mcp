@@ -1,6 +1,10 @@
 # QA-0 — Escopo fechado (CI)
 
-> Status: **escopo p/ execução** — pré-requisito de todo o resto.
+> Status: **parcial** — workflow, job de load e badge implementados
+> (`164f2f0`, `bc494de`); falta branch protection em `main` e o PR de
+> quebra proposital que confirma o gate. Ambos exigem acesso à API do
+> GitHub (token/`gh`) e uma decisão de dono do repo sobre proteção de
+> branch — não fechado por falta de acesso, não por falta de trabalho.
 > Índice-pai: `README.md`.
 >
 > **Objetivo:** todo push/PR roda a suíte inteira automaticamente. Sem CI,
@@ -18,16 +22,20 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] `.github/workflows/ci.yml` com job `test`:
+- [x] `.github/workflows/ci.yml` com job `test`:
   1. `bun install --frozen-lockfile`
   2. `bun test` (raiz — mcp-server + mcp-web)
   3. `bunx tsc --noEmit` em `packages/mcp-web`
   4. `bun run build` em `packages/mcp-web` (vite)
-- [ ] Job `load` separado, `continue-on-error: true`, só em PR p/ main:
+- [x] Job `load` separado, `continue-on-error: true`, só em PR p/ main:
       `bun run test:load` (packages/mcp-server) — números vão pro log do job.
-- [ ] Branch protection em `main`: job `test` obrigatório.
-- [ ] Badge no `README.md` raiz.
+- [ ] Branch protection em `main`: job `test` obrigatório. **Bloqueado**:
+      exige `gh`/token de admin do repo, indisponível no ambiente de
+      execução — ação do dono do repo via GitHub web UI.
+- [x] Badge no `README.md` raiz.
 - [ ] PR de teste com quebra proposital confirma o gate (depois revertido).
+      **Bloqueado** pela mesma falta de acesso — exige push real + PR no
+      GitHub.
 
 ---
 
