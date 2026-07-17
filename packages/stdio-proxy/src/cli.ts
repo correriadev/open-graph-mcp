@@ -34,7 +34,9 @@ import { connect, type OgHandle } from "@open-graph-mcp/client"
 import { fileTokenStore } from "@open-graph-mcp/client/node-store"
 import { type Credentials, postMcp, reregisterCredentials, resolveCredentials } from "./credentials"
 
-function parseArgs(argv: string[]): { server: string; name?: string; tenant?: string; live: boolean } {
+function parseArgs(
+  argv: string[],
+): { server: string; name?: string; tenant?: string; live: boolean; agentKind: string } {
   const idx = argv.indexOf("--server")
   const value = idx === -1 ? undefined : argv[idx + 1]
   if (!value) {
@@ -45,6 +47,8 @@ function parseArgs(argv: string[]): { server: string; name?: string; tenant?: st
   const name = nameIdx === -1 ? undefined : argv[nameIdx + 1]
   const tenantIdx = argv.indexOf("--tenant")
   const tenant = tenantIdx === -1 ? undefined : argv[tenantIdx + 1]
+  const agentKindIdx = argv.indexOf("--agent-kind")
+  const agentKind = agentKindIdx === -1 ? "unknown" : (argv[agentKindIdx + 1] ?? "unknown")
   const live = argv.includes("--live")
   if (live && !name) {
     process.stderr.write(
@@ -52,7 +56,7 @@ function parseArgs(argv: string[]): { server: string; name?: string; tenant?: st
     )
     process.exit(1)
   }
-  return { server: value.replace(/\/+$/, ""), name, tenant, live }
+  return { server: value.replace(/\/+$/, ""), name, tenant, live, agentKind }
 }
 
 /** Forward one JSON-RPC message over HTTP to `${server}/mcp`. Requests (have `id`) get their response
@@ -361,7 +365,7 @@ async function forward(server: string, message: JSONRPCMessage): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const { server, name, tenant, live } = parseArgs(process.argv.slice(2))
+  const { server, name, tenant, live, agentKind } = parseArgs(process.argv.slice(2))
   process.stderr.write(`stdio-proxy: proxying stdio <-> ${server}/mcp\n`)
 
   // --live (INT-2): open a real live-layer session at startup and keep it alive for the process
@@ -369,22 +373,14 @@ async function main(): Promise<void> {
   // instead of hitting the LIVE_LAYER_TOOLS stub (see routeLiveLayerCall / main()'s loop below).
   // parseArgs already guarantees `name` is set whenever `live` is true (fails fast otherwise).
   //
-  // agentKind: "unknown" — ID5 (docs/roadmap-integrations/README.md) lists agentKind as a closed
-  // contract (web, claude-code, opencode, cursor, windsurf, copilot, zed, gemini-cli, unknown) that
-  // "plugins DEVEM declarar o seu" (each plugin should declare its own). This generic stdio proxy has
-  // no way to know which of those it's actually wrapping — it's a transport-level shim any MCP client
-  // can point at it — so claiming a specific kind (e.g. "claude-code") would be a guess this proxy
-  // cannot back up, and "unknown" is exactly the value ID5 reserves for precisely this case (it exists
-  // in the enum for a reason). A `--agent-kind` flag was considered but rejected as over-engineering
-  // for this task: nothing here currently depends on getting a MORE specific value than "unknown" (it
-  // only affects system.message routing/UI labeling for non-web agents, per ID5), and a flag can be
-  // added later without breaking this default if a concrete need shows up.
+  // agentKind defaults to "unknown" (ID5's reserved value for an unidentified caller) but callers
+  // that know what they are — e.g. the Claude Code plugin — should pass `--agent-kind claude-code`.
   let og: OgHandle | null = null
   if (live) {
     try {
       og = await connect({
         server,
-        agentKind: "unknown",
+        agentKind,
         name,
         tenant,
         store: fileTokenStore(),

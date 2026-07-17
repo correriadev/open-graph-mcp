@@ -456,3 +456,33 @@ PreToolUse hook fired with the right `tool_input` — it fires before the
 permission gate either way, and omitting the flag keeps the run from
 actually mutating anything outside `/tmp` (or wherever your throwaway
 plugin/test files live).
+
+## Two findings from validating a plugin-bundled MCP server (INT-3 skeleton, packages/claude-plugin)
+
+- **Headless `--plugin-dir` + `-p` has no interactive enable step, so a
+  `userConfig` field with `required: true` and no `default` (e.g. this
+  plugin's `name`) never gets populated — Claude Code silently omits the
+  MCP server from the session's config entirely (`mcp_servers: []` in the
+  `system/init` event, zero stderr, no warning in the jsonl stream at
+  all). Don't chase this as a proxy/spawn bug; it's a config-injection
+  gap specific to headless validation. Fix: pass
+  `--settings '{"pluginConfigs":{"<plugin-name>@inline":{"options":{"key":"value",...}}}}'`
+  (the `<plugin-name>@inline` id matches the `source` field the plugin
+  shows in its own `plugins` array entry in `system/init` — check that
+  field for the exact id, don't assume `@inline` always applies). This
+  only changes the CLI invocation for the validation run; it does not
+  touch the plugin's shipped manifest, and it's the right fix — do NOT
+  add a fake `default` to a `required` userConfig field just to make
+  headless validation pass, since that would let a real user silently
+  register under a wrong/empty value.
+- **Plugin-provided MCP tools are name-scoped, not exposed under their
+  raw tool name.** A tool named `graph.query` in the plugin's own MCP
+  server shows up in the session's tool list as
+  `mcp__plugin_<plugin-name>_<server-name>__graph_query` — dots become
+  underscores and the plugin+server name gets prefixed. A validation
+  prompt asking the model to name tools "like `graph.query`" will
+  correctly get "None" back even when the server is fully connected and
+  the tools are present — check the `system/init` event's `mcp_servers`
+  array (`status: "connected"`) and `tools` array (grep for
+  `mcp__plugin_<name>`) instead of trusting the assistant's final text
+  for this kind of check.

@@ -1,0 +1,25 @@
+{
+  "name": "open-graph",
+  "description": "Connects Claude Code to an open-graph-mcp server: query the graph before coding, open a changeset before touching a cell someone else owns, and see live presence without leaving the terminal.",
+  "version": "0.1.0",
+  "mcpServers": {
+    "open-graph": {
+      "command": "bun",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../stdio-proxy/src/cli.ts", "--server", "${user_config.server}", "--name", "${user_config.name}", "--live", "--agent-kind", "claude-code"]
+    }
+  },
+  "userConfig": {
+    "server": {
+      "type": "string",
+      "title": "open-graph-mcp server URL",
+      "description": "Base URL of your open-graph-mcp server (e.g. http://localhost:8787)",
+      "default": "http://localhost:8787"
+    },
+    "name": {
+      "type": "string",
+      "title": "Your name",
+      "description": "Identifies you in presence, changesets, and authority — shown to other users on the graph",
+      "required": true
+    }
+  }
+}
