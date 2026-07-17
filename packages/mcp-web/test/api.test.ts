@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
-import { toolCall } from "../src/api"
+import { readSnapshot, toolCall } from "../src/api"
 
 // ---------------------------------------------------------------------------
 // Regression pin for transport.ts's tools/call contract change: a tool
@@ -59,4 +59,25 @@ test("toolCall resolves (does not throw) for a normal {ok:false, reasons:[...]} 
 
   const result = await toolCall("authority.flip", { cell: "no-colon-here", to: "graph" })
   expect(result).toEqual(structured)
+})
+
+// ---------------------------------------------------------------------------
+// Regression pin: graph://snapshot's resources/read result is an envelope
+// { graphId, graph, stats }, not the bare Graph — readSnapshot() must unwrap
+// `.graph` itself, since callers (main.ts's renderer.setGraph) expect a
+// plain Graph. Caught live during INT-3 validation; was silently returning
+// the envelope before.
+// ---------------------------------------------------------------------------
+
+test("readSnapshot unwraps the graph://snapshot envelope down to the bare Graph", async () => {
+  const graph = { nodes: [{ id: "n1" }], edges: [], stats: { nodes: 1 } }
+  const envelope = { graphId: "g_123", graph, stats: { nodes: 1 } }
+  mockFetchOnce({
+    jsonrpc: "2.0",
+    id: 1,
+    result: { contents: [{ uri: "graph://snapshot", text: JSON.stringify(envelope) }] },
+  })
+
+  const result = await readSnapshot()
+  expect(result).toEqual(graph as any)
 })
