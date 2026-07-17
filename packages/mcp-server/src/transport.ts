@@ -16,6 +16,7 @@ import { graphImport } from "./tools/graph-import"
 import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine } from "./tools/changeset"
 import { authorityFlip } from "./tools/authority"
 import { presenceWho, presenceFocus, presenceBeat } from "./tools/presence"
+import { systemPending } from "./system-message"
 import { resolveResource, RESOURCE_LIST } from "./resources"
 
 function tenantOf(state: ServerState, token: unknown): string {
@@ -113,6 +114,11 @@ const TOOLS = [
     description: "Heartbeat for this session's presence. No beat for 60s expires the presence (user.left, reason heartbeat_expired).",
     inputSchema: { type: "object", required: ["token", "sessionId"], properties: { token: { type: "string" }, sessionId: { type: "string" }, agentKind: { type: "string" } } },
   },
+  {
+    name: "system.pending",
+    description: "Drain (return and clear) system.message text queued for the caller since their last poll. Stateless — safe to call from a fresh process with no live SSE connection.",
+    inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" } } },
+  },
 ]
 
 function callTool(state: ServerState, name: string, args: any): unknown {
@@ -149,6 +155,8 @@ function callTool(state: ServerState, name: string, args: any): unknown {
       return presenceFocus(state, args)
     case "presence.beat":
       return presenceBeat(state, args)
+    case "system.pending":
+      return systemPending(state, args)
     default:
       throw new Error(`unknown tool: ${name}`)
   }

@@ -65,3 +65,34 @@ test("lock.denied system.message reaches only the non-web session that attempted
     s.stop()
   }
 })
+
+// INT-3: a Claude Code hook is a fresh, short-lived process — it can't read the `--live` proxy's
+// in-memory SSE stream. `system.pending { token }` persists rendered system.message text server-side
+// so a stateless poll (same pattern as the other INT-3 hooks: curl + on-disk credentials) can retrieve
+// what it missed, independent of whether a live connection is even open at poll time. Drain semantics:
+// a message returned once is consumed (deleted) and won't be returned again.
+test("system.pending persists a rendered system.message for stateless poll-based drain, once", async () => {
+  const s = startServer()
+  try {
+    const alice = await register(s.url, "alice")
+    const bob = await register(s.url, "bob")
+
+    const bobSse = await openSse(s.url, 0, bob.token, "cell:ui:6")
+    const bobSessionId = bobSse.events[0].sessionId
+    await callTool(s.url, "presence.beat", { token: bob.token, sessionId: bobSessionId, agentKind: "opencode" })
+
+    await callTool(s.url, "changeset.open", { token: alice.token, cells: ["ui:6"], intent: "notify test" })
+    await bobSse.waitFor((e) => e.kind === "system.message")
+
+    const first = await callTool(s.url, "system.pending", { token: bob.token })
+    expect(first.messages.length).toBe(1)
+    expect(first.messages[0].text).toContain("ui:6")
+
+    const second = await callTool(s.url, "system.pending", { token: bob.token })
+    expect(second.messages).toEqual([])
+
+    bobSse.close()
+  } finally {
+    s.stop()
+  }
+})
