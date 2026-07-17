@@ -19,6 +19,26 @@ jobs:
       - run: bun run build
         working-directory: packages/mcp-web
 
+  # Node-LTS proof for @open-graph-mcp/client (INT-2 risk #2: Node vs Bun
+  # runtime divergence). Runs in parallel with `test`, never replaces it —
+  # this repo otherwise only promises Bun. Uses the real `node` binary from
+  # actions/setup-node for every assertion below, not bun's node-compat shim.
+  client-node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: node --version
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd packages/client build
+      - run: node --test packages/client/test/*.test.ts
+      - run: node --test packages/client/test/dist-smoke.mjs
+
   load:
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
