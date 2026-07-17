@@ -25,7 +25,9 @@
  * focused/typing_state/left — são ambient presence chatter (barulho pra um agente sem canvas), não
  * "pare e preste atenção".
  */
+import { insertRow } from "./db"
 import { nextSeq, tenantGraph, type EventEnvelope, type ServerState, type Session } from "./state"
+import { requireToken } from "./tools/session"
 
 function userName(state: ServerState, tenant: string, userId: string | null | undefined): string {
   if (!userId) return "alguém"
@@ -67,6 +69,9 @@ export function renderSystemMessage(state: ServerState, tenant: string, env: Eve
 /** Empurra `system.message { text }` direto pra UMA sessão (nunca roteado de novo — o destinatário já
  *  foi decidido por quem chamou). Efêmero: reusa o seq durável corrente, igual toda presença (state.ts). */
 export function pushSystemMessage(state: ServerState, tenant: string, session: Session, text: string, target: string | null = null): void {
+  // INT-3: also persist for stateless poll-based drain (system.pending) — a Claude Code hook is a
+  // fresh process per tool call and can't read this SSE push directly (see system.pending's callers).
+  if (session.userId) insertRow(state.db, "system_messages", { tenant_id: tenant, user_id: session.userId, text, created_at: new Date().toISOString() })
   session.push({
     schemaVersion: 1,
     seq: nextSeq(state, tenant) - 1,
@@ -77,4 +82,20 @@ export function pushSystemMessage(state: ServerState, tenant: string, session: S
     payload: { text },
     graphId: tenantGraph(state, tenant).graphId,
   })
+}
+
+/** `system.pending { token }` — stateless poll-based drain (INT-3). Returns every persisted
+ *  system.message for the caller's user, oldest first, and deletes them: a message is returned once. */
+export function systemPending(state: ServerState, args: { token: string }): { messages: { text: string; createdAt: string }[] } {
+  const { userId, tenantId: tenant } = requireToken(state, args.token)
+  const rows = state.db.query("SELECT id, text, created_at FROM system_messages WHERE tenant_id = ? AND user_id = ? ORDER BY id").all(tenant, userId) as {
+    id: number
+    text: string
+    created_at: string
+  }[]
+  if (rows.length) {
+    const ids = rows.map((r) => r.id)
+    state.db.query(`DELETE FROM system_messages WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`).run(tenant, ...ids)
+  }
+  return { messages: rows.map((r) => ({ text: r.text, createdAt: r.created_at })) }
 }

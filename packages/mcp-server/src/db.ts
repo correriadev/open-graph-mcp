@@ -16,7 +16,7 @@ import path from "node:path"
 /** Tabelas duráveis espelhadas em JSONL, na ordem de replay do rebuild. */
 export const DURABLE_TABLES = ["users", "nodes", "edges", "claims", "authority", "changesets", "cs_deltas", "events"] as const
 /** Todas as tabelas com tenant_id (durables + índice live). */
-const ALL_TABLES = [...DURABLE_TABLES, "locks"] as const
+const ALL_TABLES = [...DURABLE_TABLES, "locks", "system_messages"] as const
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS events (
   tenant_id TEXT NOT NULL, seq INTEGER NOT NULL, ts TEXT NOT NULL, kind TEXT NOT NULL, target_kind TEXT,
   target_id TEXT, payload TEXT, by_user TEXT,
   PRIMARY KEY (tenant_id, seq)
+);
+-- INT-3: a queue for stateless poll-based drain (system.pending). Live index only, like locks — a
+-- consumer that missed a message because it wasn't connected when the server restarted has nothing
+-- to recover anyway (system.message itself is ephemeral: true), so no JSONL mirror.
+CREATE TABLE IF NOT EXISTS system_messages (
+  tenant_id TEXT NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL
 );
 `
 
