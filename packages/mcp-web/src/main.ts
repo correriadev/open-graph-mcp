@@ -733,6 +733,13 @@ const setConn = (up: boolean) => {
   el.textContent = up ? "● connected" : "● disconnected"
 }
 
+// e2e hook (QA-2): avatars/nodes are canvas pixels with no other DOM query path, and driving focus via
+// a synthetic canvas click would require re-deriving exact node screen coordinates — a fragile detail
+// unrelated to what avatar-overlay.e2e.ts actually verifies (overlay rendering + tooltip content).
+// `setFocus` here is the real production call (og.presence.focus), not a bypass; `avatarScreenPos` is
+// query-only. No production behavior depends on this object.
+;(window as any).__og_e2e = { setFocus, avatarScreenPos: (userId: string) => renderer.avatarScreenPos(userId) }
+
 // SSE connection, reconnect/backoff, event dispatch (og.on wired in connectOg), and presence lifecycle
 // are all owned by connect() now — see connectOg() above (spec §9 section).
 ;(async () => {
