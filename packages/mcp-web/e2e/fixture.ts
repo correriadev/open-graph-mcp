@@ -109,6 +109,9 @@ export type Harness = {
   pageUrl: () => string
   /** Fresh BrowserContext + Page = a new simulated user; fills #name and waits for connect. */
   openSession: (browser: Browser, name: string) => Promise<{ page: Page; context: BrowserContext }>
+  /** Same as openSession but reuses a given context — a second TAB of the same simulated user (shared
+   * localStorage/identity, independent sessionStorage), for per-tab settings-persistence tests. */
+  openSessionInContext: (context: BrowserContext, name: string) => Promise<{ page: Page }>
   /** Kills the server process and respawns it on the SAME port + stateDir (spec §10.9 web). */
   restartServer: () => Promise<void>
   stop: () => Promise<void>
@@ -149,6 +152,16 @@ export async function startHarness(opts: StartOptions = {}): Promise<Harness> {
   })
   const previewUrl = prev.resolvedUrls!.local[0]!.replace(/\/$/, "")
 
+  async function openSessionInContext(context: BrowserContext, name: string): Promise<{ page: Page }> {
+    const page = await context.newPage()
+    await page.goto(`${previewUrl}/?server=${encodeURIComponent(proc.mcpUrl)}`)
+    await page.fill("#name", name)
+    await page.locator("#name").press("Tab") // blur → change event → connectOg()
+    await page.waitForFunction((n) => document.getElementById("who")?.textContent === n, name)
+    await page.waitForSelector("#conn.on")
+    return { page }
+  }
+
   return {
     get serverUrl() {
       return proc.mcpUrl
@@ -169,14 +182,10 @@ export async function startHarness(opts: StartOptions = {}): Promise<Harness> {
     pageUrl: () => `${previewUrl}/?server=${encodeURIComponent(proc.mcpUrl)}`,
     async openSession(browser, name) {
       const context = await browser.newContext()
-      const page = await context.newPage()
-      await page.goto(`${previewUrl}/?server=${encodeURIComponent(proc.mcpUrl)}`)
-      await page.fill("#name", name)
-      await page.locator("#name").press("Tab") // blur → change event → connectOg()
-      await page.waitForFunction((n) => document.getElementById("who")?.textContent === n, name)
-      await page.waitForSelector("#conn.on")
+      const { page } = await openSessionInContext(context, name)
       return { page, context }
     },
+    openSessionInContext,
     async restartServer() {
       await stopServer(proc)
       proc = await spawnServer({ ...startOpts, port: Number(port) })
