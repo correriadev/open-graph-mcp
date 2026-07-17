@@ -385,6 +385,13 @@ export class Renderer {
     }
   }
 
+  /** Screen position of a presence avatar badge, for e2e (QA-2): hover/tooltip assertions need a real
+   * mouse move to the actual drawn position, which — being canvas, not DOM — has no other query path. */
+  avatarScreenPos(userId: string): { x: number; y: number; locked: boolean } | null {
+    const hit = this.avatarHits.find((a) => a.entry.userId === userId)
+    return hit ? { x: hit.x, y: hit.y, locked: hit.locked } : null
+  }
+
   private avatarAt(sx: number, sy: number): AvatarHit | null {
     for (const a of this.avatarHits) {
       if ((a.x - sx) ** 2 + (a.y - sy) ** 2 <= a.r * a.r) return a
