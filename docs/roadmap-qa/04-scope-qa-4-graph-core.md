@@ -1,6 +1,9 @@
 # QA-4 — Escopo fechado (graph-core: rede de segurança mínima)
 
-> Status: **regra contínua** — vale a partir de já, sem sprint dedicado.
+> Status: **implementado** (2026-07-17, `95c71c6`+) — 3/3 itens do DoD
+> próprios fechados (o 4º item listado abaixo é entrada da Fase 4, não
+> desta fase — ver sua própria nota). Regra contínua vale daqui pra
+> frente.
 > Índice-pai: `README.md`.
 >
 > **Objetivo:** graph-core (~50 módulos vendorados, 0 testes diretos) tem
@@ -17,17 +20,36 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] `packages/graph-core/test/authority.test.ts` — `canFlip` e semântica
+- [x] `packages/graph-core/test/authority.test.ts` — `canFlip` e semântica
       de autoridade (o que `gates.ts` do server consome no
-      `authority.flip`): casos permitido/negado/inválido.
-- [ ] Teste unit p/ cada função do graph-core que `gates.ts` importa
-      (inventariar imports; hoje é o gate incremental + final — cobrir as
-      entradas que o server realmente passa).
-- [ ] Regra no `CONTRIBUTING`/README do pacote: **tocou num módulo do
+      `authority.flip`): casos permitido/negado/inválido. 10 testes:
+      `canFlip` permitido/cada motivo de negação isolado/3 motivos
+      combinados, `getAuthority` default+explícito, `setAuthority`
+      seta/**deleta** a chave ao voltar pra source (não só sobrescreve)/
+      não muta o input.
+- [x] Teste unit p/ cada função do graph-core que `gates.ts` importa —
+      inventariado (5 imports: `roundtripScoped`, `verifyIntegrity`,
+      `claimCoverage`, `canFlip`, `excerptCheck`). `canFlip` acima;
+      `test/roundtrip.test.ts` (8 testes: ladder limpa, os 4 tipos de
+      violação, root em extremo não é órfão, escopo isola componente
+      desconexo, rootId ausente), `test/verify.test.ts` (8 testes: limpo,
+      os 5 `Breach.kind`, ref pra outra claim — não meta — não é
+      dangling, claim sem âncora/só-escada isenta do check de âncora-no-
+      chão), `test/claim-store.test.ts` (5 testes: `claimCoverage`
+      balanceado/não-balanceado/multi-cobertura/cell vazia/ref não
+      resolvida), `test/extract.test.ts` (6 testes: `excerptCheck` match/
+      no-match/normalização CRLF nos dois lados/excerpt vazio/excerpt
+      maior que o conteúdo). 37 testes novos, todos verdes (`bun test`
+      raiz: 218 pass, 0 fail).
+- [x] Regra no `CONTRIBUTING`/README do pacote: **tocou num módulo do
       graph-core → deixa teste unit atrás.** PR que edita graph-core sem
-      teste correspondente não passa review.
+      teste correspondente não passa review. `packages/graph-core/README.md`
+      criado (pacote não tinha nenhum) com a regra + a lista de cobertura
+      mínima garantida.
 - [ ] `merge-driver.ts`: teste unit ANTES da Fase 4 usar rebase — item de
-      entrada da Fase 4, listado lá, não aqui.
+      entrada da Fase 4, listado lá, não aqui. **Não bloqueia o fechamento
+      desta fase** — é um lembrete pra quando a Fase 4 (roadmap-mcp)
+      começar, não um item do DoD de QA-4 em si.
 
 ---
 

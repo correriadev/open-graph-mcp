@@ -13,7 +13,7 @@
 | 1 | `01-scope-qa-1-smoke.md` | Smoke browser manual-assistido da Fase 3 (roteiro versionado). | implementado — executado 2026-07-17, 9/12 ✅, 1 bug real fixado |
 | 2 | `02-scope-qa-2-e2e.md` | e2e Playwright: UI web inteira, fecha §10.7/§10.9-web da Fase 3. | quase implementado — harness + 5 specs + job CI (6/8 DoD); falta rodar de verdade no GitHub |
 | 3 | `03-scope-qa-3-multi-client.md` | Web + não-web sobre o mesmo evento (contrato §8). | proposto |
-| 4 | `04-scope-qa-4-graph-core.md` | Rede de segurança mínima + regra "tocou → testa". | regra contínua |
+| 4 | `04-scope-qa-4-graph-core.md` | Rede de segurança mínima + regra "tocou → testa". | implementado — 37 testes (5 arquivos) + regra no README do pacote |
 | 5 | `05-scope-qa-5-perf-soak.md` | Soak 10 min + broadcast storm + perf-log. **Gate da Fase 4.** | proposto |
 | 6 | `06-scope-qa-6-security.md` | Inventário de testes de segurança + processo por release. | proposto |
 
@@ -24,7 +24,7 @@
 | mcp-server (tools, gates, SQLite, SSE, presença, affinity, typing) | **Boa** — 29 arquivos de integração real (HTTP+SQLite+SSE, sem mocks) |
 | mcp-web lógica pura (envelope, eventstream, presence-state, toasts, ghosts) | **Boa** — 5 arquivos unit |
 | mcp-web DOM/UI (main.ts ~17K, render.ts ~13K) | 5 arquivos Playwright (presence bar, avatar overlay, typing, toasts, settings/invisible, reconnect) — ainda não confirmados rodando no CI real |
-| graph-core (~50 módulos vendorados) | **ZERO direto** — só via integração do server |
+| graph-core (~50 módulos vendorados) | 37 testes diretos nos 5 módulos que `gates.ts` importa (authority/roundtrip/verify/claim-store/extract); resto via integração do server (QA-4: por design, não retroativo) |
 | Performance | 1 burst (`presence-load.ts`: 50 sessões, p100=54ms) |
 | CI | `.github/workflows/ci.yml` roda `test`/`client-node`/`load` em push+PR; falta branch protection em `main` |
 | Segurança | Regressões pinadas, mas espalhadas/anônimas |
