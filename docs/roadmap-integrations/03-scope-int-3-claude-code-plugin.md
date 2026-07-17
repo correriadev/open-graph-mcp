@@ -1,6 +1,9 @@
 # INT-3 — Escopo fechado (plugin Claude Code)
 
-> Status: **escopo p/ execução** — após INT-2. Integração de referência (ID4).
+> Status: **implementado** — todos os 8 itens do DoD fechados. Ver
+> `int-3-validation-harness.md` (spike do harness de validação headless) e
+> `int-3-validation-run.md` (validação real ponta-a-ponta, achados e um
+> bug fixado). Integração de referência (ID4).
 > Índice-pai: `README.md`.
 >
 > **Objetivo:** Claude Code é a plataforma mais rica (plugins com MCP
@@ -81,10 +84,19 @@ Um plugin instalável (`/plugin install open-graph`) contendo:
       `claude --plugin-dir packages/claude-plugin -p "..."` listando os
       4 comandos com o namespace real. `disable-model-invocation: true`
       em todos (só o humano invoca, spec §3 do escopo).
-- [ ] **Validação real**: sessão de Claude Code com o plugin, executando
+- [x] **Validação real**: sessão de Claude Code com o plugin, executando
       o fluxo completo contra server real, com um segundo usuário na web
-      UI vendo presença/turno do agente. Roteiro + resultado registrados
-      (formato smoke-checklist da QA-1).
+      UI vendo presença/turno do agente. Prompt-driven (não scripted) —
+      achou e corrigiu um bug real no PreToolUse advisory (`domain: null`
+      tratado como "sem mapeamento" quando na verdade é o caso comum
+      "unassigned"). Confirmou o loop vivo ponta-a-ponta: usuária web viu
+      `agent-alice (claude-code)` aparecer em presença em tempo real, e o
+      agente citou corretamente o lock/holder/csId reais ao reagir ao
+      advisory. Risk #1 parcialmente retirado: trigger reativo (skill
+      engaja ao ver o advisory) confirmado; trigger proativo (query antes
+      de editar) não disparou sozinho nesta rodada — ver
+      `int-3-validation-run.md` para o relato completo, incluindo achados
+      negativos.
 
 ---
 
