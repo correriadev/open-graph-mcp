@@ -126,8 +126,6 @@ export type Harness = {
 const DEFAULT_KNOBS: StartOptions = {
   watch: false,
   focusDebounceMs: 10,
-  typingMs: 300,
-  idleMs: 150,
 }
 
 export async function startHarness(opts: StartOptions = {}): Promise<Harness> {
