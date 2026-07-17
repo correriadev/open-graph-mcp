@@ -1,4 +1,11 @@
 {
+  // KNOWN BROKEN (pre-existing, predates INT-2): "@tsconfig/bun" below is not an installed
+  // devDependency anywhere in this monorepo (not in bun.lock, no package.json references it),
+  // so `extends` fails with TS6053 and ~356 cascading errors (mostly duplicate @types/node
+  // identifiers). packages/stdio-proxy/tsconfig.json has the identical problem. No CI step
+  // type-checks this package because of it. Found during INT-2 T7; not fixed there (out of
+  // scope) — fix by either installing @tsconfig/bun as a devDependency or dropping this extends
+  // and inlining whatever options it was meant to provide.
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {

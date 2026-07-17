@@ -14,9 +14,10 @@ Node-friendly token store land in later INT-2 tasks.
     non-Bun bundler consumer get the compiled, plain-JS output).
 - `dist/` is produced by `bun run build` (`tsc -p tsconfig.build.json`) and is git-ignored
   (repo root `.gitignore` already ignores `dist/`). **It must be rebuilt after every source
-  change** — nothing rebuilds it automatically. Any later task that adds a cross-package
-  import of `@open-graph-mcp/client` from a non-Bun-native consumer, or that adds a Node CI
-  job, needs `bun run build` to run first.
+  change** — nothing rebuilds it automatically. Any cross-package import of
+  `@open-graph-mcp/client` from a non-Bun-native consumer (e.g. `packages/stdio-proxy`'s
+  `node-store` usage) needs `bun run build` to have run first; CI's `client-node` job does
+  this itself before running Node-based tests.
 - `tsconfig.json` is self-contained (does not `extend` `@tsconfig/bun`, unlike
   `mcp-server`/`stdio-proxy` — that package isn't in the lockfile/node_modules here, so `tsc`
   can't resolve it). `tsconfig.build.json` extends it, restricting `include` to `src` and
@@ -30,8 +31,9 @@ Node-friendly token store land in later INT-2 tasks.
 - **A green `bun test` is not evidence the `dist` build is healthy.** Bun's runtime resolver
   silently accepts things `tsc` rejects (e.g. an extensionless relative import like
   `./foo` instead of `./foo.ts`) — `bun test` will stay green while `bun run build` fails.
-  No CI step type-checks/builds this package yet (planned for a later INT-2 task), so run
-  `bun run build` locally after any source change, don't rely on `bun test` alone.
+  The `client-node` CI job (`.github/workflows/ci.yml`) now runs `bun run build` on every
+  push/PR, but still run it locally after any source change rather than relying on CI to
+  catch it first.
 
 ## Verified Node version floor
 
@@ -71,3 +73,9 @@ Bun implements the `node:test` module, so this one file runs unmodified under bo
 and `node --test` — no duplicated test logic. `test/dist-smoke.mjs` is deliberately named
 without `.test.` in the name so Bun's default test-discovery glob never picks it up; it's run
 explicitly, after a build, to prove the shipped floor rather than the source-execution floor.
+
+`bun run test:node` (`node --test test/*.test.ts`) runs every `*.test.ts` file directly under
+plain Node in one shot — this proves the source-execution floor (Node >=22.18 unflagged, or
+>=22.6 with `--experimental-strip-types`), not the shipped `dist` floor; it deliberately does
+NOT pick up `dist-smoke.mjs` (see above). CI's `client-node` job runs this AND `dist-smoke.mjs`
+separately, so both floors get regression coverage.
