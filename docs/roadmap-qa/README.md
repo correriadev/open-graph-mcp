@@ -15,7 +15,7 @@
 | 3 | `03-scope-qa-3-multi-client.md` | Web + não-web sobre o mesmo evento (contrato §8). | implementado — cross-client.test.ts + script de contrato MCP + gate pinado |
 | 4 | `04-scope-qa-4-graph-core.md` | Rede de segurança mínima + regra "tocou → testa". | implementado — 37 testes (5 arquivos) + regra no README do pacote |
 | 5 | `05-scope-qa-5-perf-soak.md` | Soak 10 min + broadcast storm + perf-log. **Gate da Fase 4.** | implementado — achou degradação real de latência (`readClaims` full-scan), corrigida no mesmo dia (cache por tenant), revalidada; gate da Fase 4 desbloqueado |
-| 6 | `06-scope-qa-6-security.md` | Inventário de testes de segurança + processo por release. | proposto |
+| 6 | `06-scope-qa-6-security.md` | Inventário de testes de segurança + processo por release. | implementado — `security-tests.md` com 8 linhas (achou 4 a mais que o previsto: `authority-flip.test.ts` ×2, `protocol-compliance.test.ts` DNS-rebinding), processo + gate da Fase 4 documentados |
 
 ## Fotografia atual (o que JÁ existe)
 
@@ -27,7 +27,7 @@
 | graph-core (~50 módulos vendorados) | 37 testes diretos nos 5 módulos que `gates.ts` importa (authority/roundtrip/verify/claim-store/extract); resto via integração do server (QA-4: por design, não retroativo) |
 | Performance | 1 burst (`presence-load.ts`: 50 sessões, p100=54ms) |
 | CI | `.github/workflows/ci.yml` roda `test`/`client-node`/`load` em push+PR; falta branch protection em `main` |
-| Segurança | Regressões pinadas, mas espalhadas/anônimas |
+| Segurança | 8 testes de ataque nomeados, inventariados em `security-tests.md` (QA-6) |
 
 ## Decisões tomadas (QD)
 
@@ -51,16 +51,18 @@ QA-1 (smoke)┘                              │
 QA-4 (graph-core: regra contínua, vale desde já)
                                            │
                                            ▼
-                            QA-5 (soak) ══ GATE da Fase 4 (roadmap-mcp)
+                            QA-5 (soak) ══ GATE da Fase 4 (roadmap-mcp) ✅ desbloqueado
                                            │
-QA-6 (sec suite) — qualquer hora; obrigatório antes da Fase 4
+QA-6 (sec suite) — qualquer hora; obrigatório antes da Fase 4 ✅ implementado
 ```
 
 QA-0 e QA-1 em paralelo, imediatos. QA-2 só com QA-0 verde (e2e sem CI é
-teatro). QA-5 e QA-6 são pré-requisitos declarados da Fase 4 do
+teatro). QA-5 e QA-6 eram pré-requisitos declarados da Fase 4 do
 roadmap-mcp (lock otimista + rebase + authz multiplicam superfície de
 escrita e de permissão — sem soak e sem suíte de segurança nomeada, não
-começa).
+começa) — **ambos fechados em 2026-07-18**. O único bloqueio remanescente
+antes da Fase 4 é QA-0's branch protection (bloqueado por falta de acesso
+`gh`, não por trabalho pendente — ver `00-scope-qa-0-ci.md`).
 
 ## Esforço estimado (1 dev, ~50% dedicação)
 
