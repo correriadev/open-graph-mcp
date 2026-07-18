@@ -6,7 +6,13 @@ import { defineConfig } from "vite"
 const stub = fileURLToPath(new URL("./src/node-stub.ts", import.meta.url))
 
 export default defineConfig({
-  resolve: { alias: { "node:fs": stub, "node:path": stub } },
+  resolve: {
+    alias: {
+      "node:fs": stub,
+      "node:path": stub,
+      "@open-graph-mcp/client": fileURLToPath(new URL("../client/src/index.ts", import.meta.url)),
+    },
+  },
   server: { port: 5175 },
   build: { target: "esnext", sourcemap: true },
 })

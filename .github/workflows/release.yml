@@ -1,0 +1,74 @@
+# release.yml — BT-1 beta release pipeline
+# (docs/roadmap-beta-test/01-scope-bt-1-pipeline-artefato.md, BD4/BD6).
+#
+# The `test` job DELIBERATELY duplicates ci.yml's test job (architecture decision): ci.yml only
+# triggers on main pushes / PRs, so a `beta-v*` tag push or a manual dispatch would otherwise have
+# no green gate for the exact tagged commit. Do not "deduplicate" this into a reusable workflow —
+# ci.yml is the hardened QA-0 gate and stays untouched.
+#
+# Distribution is BD4: this Release is the source of truth for the artifact; the owner downloads
+# the assets and uploads them to the beta Google Drive folder manually. Participants never touch
+# GitHub.
+name: Release
+
+on:
+  push:
+    tags: ["beta-v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. beta-v1). Must match beta-v*; created at the current commit if it does not exist yet."
+        required: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun test
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          case "$tag" in
+            beta-v*) ;;
+            *) echo "error: tag must match beta-v* (got '$tag' — pass the tag input when dispatching from a branch)" >&2; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Package assets
+        run: .github/scripts/package-beta-assets.sh "${{ steps.tag.outputs.tag }}"
+
+      - name: Create prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          server_version="$(jq -r .version packages/mcp-server/package.json)"
+          notes="Beta session artifact ($tag).
+
+          Frozen server (BD6): @open-graph-mcp/mcp-server v${server_version} @ commit ${GITHUB_SHA}.
+          Clients built from this same commit — a client/server version mismatch during the session is diagnosable from these two values.
+
+          Distribution (BD4): owner downloads these assets and uploads them to the beta Google Drive folder; participants install from Drive using INSTALL.md only."
+          gh release create "$tag" \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Beta $tag" \
+            --notes "$notes" \
+            "dist-beta/open-graph-proxy-$tag.tar.gz" \
+            "dist-beta/open-graph-plugin-$tag.tar.gz" \
+            "dist-beta/INSTALL.md"
