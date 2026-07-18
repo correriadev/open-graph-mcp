@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "test": "bun test --timeout 30000",
-    "test:load": "bun test/load/presence-load.ts"
+    "test:load": "bun test/load/presence-load.ts",
+    "test:client-contract": "bun test/mcp-client-contract.ts"
   },
   "exports": {
     "./*": "./src/*.ts"
