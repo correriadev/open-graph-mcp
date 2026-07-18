@@ -1,7 +1,7 @@
 # QA-6 — Escopo fechado (segurança como suíte nomeada)
 
-> Status: **escopo p/ execução** — qualquer hora; OBRIGATÓRIO antes da
-> Fase 4 (roles/authz). Índice-pai: `README.md`.
+> Status: **implementado (2026-07-18)** — 4/4 itens do DoD fechados. Ver
+> `security-tests.md`. Índice-pai: `README.md`.
 >
 > **Objetivo:** os testes de segurança JÁ existem (nasceram das reviews da
 > Fase 3), mas estão espalhados e anônimos. Consolidar visibilidade — não
@@ -17,8 +17,13 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] `docs/roadmap-qa/security-tests.md` — inventário: arquivo → ataque
-      coberto:
+- [x] `docs/roadmap-qa/security-tests.md` — inventário: arquivo → ataque
+      coberto. Achado ao levantar (não é reescrita do que já estava aqui —
+      é o "consolidar visibilidade" do objetivo): além dos 4 itens
+      previstos, o inventário real ficou com 8 linhas — `authority-flip.test.ts`
+      (2: reuse hijack + lock ownership no flip) e `protocol-compliance.test.ts`
+      (guarda ativa de DNS-rebinding/Origin, 6 variantes) também são
+      cobertura de segurança real e estavam igualmente anônimos.
   - `tenant-isolation.test.ts` → dados/eventos não vazam entre tenants.
   - `presence-ownership.test.ts` → hijack de sessionId (mesmo tenant e
     cross-tenant): rejeitado, estado da vítima intacto, zero broadcast.
@@ -27,13 +32,14 @@
   - Session IDs aleatórios (capability opaca) — coberto por construção +
     ownership binding como defense in depth (comentários em sse.ts /
     presence.ts).
-- [ ] Convenção documentada (no próprio inventário): teste novo de
+- [x] Convenção documentada (no próprio inventário): teste novo de
       segurança entra no inventário no MESMO PR — inventário desatualizado
       é quebra de review.
-- [ ] Processo: `/security-review` no diff acumulado antes de cada release
+- [x] Processo: `/security-review` no diff acumulado antes de cada release
       de fase; cada achado confirmado vira teste pinado + linha no
-      inventário. (Fase 3 fez isso implicitamente via reviews; formalizar.)
-- [ ] Declarado como gate da Fase 4: authz nasce com testes NEGATIVOS
+      inventário. (Fase 3 fez isso implicitamente via reviews; formalizado
+      em `security-tests.md`.)
+- [x] Declarado como gate da Fase 4: authz nasce com testes NEGATIVOS
       (observer NÃO pode editar; editor NÃO pode admin; token expirado NÃO
       autentica) — feature de permissão sem teste negativo não mergeia.
 
