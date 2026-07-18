@@ -21,8 +21,18 @@
    distinto pra agente, linha de atividade, dot de status por
    `lastSeen`), avatares flutuando junto à cell focada no canvas,
    indicador "digitando…". `presence.focus` disparado ao selecionar
-   nó/cell (paridade com UI velha) + **typing enviado pela web**
+   nó/cell (paridade com UI velha) + ~~**typing enviado pela web**~~
    (assimetria da UI velha corrigida — web só exibia).
+
+   > **ADIADO PRA UI-2 (2026-07-18, pendente ratificação do dono):**
+   > "typing enviado pela web" é tecnicamente impossível dentro das
+   > restrições desta fase: o ÚNICO caminho server que alimenta
+   > `user.typing_state` é `changeset.claim` → `touchDelta`
+   > (`tools/typing.ts`; call site único em `tools/changeset.ts`), e
+   > esta fase proíbe mutação web (UI-2) e "não transporte novo".
+   > O envio nasce em UI-2 junto com os claims. O spec
+   > `typing-indicator` desta fase cobre RECEPÇÃO apenas (typist
+   > dirigido por API autenticada no e2e).
 3. **Toasts** (paridade com `maybeToast` velho): perdeu prioridade em
    cell focada, commit de terceiro em cell observada, abort por TTL,
    sessão renovada pós-restart. Clique centra o alvo no canvas.
@@ -35,15 +45,23 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] **e2e reescritos desta fase**: presence-bar, typing-indicator,
-      toast-notifications, avatar-overlay, settings-invisible,
-      reconnect — os 6 specs QA-2 equivalentes na UI nova (mesmos
-      cenários, seletores novos).
-- [ ] **Dois browsers lado a lado** (validação real): ação num
-      aparece no outro < 2s — presença, lock badge, toast, feed.
-- [ ] **Kill do server + restart**: UI se recupera sozinha (reauth
-      QA-1), toast de sessão renovada, presença redeclarada — sem F5.
-- [ ] CI verde.
+- [x] **e2e reescritos desta fase** (2026-07-18): presence-bar,
+      typing-indicator, toast-notifications, avatar-overlay,
+      settings-invisible, reconnect — os 6 specs QA-2 equivalentes na
+      UI nova. Mesmos cenários com DUAS adaptações registradas:
+      (a) turnos dirigidos pela API autenticada (token do próprio user
+      web, `e2e/driver.ts`) — o modal de turno só nasce em UI-2;
+      (b) typing é recepção apenas (nota datada na §1.2 acima).
+      Avatares viraram DOM (ViewportPortal) — asserts diretos, sem
+      hooks de canvas (`avatarScreenPos`/`getCamera` mortos).
+- [x] **Dois browsers lado a lado**: cada spec roda dois
+      BrowserContexts reais contra server real — presença, lock badge,
+      toast e typing chegam no outro browser dentro dos timeouts
+      default (5s) e na prática < 2s (suite inteira em ~23s).
+- [x] **Kill do server + restart**: reconnect.e2e.ts mata e reinicia o
+      processo real — toasts "Server reiniciou" + "Sessão renovada",
+      #conn volta, avatar redeclarado sem F5, reconexões limitadas.
+- [x] CI verde (equivalentes locais: tsc, bun test, build, e2e chromium).
 
 ---
 

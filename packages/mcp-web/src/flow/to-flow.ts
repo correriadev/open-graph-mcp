@@ -19,7 +19,9 @@ const BAND_GAP = 80
 
 export type CardData = { node: GraphNode; cell: string }
 
-export function toFlow(graph: Graph): { nodes: Node<CardData>[]; edges: Edge[] } {
+export type CellRect = { x: number; y: number; w: number; h: number }
+
+export function toFlow(graph: Graph): { nodes: Node<CardData>[]; edges: Edge[]; cells: Record<string, CellRect> } {
   const domains = [...new Set(graph.nodes.map((n) => n.domain).filter((d): d is string => d !== null))].sort()
   // mesma regra de banda de xForNode (layout.ts): domínio conhecido = índice alfabético; null/desconhecido = última banda
   const domainIdx = (d: string | null) => {
@@ -55,6 +57,7 @@ export function toFlow(graph: Graph): { nodes: Node<CardData>[]; edges: Edge[] }
   const bandW = COLS * (CARD_W + GAP) + CELL_PAD * 2 + BAND_GAP
 
   const nodes: Node<CardData>[] = []
+  const cells: Record<string, CellRect> = {}
   for (const [key, list] of byCell) {
     const level = key.split(":")[1] ?? "P5"
     const x0 = domainIdx(list[0]!.domain) * bandW + CELL_PAD
@@ -67,6 +70,13 @@ export function toFlow(graph: Graph): { nodes: Node<CardData>[]; edges: Edge[] }
         data: { node: n, cell: key },
       })
     })
+    const rows = rowsOfCell(list.length)
+    cells[key] = {
+      x: x0,
+      y: y0,
+      w: Math.min(list.length, COLS) * (CARD_W + GAP) - GAP,
+      h: rows * (CARD_H + GAP) - GAP,
+    }
   }
 
   const known = new Set(graph.nodes.map((n) => n.id))
@@ -80,5 +90,5 @@ export function toFlow(graph: Graph): { nodes: Node<CardData>[]; edges: Edge[] }
       style: { stroke: e.type === "survey" ? "#26262e" : "#3f3f4b" },
     }))
 
-  return { nodes, edges }
+  return { nodes, edges, cells }
 }
