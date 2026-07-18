@@ -71,8 +71,25 @@ RSS e sessões órfãs: PASS, limpo. Latência: **FAIL real** — não é ruído
 (harness já corrigido nesta execução). Causa raiz: `readClaims` (`store.ts:12`) faz full-tenant-scan
 (`SELECT * FROM claims WHERE tenant_id = ?`, sem LIMIT) dentro de `incrementalGate`, chamado em TODO
 `changeset.claim` — custo por chamada cresce com o total de claims já commitados (5610 ao final).
-Mesma família do N+1 conhecido do `presence.who`. Ver scope doc §5 para os detalhes e o próximo
-passo (fix é item próprio, fora de QA-5 — esta fase MEDE, não otimiza).
+Mesma família do N+1 conhecido do `presence.who`. Ver scope doc §5 para os detalhes.
+
+**Fix (mesma data): cache em memória de `readClaims` por tenant.** `state.claimsCache` — populado
+lazy no primeiro `readClaims`, mantido incrementalmente por `writeClaim` (claims são append-only,
+nunca mudam/somem depois de commitadas), invalidado por `invalidateClaimsCache` no único caminho que
+escreve claims por fora de `writeClaim` (`rebuildFromJsonl`). Reexecução real de 10 min pós-fix:
+
+| minuto | RSS (MB) | claims | beats |
+|---|---|---|---|
+| 1 | 161.5 | 600 | 150 |
+| 2 (aquecido) | 123.9 | 1190 | 350 |
+| 5 | 125.7 | 2980 | 950 |
+| 10 | 126.8 | 5950 | 1950 |
+
+| RSS growth (min2→min10) | monotônico? | orphan sessions | latência p95 (min1→min10) |
+|---|---|---|---|
+| 2.3% ✅ | não ✅ | 0 ✅ | **23.6ms → 26.3ms** ✅ (era 15.9ms → 145.8ms, ≈9× degradação, antes do fix) |
+
+**PASS — todas as 4 asserções do soak.** Fase 4 gate: desbloqueado.
 
 ## Débito
 
@@ -80,9 +97,7 @@ passo (fix é item próprio, fora de QA-5 — esta fase MEDE, não otimiza).
   ver comentário no próprio script (`presence-load.ts`, `runSoak`): correlacionar 50 observadores ×
   cada churn ao longo de 10 min é uma métrica mais pesada e diferente do que soak precisa provar
   ("o servidor continua respondendo sob carga sustentada").
-- **`readClaims` full-tenant scan por `changeset.claim`** (novo, 2026-07-18) — causa confirmada da
-  degradação de latência acima. Mesma família do N+1 do `presence.who`. Candidato a item próprio,
-  BLOQUEIA o gate de entrada da Fase 4 até corrigido e revalidado (ver `05-scope-qa-5-perf-soak.md`
-  §5).
-- `presence.who` N+1 conhecido (`ponytail:` comment) — mesmo padrão do achado acima; ainda não
-  medido isoladamente.
+- ~~`readClaims` full-tenant scan por `changeset.claim`~~ — **corrigido** 2026-07-18 (cache em
+  memória por tenant, `state.claimsCache`). Ver acima.
+- `presence.who` N+1 conhecido (`ponytail:` comment) — mesmo padrão do achado corrigido acima; ainda
+  não medido isoladamente. Candidato a mesmo tratamento se algum soak futuro mostrar degradação.

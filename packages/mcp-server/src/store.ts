@@ -9,7 +9,15 @@ import { write } from "./db"
 import type { ServerState } from "./state"
 import type { ClaimSnapshot, NodeSnapshot } from "./gates"
 
+/**
+ * readClaims — QA-5 achou este SELECT rodando a cada `changeset.claim` (não só no commit), custo
+ * crescendo com o total de claims já commitados: p95 subiu ~9x num soak de 10min. Cacheado em memória
+ * por tenant (`state.claimsCache`), populado lazy aqui na primeira leitura, mantido incrementalmente
+ * por `writeClaim` — evita o full-tenant-scan repetido sem mudar a forma como os chamadores usam isto.
+ */
 export function readClaims(state: ServerState, tenant: string): ClaimSnapshot[] {
+  const cached = state.claimsCache.get(tenant)
+  if (cached) return cached
   const rows = state.db.query("SELECT id, subject, domain, level, refs, anchor, file FROM claims WHERE tenant_id = ?").all(tenant) as {
     id: string
     subject: string | null
@@ -19,7 +27,7 @@ export function readClaims(state: ServerState, tenant: string): ClaimSnapshot[] 
     anchor: string | null
     file: string | null
   }[]
-  return rows.map((r) => ({
+  const claims = rows.map((r) => ({
     id: r.id,
     subject: r.subject ?? undefined,
     domain: r.domain ?? undefined,
@@ -28,6 +36,8 @@ export function readClaims(state: ServerState, tenant: string): ClaimSnapshot[] 
     anchor: r.anchor ?? undefined,
     file: r.file ?? undefined,
   }))
+  state.claimsCache.set(tenant, claims)
+  return claims
 }
 
 export function readNodes(state: ServerState, tenant: string): NodeSnapshot[] {
@@ -39,6 +49,12 @@ export function readNodes(state: ServerState, tenant: string): NodeSnapshot[] {
     anchor: string | null
   }[]
   return rows.map((r) => ({ id: r.id, domain: r.domain, level: Number(String(r.level ?? "P5").replace(/^P/, "")) || 5, file: r.file ?? "", anchor: r.anchor ?? "" }))
+}
+
+/** Invalidates readClaims' cache for a tenant — call after any claims mutation that bypasses
+ *  writeClaim (currently only `rebuildFromJsonl`, db.ts — it writes claims directly via insertRow). */
+export function invalidateClaimsCache(state: ServerState, tenant: string): void {
+  state.claimsCache.delete(tenant)
 }
 
 export function authorityOf(state: ServerState, tenant: string, cell: string): "source" | "graph" | "suspended" {
@@ -77,6 +93,10 @@ export function writeClaim(state: ServerState, tenant: string, seq: number, c: C
     verdict_overclaim: null,
     supersedes: null,
   })
+  // Keep readClaims' cache in sync — claims are append-only (never updated/deleted once committed),
+  // so pushing here is always correct as long as the cache was already populated (if not, the next
+  // readClaims just loads fresh from SQLite, this row included).
+  state.claimsCache.get(tenant)?.push({ ...c, refs: c.refs ?? [] })
 }
 
 export function writeAuthority(state: ServerState, tenant: string, cell: string, value: string, seq: number, by: string): void {

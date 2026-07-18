@@ -109,6 +109,11 @@ export type ServerState = {
   presence: Map<string, Presence>
   /** Timers de debounce de focus por sessionId (Fase 3 §6.3) — só o último settle broadcast. */
   focusDebounce: Map<string, ReturnType<typeof setTimeout>>
+  /** Cache em memória de `readClaims` por tenant (QA-5: full-tenant scan em TODO `changeset.claim`
+   *  media p95 subir ~9x num soak de 10min conforme claims commitados acumulam). Populado lazy no
+   *  primeiro `readClaims`; `writeClaim` empurra incrementalmente (append-only — claims nunca mudam
+   *  nem somem); `rebuildFromJsonl` invalida (único caminho que escreve claims por fora de writeClaim). */
+  claimsCache: Map<string, import("./gates").ClaimSnapshot[]>
 }
 
 export function createState(opts: {
@@ -139,6 +144,7 @@ export function createState(opts: {
     lastTickHadEvents: false,
     presence: new Map(),
     focusDebounce: new Map(),
+    claimsCache: new Map(),
   }
 }
 

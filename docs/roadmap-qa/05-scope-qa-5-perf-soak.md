@@ -1,10 +1,11 @@
 # QA-5 — Escopo fechado (performance + soak)
 
-> Status: **executado (2026-07-18)** — harness completo, 4/5 itens do DoD
-> verdes; o 5º (latência estável) FALHOU numa execução real de 10 min e o
-> achado é o produto desta fase (não um bug do teste — ver §5). GATE DE
-> ENTRADA da Fase 4 (roadmap-mcp): **não passa** enquanto o achado abaixo
-> não virar item próprio e for corrigido/revalidado.
+> Status: **implementado (2026-07-18)** — harness completo, 5/5 itens do
+> DoD verdes. A 1ª execução real de 10 min achou uma degradação de
+> latência real (~9×) — não bug do teste, achado É o produto desta fase
+> (ver §5) — causa raiz corrigida no mesmo dia (`readClaims` cacheado por
+> tenant) e revalidada com um 2º soak real de 10 min, limpo. GATE DE
+> ENTRADA da Fase 4 (roadmap-mcp): **desbloqueado**.
 > Índice-pai: `README.md`.
 >
 > **Objetivo:** o load test atual (`presence-load.ts`) mede UM burst
@@ -43,17 +44,23 @@
   - Zero sessões órfãs no fim: **passou** — `state.sessions.size` = 0 após
     close de todos os 50 clients.
   - Latência estável (p95 do último minuto < 2× p95 do primeiro):
-    **FALHOU, de verdade** — 15.9ms → 145.8ms (≈9×) numa execução real de
-    10 min, depois do fix do harness acima (então não é o mesmo artefato).
-    Causa raiz encontrada: `readClaims` (`store.ts:12`) faz
-    `SELECT * FROM claims WHERE tenant_id = ?` (full scan + JSON.parse por
-    linha) e é chamado dentro de `incrementalGate` em TODO `changeset.claim`
-    — não só no commit. Com 10 holders reivindicando ~1/s, o custo por
-    chamada cresce com o total de claims já commitados (5610 ao final),
-    O(n) por operação, O(n²) agregado ao longo do soak. Mesma família do
-    N+1 já documentado do `presence.who` (README, Débitos #3) — não é bug
-    deste script, é o comportamento real do servidor sob carga sustentada,
-    exatamente o que esta fase existe pra revelar (§4 risco 3 previu isso).
+    **FALHOU na 1ª execução real** — 15.9ms → 145.8ms (≈9×) em 10 min,
+    depois do fix do harness acima (então não é o mesmo artefato). Causa
+    raiz: `readClaims` (`store.ts:12`) fazia `SELECT * FROM claims WHERE
+    tenant_id = ?` (full scan + JSON.parse por linha) dentro de
+    `incrementalGate` em TODO `changeset.claim` — não só no commit. Com 10
+    holders reivindicando ~1/s, o custo por chamada crescia com o total de
+    claims já commitados (5610 ao final), O(n) por operação, O(n²)
+    agregado ao longo do soak. Mesma família do N+1 já documentado do
+    `presence.who` (README, Débitos #3) — não era bug deste script, era o
+    comportamento real do servidor sob carga sustentada, exatamente o que
+    esta fase existe pra revelar (§4 risco 3 previu isso). **Corrigido no
+    mesmo dia**: `state.claimsCache` — cache em memória por tenant,
+    populado lazy no primeiro `readClaims`, mantido incrementalmente por
+    `writeClaim` (claims são append-only), invalidado por
+    `invalidateClaimsCache` no único caminho que escreve claims por fora
+    de `writeClaim` (`rebuildFromJsonl`). Revalidado com um 2º soak real
+    de 10 min: p95 23.6ms → 26.3ms — **passou**.
     Escopo de correção é próprio (fora de QA-5 — "esta fase MEDE").
 - [x] Broadcast storm: 50 sessões todas com focus + claims simultâneos →
       `user.typing_state` continua agregado (spec Fase 3 §5: transições,
@@ -74,9 +81,11 @@
 
 - ❌ Otimização — esta fase MEDE. Se números quebrarem, o fix é tarefa
   própria (candidato conhecido: N+1 do `presence.who`, já marcado com
-  `ponytail:` — vira item real SE o soak mostrar degradação). **Aconteceu**:
-  ver §5 — `readClaims` tem o mesmo padrão (full-tenant scan por chamada)
-  e o soak mostrou a degradação prevista. O fix continua fora deste escopo.
+  `ponytail:` — vira item real SE o soak mostrar degradação). **Aconteceu
+  e foi corrigido no mesmo dia** (ver §5) precisamente porque bloqueava o
+  gate de entrada da Fase 4 declarado no topo deste doc — não é uma
+  reversão da regra "esta fase mede", é o próprio gate falhando e sendo
+  desbloqueado. `presence.who` continua candidato, não medido isoladamente.
 - ❌ Load distribuído/multi-máquina — single-node SQLite é decisão D3;
   50 usuários é o teto declarado do v1.
 - ❌ Profiling contínuo/APM — fora do v1.
@@ -103,42 +112,48 @@
    real em uso.
 3. **SQLite single-writer sob claims contínuos.** É exatamente o que o
    soak vai revelar — se serializar mal, o dado chega antes da Fase 4
-   (onde rebase multiplica escrita). **Confirmado** — não é o writer em si
-   (WAL mode, `busy_timeout` configurado), é `readClaims` fazendo
-   full-tenant-scan a cada claim; ver §5.
+   (onde rebase multiplica escrita). **Confirmado e corrigido** — não era
+   o writer em si (WAL mode, `busy_timeout` configurado), era `readClaims`
+   fazendo full-tenant-scan a cada claim; ver §5.
 
 ---
 
-## 5. Achado real do soak (2026-07-18) — degradação de latência sob carga sustentada
+## 5. Achado real do soak (2026-07-18) — degradação de latência sob carga sustentada, corrigida no mesmo dia
 
-**Sintoma:** p95 de `presence.focus` sobe de 15.9ms (minuto 1) pra 145.8ms
-(minuto 10) — ≈9× — numa execução real de 10 minutos, 10 holders
-reivindicando ~1 claim/s cada (commit+reabre a cada 5 claims), 50 sessões
-com beat/focus churn. RSS ficou estável (2.3% de crescimento) e zero
-sessões órfãs — não é leak de memória, é custo de CPU/IO crescente por
-operação.
+**Sintoma (1ª execução):** p95 de `presence.focus` sobe de 15.9ms (minuto
+1) pra 145.8ms (minuto 10) — ≈9× — numa execução real de 10 minutos, 10
+holders reivindicando ~1 claim/s cada (commit+reabre a cada 5 claims), 50
+sessões com beat/focus churn. RSS ficou estável (2.3% de crescimento) e
+zero sessões órfãs — não era leak de memória, era custo de CPU/IO
+crescente por operação.
 
 **Causa raiz:** `changesetClaim` (`changeset.ts`) chama `incrementalGate`,
 que recebe `existingClaims: readClaims(state, tenant)` — `readClaims`
-(`store.ts:12`) roda `SELECT id, subject, domain, level, refs, anchor, file
+(`store.ts`) rodava `SELECT id, subject, domain, level, refs, anchor, file
 FROM claims WHERE tenant_id = ?` (SEM LIMIT, sem filtro por cell/domain) e
-faz `JSON.parse` + aloca um objeto por linha, TODA vez que qualquer
+fazia `JSON.parse` + alocava um objeto por linha, TODA vez que qualquer
 changeset faz `changeset.claim` — não só no commit. Claims committed só
-crescem (5610 no fim dos 10 min); o custo de cada nova claim.add cresce com
+crescem (5610 no fim dos 10 min); o custo de cada nova claim.add crescia com
 o total acumulado. Efeito agregado ao longo do soak: O(n²) em vez de O(n).
 
 **Por que não é o mesmo achado de RSS (não é confundir dois bugs):** o
 crescimento de RSS foi isolado e corrigido separadamente (era o harness
 retendo eventos, `openSseDiscard` fix) ANTES desta execução; a run que
 produziu os 15.9→145.8ms já rodava com o harness corrigido (RSS 2.3%,
-plano) — a degradação de latência é um achado limpo, reproduzido depois do
-fix, não resíduo do primeiro bug.
+plano) — a degradação de latência foi um achado limpo, reproduzido depois
+do fix do harness, não resíduo do primeiro bug.
 
-**Próximo passo (fora deste escopo — QA-5 mede, não otimiza):** item
-próprio pra `readClaims`, mesma família do N+1 do `presence.who` — ambos
-"full-tenant scan em toda operação, sem índice/paginação por cell ou
-janela". Candidatos de fix (não avaliados aqui): filtrar por cells
-relevantes ao delta em vez do tenant inteiro, ou cachear/indexar
-`existingClaims` incrementalmente. Este item bloqueia o gate de entrada da
-Fase 4 (rebase multiplica escrita — §4 risco 3) até corrigido e
-revalidado com novo soak.
+**Fix (mesmo dia):** `state.claimsCache` (`state.ts`) — `Map<tenant,
+ClaimSnapshot[]>` populado lazy no primeiro `readClaims`, empurrado
+incrementalmente por `writeClaim` (claims são append-only — nunca mudam
+nem somem depois de commitadas, então empurrar é sempre seguro), invalidado
+por `invalidateClaimsCache` (novo export de `store.ts`) no único caminho
+que escreve claims por fora de `writeClaim` (`rebuildFromJsonl`, que não
+conhece `ServerState` de propósito — invalidação é responsabilidade do
+chamador, documentada no próprio `db.ts`).
+
+**Revalidação:** 2º soak real de 10 min, harness idêntico, mesma máquina —
+p95 23.6ms → 26.3ms (dentro do 2× threshold, praticamente plano), RSS 2.3%
+de crescimento, 0 sessões órfãs. **PASS nas 4 asserções.** `presence.who`
+tem o mesmo padrão (README, Débitos #3) e continua candidato pra tratamento
+igual, sem medição isolada ainda.

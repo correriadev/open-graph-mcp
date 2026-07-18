@@ -14,7 +14,7 @@
 | 2 | `02-scope-qa-2-e2e.md` | e2e Playwright: UI web inteira, fecha §10.7/§10.9-web da Fase 3. | quase implementado — harness + 5 specs + job CI (6/8 DoD); falta rodar de verdade no GitHub |
 | 3 | `03-scope-qa-3-multi-client.md` | Web + não-web sobre o mesmo evento (contrato §8). | implementado — cross-client.test.ts + script de contrato MCP + gate pinado |
 | 4 | `04-scope-qa-4-graph-core.md` | Rede de segurança mínima + regra "tocou → testa". | implementado — 37 testes (5 arquivos) + regra no README do pacote |
-| 5 | `05-scope-qa-5-perf-soak.md` | Soak 10 min + broadcast storm + perf-log. **Gate da Fase 4.** | executado — RSS/storm/orphan-sessions ok; achou degradação real de latência (`readClaims` full-scan), gate da Fase 4 **não passa** até corrigir |
+| 5 | `05-scope-qa-5-perf-soak.md` | Soak 10 min + broadcast storm + perf-log. **Gate da Fase 4.** | implementado — achou degradação real de latência (`readClaims` full-scan), corrigida no mesmo dia (cache por tenant), revalidada; gate da Fase 4 desbloqueado |
 | 6 | `06-scope-qa-6-security.md` | Inventário de testes de segurança + processo por release. | proposto |
 
 ## Fotografia atual (o que JÁ existe)
@@ -80,15 +80,15 @@ começa).
    limpar baseline é tarefa própria, sem dono ainda.
 2. Testes com timing (debounce 250ms, typing ticks) têm margem, não
    imunidade — QD2 é a resposta.
-3. `presence.who` N+1 (`ponytail:` comment) — mesma família do item 4
-   abaixo; ainda não medido isoladamente.
-4. `readClaims` (`store.ts:12`) faz full-tenant scan (`SELECT * FROM
-   claims WHERE tenant_id = ?`, sem LIMIT) dentro de `incrementalGate`,
-   chamado em TODO `changeset.claim` — QA-5 mediu p95 subir ≈9× (15.9ms →
-   145.8ms) ao longo de um soak de 10min conforme claims commitados
-   acumulam (5610 ao final). BLOQUEIA o gate de entrada da Fase 4 até
-   corrigido e revalidado com novo soak — ver
-   `05-scope-qa-5-perf-soak.md` §5 e `perf-log.md`.
+3. `presence.who` N+1 (`ponytail:` comment) — mesma família do achado (já
+   corrigido) de `readClaims` abaixo; ainda não medido isoladamente,
+   candidato ao mesmo tratamento (cache por tenant) se algum soak futuro
+   mostrar degradação.
+4. ~~`readClaims` full-tenant scan por `changeset.claim`~~ — **corrigido**
+   2026-07-18 (cache em memória por tenant, `state.claimsCache`). QA-5
+   mediu p95 subir ≈9× (15.9ms → 145.8ms) num soak de 10min antes do fix;
+   revalidado em 23.6ms → 26.3ms depois. Ver `05-scope-qa-5-perf-soak.md`
+   §5 e `perf-log.md`.
 4. Cliente opencode REAL nunca integrado ponta-a-ponta — QA-3 simula o
    protocolo; validação com produto real é checkpoint de adoção
    (roadmap-mcp), não CI.
