@@ -116,6 +116,11 @@ export function write(db: Database, stateDir: string, tenant: string, table: str
  * rebuildFromJsonl — apaga o estado SQLite do tenant e o reconstrói a partir dos JSONL duráveis.
  * Prova a regra canônica: JSONL é a verdade; SQLite é derivado/rebuildável. Locks (índice live puro)
  * não são espelhados, então somem no rebuild — coordenação, não durabilidade.
+ *
+ * Escreve claims direto via `insertRow` (bypassa `writeClaim`) — se o chamador usa `state.claimsCache`
+ * (store.ts `readClaims`), chame `invalidateClaimsCache(state, tenant)` depois desta função. `db.ts`
+ * não conhece `ServerState` de propósito (módulo de baixo nível); a invalidação é responsabilidade do
+ * chamador, não desta função.
  */
 export function rebuildFromJsonl(db: Database, stateDir: string, tenant: string): void {
   const tx = db.transaction(() => {

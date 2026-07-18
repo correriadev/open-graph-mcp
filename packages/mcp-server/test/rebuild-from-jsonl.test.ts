@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
 import { rebuildFromJsonl } from "../src/db"
+import { invalidateClaimsCache } from "../src/store"
 import { callTool, register } from "./helpers"
 
 const count = (s: any, table: string) => (s.state.db.query(`SELECT COUNT(*) AS c FROM ${table} WHERE tenant_id = ?`).get("default") as { c: number }).c
@@ -33,6 +34,7 @@ test("rebuildFromJsonl reconstructs a tenant's SQLite state from the JSONL mirro
     expect(count(s, "claims")).toBe(0)
 
     rebuildFromJsonl(s.state.db, s.state.stateDir, "default")
+    invalidateClaimsCache(s.state, "default")
 
     expect(count(s, "claims")).toBe(before.claims)
     expect(count(s, "changesets")).toBe(before.changesets)
