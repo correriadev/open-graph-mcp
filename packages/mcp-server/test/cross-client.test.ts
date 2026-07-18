@@ -1,0 +1,141 @@
+import { expect, test } from "bun:test"
+import { startServer } from "../src/index"
+import { callTool, openSse, register } from "./helpers"
+
+// QA-3 DoD: web + non-web (opencode et al.) observing the SAME event, over the SAME server. Web gets the
+// raw envelope only (toasts render it client-side, Task 4); non-web gets the raw envelope PLUS a pt-BR
+// `system.message` (system-message.ts renders it server-side, since non-web has no canvas/toasts). The
+// existing system-message.test.ts already covers this shape for changeset.opened and lock.denied — this
+// file extends it to the other two DoD-named kinds (changeset.committed, authority.flipped) plus the
+// TTL-abort scenario and the unknown-agentKind gate.
+
+async function declareAgentKind(base: string, sse: Awaited<ReturnType<typeof openSse>>, token: string, agentKind: string) {
+  const sessionId = sse.events[0].sessionId
+  await callTool(base, "presence.beat", { token, sessionId, agentKind })
+}
+
+test("changeset.committed: non-web gets envelope + system.message, web gets envelope only", async () => {
+  const s = startServer()
+  try {
+    const alice = await register(s.url, "alice") // holder, commits
+    const bob = await register(s.url, "bob") // non-web observer
+    const carol = await register(s.url, "carol") // web observer
+
+    const bobSse = await openSse(s.url, 0, bob.token, "cell:commitcell:4")
+    const carolSse = await openSse(s.url, 0, carol.token, "cell:commitcell:4")
+    await declareAgentKind(s.url, bobSse, bob.token, "opencode")
+    await declareAgentKind(s.url, carolSse, carol.token, "web")
+
+    const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: ["commitcell:4"], intent: "cross-client commit" })
+    const commit = await callTool(s.url, "changeset.commit", { token: alice.token, csId })
+    expect(commit.ok).toBe(true)
+
+    // bob is cell-filtered, so he also received the earlier changeset.opened system.message
+    // ("... abriu turno ...") — disambiguate to the commit-specific one.
+    const sysMsg = await bobSse.waitFor((e) => e.kind === "system.message" && e.payload.text.includes("commitou"))
+    expect(sysMsg.payload.text).toContain("[open-graph]")
+    expect(sysMsg.payload.text).toContain(csId)
+    expect(sysMsg.payload.text).toContain("commitcell:4")
+
+    await new Promise((r) => setTimeout(r, 50))
+    expect(carolSse.events.some((e) => e.kind === "system.message")).toBe(false)
+    expect(carolSse.events.some((e) => e.kind === "changeset.committed")).toBe(true)
+
+    bobSse.close()
+    carolSse.close()
+  } finally {
+    s.stop()
+  }
+})
+
+test("authority.flipped: non-web gets envelope + system.message, web gets envelope only", async () => {
+  const s = startServer()
+  try {
+    const alice = await register(s.url, "alice") // flips
+    const bob = await register(s.url, "bob") // non-web observer
+    const carol = await register(s.url, "carol") // web observer
+    const cell = "flipcell:5"
+
+    const bobSse = await openSse(s.url)
+    const carolSse = await openSse(s.url)
+    await declareAgentKind(s.url, bobSse, bob.token, "cursor")
+    await declareAgentKind(s.url, carolSse, carol.token, "web")
+
+    const flip = await callTool(s.url, "authority.flip", { token: alice.token, cell, to: "graph" })
+    expect(flip.ok).toBe(true)
+
+    const sysMsg = await bobSse.waitFor((e) => e.kind === "system.message")
+    expect(sysMsg.payload.text).toContain("[open-graph]")
+    expect(sysMsg.payload.text).toContain(cell)
+    expect(sysMsg.payload.text).toContain("graph")
+
+    await new Promise((r) => setTimeout(r, 50))
+    expect(carolSse.events.some((e) => e.kind === "system.message")).toBe(false)
+    expect(carolSse.events.some((e) => e.kind === "authority.flipped")).toBe(true)
+
+    bobSse.close()
+    carolSse.close()
+  } finally {
+    s.stop()
+  }
+})
+
+test("TTL abort while a non-web holder and a web observer both watch: opencode gets 'seu changeset abortado', web gets the raw changeset.aborted envelope", async () => {
+  const s = startServer({ ttlMs: 1 }) // deterministic — see ttl-expire.test.ts's pattern
+  try {
+    const alice = await register(s.url, "alice") // opencode holder, loses the turn to TTL
+    const bob = await register(s.url, "bob") // web, observes by event kind (§6.1: changeset.aborted
+    // routes to cs_id-observers + holder only — NEVER cell-observers, so bob's filter can't be "cell:…")
+
+    const aliceSse = await openSse(s.url, 0, alice.token)
+    const bobSse = await openSse(s.url, 0, bob.token, "event:changeset.aborted")
+    await declareAgentKind(s.url, aliceSse, alice.token, "opencode")
+    await declareAgentKind(s.url, bobSse, bob.token, "web")
+
+    const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: ["ttlcell:4"], intent: "opencode turn" })
+
+    await new Promise((r) => setTimeout(r, 20))
+    s.sweep() // deterministic sweep (prod runs this on an interval) — same knob as ttl-expire.test.ts
+
+    const sysMsg = await aliceSse.waitFor((e) => e.kind === "system.message")
+    expect(sysMsg.payload.text).toContain("[open-graph]")
+    expect(sysMsg.payload.text).toContain("Seu changeset")
+    expect(sysMsg.payload.text).toContain(csId)
+    expect(sysMsg.payload.text).toContain("TTL")
+
+    const abortEvt = await bobSse.waitFor((e) => e.kind === "changeset.aborted" && e.payload.csId === csId)
+    expect(abortEvt.payload.reason).toBe("ttl_expired")
+    expect(bobSse.events.some((e) => e.kind === "system.message")).toBe(false)
+
+    aliceSse.close()
+    bobSse.close()
+  } finally {
+    s.stop()
+  }
+})
+
+test("a session with NO declared agentKind (never called presence.beat/focus) never receives system.message, even for an event it's routed to receive", async () => {
+  const s = startServer()
+  try {
+    const alice = await register(s.url, "alice")
+    const bob = await register(s.url, "bob")
+
+    // Bob's SSE is open and filtered to the cell — the affinity router WILL route the raw envelope to
+    // him — but he never calls presence.beat/focus, so state.presence has no record for his session at
+    // all. system-message.ts's gate (`!presence || presence.agentKind === "web"`) must treat "no
+    // presence yet" as "unknown, not non-web" and stay silent, same as an explicit agentKind:"web".
+    const bobSse = await openSse(s.url, 0, bob.token, "cell:unknownkind:4")
+
+    await callTool(s.url, "changeset.open", { token: alice.token, cells: ["unknownkind:4"], intent: "unknown agentKind gate" })
+
+    const envelope = await bobSse.waitFor((e) => e.kind === "changeset.opened")
+    expect(envelope.payload.cells).toEqual(["unknownkind:4"])
+
+    await new Promise((r) => setTimeout(r, 50))
+    expect(bobSse.events.some((e) => e.kind === "system.message")).toBe(false)
+
+    bobSse.close()
+  } finally {
+    s.stop()
+  }
+})
