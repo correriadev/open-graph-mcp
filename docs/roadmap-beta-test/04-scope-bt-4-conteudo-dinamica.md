@@ -23,8 +23,8 @@
    (~2h) — boas-vindas + consentimento de coleta (BD2/risco 2 do BT-2)
    → warm-up individual (query + 1º turno guiado, ativa a métrica
    tempo-até-1º-commit) → rodadas de missão → retro a quente (15 min,
-   perguntas fixas, incluindo a do `beta-plan.md`: "se isso sumisse
-   amanhã, sentiria falta de quê?").
+   perguntas fixas, incluindo a do gate pós-beta do `README.md`: "se
+   isso sumisse amanhã, sentiria falta de quê?").
 3. **Missões de co-criação** (3-4, no roteiro): desenhadas contra as
    métricas do BT-2 — ex.: "definam a premissa em `historia`" (converge
    todos → contenção medida), "cada dupla fecha uma mecânica que

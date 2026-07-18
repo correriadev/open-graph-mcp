@@ -7,9 +7,10 @@
 > janela de teste; artefato instalável sai do GitHub Actions. Irmão de
 > `roadmap-mcp/` (produto), `roadmap-qa/` (qualidade) e
 > `roadmap-integrations/` (conexão). Baseline: pós-INT-3 + QA-1..6.
-> Substitui a parte operacional de `docs/beta-plan.md` (o modelo de
-> coortes A/B); o gate de adoção e as métricas de retenção de lá
-> continuam válidos como leitura pós-beta.
+> Substitui o plano anterior de beta por coortes A/B (instalação
+> individual, removido); o que sobreviveu de lá está incorporado aqui:
+> o gate pós-beta (§Gate de decisão abaixo) e as metas de ativação
+> (<15 min instalação, BT-1).
 
 ## A tese (ler antes dos escopos)
 
@@ -67,13 +68,15 @@ são gates, não luxo.
   pronta) e permite descartar/arquivar sem tocar em nada mais. *Reabre
   se:* sessões precisarem continuar o MESMO jogo entre janelas — aí o
   tenant persiste entre sessões (decisão do facilitador, não técnica).
-- **BD4 — Artefato via GitHub Release; repo continua privado, com
-  participantes convidados como collaborators (read).** Menor
-  superfície: sem npm publish, sem repo público antes da hora. O job de
-  release (BT-1) empacota proxy + plugin + instruções num tarball
-  baixável da página de Release. *Reabre se:* INT-6 mínimo (npm) sair
-  antes da 1ª sessão — aí o artefato vira `bunx @open-graph-mcp/stdio`
-  e o Release guarda só o plugin; ou se o dono decidir abrir o repo.
+- **BD4 — Artefato via GitHub Release em repo privado; distribuição
+  aos participantes é MANUAL via Google Drive (este beta somente).**
+  *(Decidido pelo dono, 2026-07-18.)* O job de release (BT-1) continua
+  sendo a fonte de verdade do artefato (build reprodutível, gate de CI,
+  tag por sessão); o dono baixa os assets do Release e sobe no Drive —
+  participantes recebem um link de pasta, zero conta GitHub envolvida.
+  Sem npm publish, sem collaborators, sem repo público. *Reabre se:*
+  beta virar recorrente/público — aí distribuição manual não escala e
+  vira INT-6 (npm + registries).
 - **BD5 — Web UI é o cliente garantido; agente MCP é camada opcional
   por participante.** Todo participante cria pela web UI (zero
   instalação além do link); quem tiver Claude Code instala o plugin e
@@ -148,20 +151,34 @@ acontece com BT-5 verde.
    continua sendo o checkpoint de adoção do roadmap-mcp, lido depois
    com as métricas do BT-2.
 
+## Gate de decisão pós-beta (herdado do plano anterior)
+
+Lido DEPOIS da(s) sessão(ões), com o relatório BT-2 na mão — é o
+checkpoint de adoção do roadmap-mcp aplicado ao beta:
+
+- **≥2 participantes voltando ao grafo sem cobrança** (sessão seguinte
+  pedida, ou uso espontâneo do tenant entre janelas) → checkpoint
+  fechado; investir Fase 4 (authz/tokens 90d) + INT-6 real.
+- **Uso só quando cutucados** → pausa de produto; entrevistas de "por
+  que não voltou" antes de codar qualquer coisa.
+- Sinal > opinião: amigos elogiam por gentileza; a métrica do gate é
+  comportamento (voltou), nunca feedback verbal. Pergunta fixa da retro
+  (BT-4): "se isso sumisse amanhã, você sentiria falta? do quê?"
+
 ## Pesquisa pré-código (trava BT-0/BT-1)
 
-1. **Capacidades reais do plano ngrok da conta do dono** (free vs
-   pago): interstitial e o header `ngrok-skip-browser-warning` (a web
+1. **Capacidades reais do plano ngrok FREE** (decidido pelo dono,
+   2026-07-18 — "por enquanto"; upgrade só se a matriz ou o BT-3
+   provarem insuficiência): interstitial e o header `ngrok-skip-browser-warning` (a web
    UI consegue mandar? senão, plano pago ou domínio reservado);
    streaming SSE atravessa sem buffering?; limites de
    conexões/banda/duração de túnel; `--basic-auth` disponível? IP
    allowlist? Registrar a matriz testada (com data) no BT-0.
-2. **Formato do artefato que menos atrita**: tarball de Release com
-   script de setup vs `gh release download` vs zipball do repo — testar
-   o caminho completo numa máquina limpa SEM o monorepo antes de fixar
-   o BT-1 (inclui: participante collaborator consegue baixar asset de
-   Release de repo privado sem `gh`? Se não, o link autenticado do
-   browser resolve?).
+2. **Formato do artefato que menos atrita**: tarball com script de
+   setup vs `bun build --compile` — testar o caminho completo numa
+   máquina limpa SEM o monorepo antes de fixar o BT-1. O download em si
+   está resolvido por BD4 (link de Google Drive); o que resta validar é
+   só instalar → conectar a partir do tarball baixado.
 3. **Confirmar que o event log JSONL por tenant contém o suficiente**
    pro funil de turno (open/claim/commit/abort com timestamps e
    userId) — o que faltar define o tamanho real da camada nova do BT-2.
