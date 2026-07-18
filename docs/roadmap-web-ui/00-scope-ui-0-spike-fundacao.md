@@ -26,6 +26,29 @@
      reprovou, o gate registra explicitamente "UI nova promete regime
      sessão; explorer de milhares fica no canvas legado ou híbrido" —
      decisão do dono, datada, no README (WD2 *reabre*).
+
+   **RESULTADO (2026-07-18, chromium headless 149 via playwright,
+   @xyflow/react 12.11.2, linux x64 8-core — números comparativos;
+   protótipo em `packages/mcp-web/spike-rf/`, `bun spike-rf/measure.ts`):**
+
+   | nós | grupos | culling | FPS pan/zoom (5s contínuos) |
+   |---|---|---|---|
+   | 200 | 6 | on | 60 |
+   | 500 | 6 | on | 59 |
+   | 1000 | 6 | on | 53 |
+   | 1000 | 6 | off | 54 |
+   | 5000 | 6 | on | 40 |
+   | 5000 | 30 | on | 49 |
+   | 5000 | 6 | off | **15** |
+
+   **GATE: APROVADO nos dois regimes.** Obrigatório: 59-60 FPS ≥ 50 ✅.
+   Desejável: 40-49 FPS ≥ 30 ✅. Conclusões vinculantes:
+   (a) `onlyRenderVisibleElements` é OBRIGATÓRIO — sem ele, 5000 nós
+   caem pra 15 FPS; (b) grupos menores/mais numerosos MELHORAM perf
+   (49 vs 40 em 5000 nós — culling por grupo mais efetivo); (c) cards
+   ricos (nó com chip+corpo+badge) e cell-groups (`parentId` +
+   `extent:"parent"`) funcionam — pesquisa #2 respondida: **subflow
+   RF nativo**, não nó custom com layout interno.
 4. Resposta da pesquisa #2: cell containers = subflow RF ou nó custom
    com layout interno próprio (testado no spike, registrado).
 
@@ -45,17 +68,20 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] **Tabela do spike preenchida** com data/máquina/versão RF;
-      decisão de regime assinada no README se o desejável reprovar.
-- [ ] **`src/` velho deletado e ≥1 spec e2e novo no MESMO commit**
+- [x] **Tabela do spike preenchida** com data/máquina/versão RF;
+      desejável aprovou — sem decisão de regime pendente.
+- [x] **`src/` velho deletado e ≥1 spec e2e novo no MESMO commit**
       (`e2e/snapshot-render.e2e.ts`: sobe fixture real, vê N nós
-      renderizados, pan/zoom altera viewport, painel abre no clique).
-      Diretório `e2e/` nunca vazio (WD1).
-- [ ] **CI verde**: `tsc --noEmit`, `bun run build`, e2e chromium —
-      jobs existentes, sem edição no `ci.yml`.
-- [ ] **Zero referência a `api.ts`**; toda chamada via `og.call()`.
-- [ ] **Validação real**: server local + `bun run dev:web` → grafo do
-      `.graph/` do próprio repo renderiza e navega.
+      renderizados, pan/zoom altera viewport, painel abre no clique,
+      LOD atinge "tower" — pega o `minZoom` default do RF (0.5) que
+      tornaria o tower inatingível). Diretório `e2e/` nunca vazio (WD1).
+- [x] **CI verde**: `tsc --noEmit`, `bun run build`, e2e chromium —
+      jobs existentes, sem edição no `ci.yml`. (O tsc de CI falhava em
+      main por resolver o client via `dist/` nunca buildado; corrigido
+      com `paths` no tsconfig espelhando o alias do vite — 2026-07-18.)
+- [x] **Zero referência a `api.ts`**; toda chamada via `og.call()`.
+- [x] **Validação real** (2026-07-18): server local + preview → grafo do
+      `.graph/` do próprio repo (177 nós) renderiza, navega e cruza LOD.
 
 ---
 

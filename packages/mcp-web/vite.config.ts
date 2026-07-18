@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url"
+import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
 // opencode/graph/layout imports node:fs/node:path for its persistence helpers, which the
@@ -6,6 +7,7 @@ import { defineConfig } from "vite"
 const stub = fileURLToPath(new URL("./src/node-stub.ts", import.meta.url))
 
 export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: {
       "node:fs": stub,

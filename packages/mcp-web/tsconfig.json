@@ -4,13 +4,19 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": ["bun"]
+    "types": ["bun"],
+    // espelha o alias do vite.config.ts: tsc resolve o client pelo fonte, sem exigir dist/ buildado (CI não builda o client antes do tsc)
+    "paths": {
+      "@open-graph-mcp/client": ["../client/src/index.ts"]
+    }
   },
   "include": ["src", "test", "vite.config.ts"]
 }
