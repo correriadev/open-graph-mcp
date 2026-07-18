@@ -9,6 +9,8 @@
     "dev": "bun run src/index.ts",
     "test": "bun test --timeout 30000",
     "test:load": "bun test/load/presence-load.ts",
+    "test:soak": "bun test/load/presence-load.ts --soak",
+    "test:storm": "bun test/load/presence-load.ts --storm",
     "test:client-contract": "bun test/mcp-client-contract.ts"
   },
   "exports": {
