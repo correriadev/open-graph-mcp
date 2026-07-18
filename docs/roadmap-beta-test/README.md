@@ -1,5 +1,13 @@
 # Roadmap-beta-test — índice
 
+> **⚠ ADIADO (2026-07-18, decisão do dono):** a web UI atual não
+> sustenta a dinâmica criativa da sessão (sem `graph.query`, sem
+> leitura de claims — evidência que o BD5 previa descobrir só no
+> dry-run). A UI será recriada em `docs/roadmap-web-ui/` (React Flow);
+> este roadmap retoma quando o gate UI-5 de lá for assinado. O que já
+> foi entregue não se perde: BT-1 (release.yml + empacotamento +
+> INSTALL.md) está implementado e independe da web UI.
+
 > Como transformamos o open-graph-mcp numa **sessão coordenada de
 > co-criação**: participantes (game devs + solo devs) usam as tools do
 > grafo para criar, juntos e em tempo real, um jogo simples (história,
