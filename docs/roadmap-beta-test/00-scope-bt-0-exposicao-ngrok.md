@@ -16,8 +16,10 @@
 1. Topologia documentada: `participante → ngrok edge → túnel → server
    local (:8787) → SQLite/JSONL local`, cobrindo os DOIS canais (`POST
    /mcp` request/response e `GET /events` SSE de longa duração).
-2. Matriz de capacidades ngrok testada no plano real da conta (com
-   data): interstitial/header, SSE, basic-auth, limites.
+2. Matriz de capacidades ngrok testada no **plano free** (decidido,
+   2026-07-18), com data: interstitial/header, SSE, basic-auth,
+   limites de conexões/banda — cada limite comparado com o consumo
+   esperado da sessão (participantes × [1 SSE + tool calls] + margem).
 3. Análise de ameaça da janela (quem pode chegar no túnel, o que
    consegue fazer, o que confina o dano) com cada mitigação mapeada.
 4. Runbook `abrir-janela.md` / `fechar-janela.md`: passos exatos,
@@ -86,6 +88,6 @@
    lib INT-2 já re-conecta e re-attacha — medir a frequência de
    reconexão e registrar como baseline pro BT-2.
 3. **A análise de ameaça conclui que o residual é inaceitável.**
-   Mitigação honesta: se acontecer, a resposta é tailnet (plano
-   anterior, `beta-plan.md`) e a sessão perde "qualquer um entra com um
-   link" — decisão do dono, documentada, não contornada.
+   Mitigação honesta: se acontecer, a resposta é tailnet (a alternativa
+   do plano de beta anterior) e a sessão perde "qualquer um entra com
+   um link" — decisão do dono, documentada, não contornada.

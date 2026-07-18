@@ -54,8 +54,8 @@
 ## 2. O que NÃO está nesta fase
 
 - ❌ A sessão real em si — é o EVENTO que este roadmap prepara; a
-  análise dela (relatório BT-2 + retro + leitura do gate de adoção do
-  `beta-plan.md`) é pós-roadmap.
+  análise dela (relatório BT-2 + retro + leitura do gate de decisão
+  pós-beta do `README.md`) é pós-roadmap.
 - ❌ Segunda rodada de dry-run completa por default — só o bloco que
   falhou repete; ensaio infinito é procrastinação com checklist.
 - ❌ Automatizar o go/no-go — checklist humano de véspera; automação

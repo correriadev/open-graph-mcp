@@ -29,9 +29,11 @@
   4. `bun run build` em `packages/mcp-web` (vite)
 - [x] Job `load` separado, `continue-on-error: true`, só em PR p/ main:
       `bun run test:load` (packages/mcp-server) — números vão pro log do job.
-- [ ] Branch protection em `main`: job `test` obrigatório. **Bloqueado**:
-      exige `gh`/token de admin do repo, indisponível no ambiente de
-      execução — ação do dono do repo via GitHub web UI.
+- [ ] Branch protection em `main`: job `test` obrigatório. **Bloqueado
+      por auth, não por tooling** (update 2026-07-18): `gh` 2.86.0 já
+      instalado em `~/.local/bin`; o dono decidiu autenticar na máquina
+      destino (não esta) — executar lá `gh auth login` e então os dois
+      itens abertos deste DoD.
 - [x] Badge no `README.md` raiz.
 - [ ] PR de teste com quebra proposital confirma o gate (depois revertido).
       **Bloqueado** pela mesma falta de acesso — exige push real + PR no

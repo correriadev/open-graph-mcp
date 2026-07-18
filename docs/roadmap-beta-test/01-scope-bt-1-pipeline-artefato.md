@@ -38,12 +38,13 @@
 - [ ] **Máquina limpa**: numa máquina/container SEM o monorepo, com só
       Bun instalado: baixar assets do Release → seguir `INSTALL.md` →
       proxy conecta num server de teste e completa register + query.
-      Tempo cronometrado e registrado (<15 min é a meta do
-      `beta-plan.md`).
-- [ ] **Download por collaborator confirmado** (pesquisa #2 do README):
-      um participante-cobaia (conta GitHub convidada, read) baixa o
-      asset do repo privado sem ajuda — registrar COMO (browser
-      logado / `gh release download` / outro).
+      Tempo cronometrado e registrado (<15 min, meta de ativação
+      herdada do plano de beta anterior).
+- [ ] **Fluxo de distribuição Drive confirmado** (BD4): dono baixa os
+      assets do Release, sobe na pasta do Drive do beta; uma cobaia SEM
+      conta GitHub baixa pelo link e instala só com o `INSTALL.md` —
+      o INSTALL.md não pode referenciar GitHub em nenhum passo do
+      participante.
 - [ ] **Validação real**: checklist acima com datas no próprio doc; o
       Release da sessão real referencia este DoD.
 
@@ -51,8 +52,11 @@
 
 ## 2. O que NÃO está nesta fase
 
-- ❌ npm publish / registries MCP — INT-6 (roadmap-integrations); BD4
-  reabre se INT-6 mínimo sair antes da sessão.
+- ❌ npm publish / registries MCP / repo público / collaborators — BD4
+  fixou Release privado + Drive manual pra este beta; qualquer coisa
+  além disso é INT-6 (roadmap-integrations).
+- ❌ Automatizar o upload pro Drive — manual por decisão (BD4, "este
+  teste somente"); automação só se o beta virar recorrente.
 - ❌ Auto-release em merge — release é manual-approve por design (mesmo
   espírito do INT-6 DoD de CI).
 - ❌ Instalador sem Bun (binário Node/standalone garantido) —
@@ -80,11 +84,12 @@
    vendorado, deps nativas). Mitigação: já previsto fallback tarball +
    `setup.sh`; decidir pelo que funcionar primeiro, não insistir
    (mesma lógica do INT-6 "medir na execução").
-2. **Asset de Release em repo privado atrita mais que o esperado**
-   (auth no download). Mitigação: DoD testa com cobaia real; se
-   atritar, alternativa barata é anexar o tarball direto no canal
-   privado do grupo pra ESTA sessão e registrar a fricção como input do
-   INT-6.
+2. **Drive manual introduz drift de versão** (dono esquece de subir o
+   tarball da tag nova; participante instala artefato velho). Mitigação:
+   nome do arquivo carrega a tag (`open-graph-proxy-beta-v3.tar.gz`),
+   o checklist go/no-go (BT-5) confere "Drive == tag congelada", e o
+   proxy loga a própria versão + `serverInfo.version` no register —
+   mismatch aparece no metrics log.
 3. **INSTALL.md envelhece a cada mudança de cliente.** Aceito: vale por
    sessão (tag), revalidado no dry-run (BT-5); manutenção contínua é
    INT-5/INT-6.
