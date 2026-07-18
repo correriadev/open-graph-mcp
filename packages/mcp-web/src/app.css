@@ -1,0 +1,79 @@
+/* Estilo do app (norte visual): tokens em index.html (:root). */
+
+#topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 40px; z-index: 20;
+  display: flex; align-items: center; gap: 14px; padding: 0 14px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+#topbar .title { font-weight: 600; letter-spacing: 0.2px; }
+#conn { font-size: 12px; }
+#conn.on { color: var(--ok); }
+#conn.off { color: var(--muted); }
+#seq { color: var(--muted); font-size: 12px; }
+#name {
+  margin-left: auto; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font: inherit;
+}
+#name:focus { outline: 1px solid var(--accent); }
+#who { color: var(--accent); font-weight: 600; }
+
+.canvas-wrap { position: fixed; inset: 40px 0 0 0; }
+
+/* ---- BaseCard + LOD (data-lod no wrapper; CSS decide card/chip/dot) ---- */
+.og-card {
+  width: 190px; min-height: 96px; position: relative;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 11px; color: var(--text);
+}
+.og-card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.og-card.over { border-color: var(--warn); }
+.og-card-top { display: flex; align-items: center; justify-content: space-between; }
+.og-chip {
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
+  border-radius: 4px; padding: 1px 6px; font-size: 9px;
+}
+.og-level { color: var(--muted); font-size: 9px; }
+.og-card-title {
+  font-weight: 600; margin: 5px 0 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.og-card-body {
+  color: var(--muted); font-size: 10px; line-height: 1.35; max-height: 41px; overflow: hidden;
+}
+.og-card-status { margin-top: 6px; font-size: 9px; }
+.og-card-status.ok { color: var(--ok); }
+.og-card-status.warn { color: var(--warn); }
+.og-card-status.muted { color: var(--muted); }
+.og-handle { opacity: 0; pointer-events: none; }
+.og-dot { display: none; }
+
+/* floor: chip compacto — título + domínio, sem corpo */
+[data-lod="floor"] .og-card { min-height: 0; }
+[data-lod="floor"] .og-card-body,
+[data-lod="floor"] .og-card-status { display: none; }
+
+/* tower: dot por domínio — card some, resta o marcador */
+[data-lod="tower"] .og-card {
+  background: none; border: none; padding: 0; min-height: 0;
+}
+[data-lod="tower"] .og-card > :not(.og-dot) { display: none; }
+[data-lod="tower"] .og-dot {
+  display: block; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); opacity: 0.8;
+}
+
+/* ---- painel lateral de nó ---- */
+#panel {
+  position: fixed; top: 52px; right: 12px; width: 320px; max-height: calc(100% - 64px);
+  overflow-y: auto; z-index: 15;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border: 1px solid var(--border); border-radius: 8px; padding: 14px;
+}
+#panel h3 { word-break: break-all; margin-bottom: 8px; font-size: 13px; }
+#panel .close {
+  position: absolute; top: 8px; right: 10px; background: none; border: none;
+  color: var(--muted); font-size: 16px; cursor: pointer;
+}
+#panel dt { color: var(--muted); font-size: 10px; text-transform: uppercase; margin-top: 8px; }
+#panel dd { word-break: break-word; font-size: 12px; }
+#panel .auth-graph { color: var(--ok); }
+#panel .auth-suspended { color: var(--warn); }

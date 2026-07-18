@@ -7,3 +7,4 @@ dist-beta/
 dev-repo/
 test-results/
 playwright-report/
+.graph-dev-state/

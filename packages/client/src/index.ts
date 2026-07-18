@@ -20,4 +20,6 @@ export {
 
 export { type Credentials, type TokenStore } from "./store.ts"
 
+export { toolCall, resourceRead } from "./rpc.ts"
+
 export { type ConnectOptions, type OgHandle, type ReauthEvent, connect, registerSession } from "./connect.ts"
