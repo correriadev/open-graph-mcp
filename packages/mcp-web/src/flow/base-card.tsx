@@ -14,14 +14,12 @@ import type { CardData } from "./to-flow"
 
 function BaseCardInner({ data, selected }: NodeProps<Node<CardData>>) {
   const n = data.node
-  const lock = useUi((s) => s.locks[data.cell])
-  const ghostColor = useUi((s) => s.ghostCells[data.cell])
   const drift = useUi((s) => s.drift[n.id])
+  const picking = useUi((s) => s.refPicking)
+  // lock/ghost são estado da CELL, não do nó — desenhados pelo CellOverlays
+  // (norte visual, correção UI-2: borda âmbar na cell inteira, nunca em nó solto)
   return (
-    <div
-      className={`og-card${selected ? " sel" : ""}${n.overclaim ? " over" : ""}${lock ? " locked" : ""}`}
-      style={ghostColor && !lock ? { borderColor: ghostColor } : undefined}
-    >
+    <div className={`og-card${selected ? " sel" : ""}${n.overclaim ? " over" : ""}${picking ? " pickable" : ""}`}>
       <Handle type="target" position={Position.Top} className="og-handle" />
       <div className="og-card-top">
         <span className="og-chip">{n.domain ?? "(unassigned)"}</span>
@@ -31,7 +29,6 @@ function BaseCardInner({ data, selected }: NodeProps<Node<CardData>>) {
       <div className="og-card-body">{n.responsibility || n.anchor || "—"}</div>
       <div className="og-card-status muted">
         ● {n.claims.length} claim{n.claims.length === 1 ? "" : "s"}
-        {lock && <span className="og-lock" title={`turno ${lock.csId}`}> 🔒</span>}
         {drift && <span className="og-drift" title={`drift: ${drift}`}> ⚠ {drift}</span>}
       </div>
       <div className="og-dot" aria-hidden />

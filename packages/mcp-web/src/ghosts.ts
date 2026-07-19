@@ -11,6 +11,8 @@ import { stableHash } from "@open-graph-mcp/graph-core/layout"
 
 export type GhostDelta = {
   kind: string
+  /** id do claim do delta (payload.id) — ref-por-clique em ghost usa isto (UI-2). */
+  id?: string
   subject?: string
   domain?: string | null
   level?: string
