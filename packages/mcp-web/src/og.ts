@@ -14,10 +14,11 @@ import {
   type OgHandle,
   type ReauthEvent,
 } from "@open-graph-mcp/client"
+import { toServerCell, toUiCell, levelNum } from "./cells"
 import { colorForCsId, GhostStore, type GhostDelta } from "./ghosts"
 import { localStorageTokenStore } from "./token-store"
 import { ToastQueue } from "./toasts"
-import { useUi } from "./store"
+import { useUi, type ActiveCs, type DraftDelta } from "./store"
 
 const DRIFT_KINDS = new Set(["drift.node", "drift.cell"])
 const CS_KINDS = new Set([
@@ -55,11 +56,22 @@ function projectPresence(): void {
 }
 
 function projectGhosts(): void {
-  const locks = Object.fromEntries(ghosts.locks)
+  // chaves convertidas pro dialeto de exibição ("auth:2" → "auth:P2") — cells.ts
+  const locks = Object.fromEntries([...ghosts.locks.values()].map((l) => [toUiCell(l.cell), l]))
   const ghostCells: Record<string, string> = {}
+  const ghostDeltasByCell: Record<string, DraftDelta[]> = {}
   for (const cs of ghosts.changesets.values())
-    for (const cell of cs.cells) ghostCells[cell] = colorForCsId(cs.csId)
-  useUi.setState({ locks, ghostCells })
+    for (const cell of cs.cells) {
+      const uiCell = toUiCell(cell)
+      ghostCells[uiCell] = colorForCsId(cs.csId)
+      for (const d of cs.deltas)
+        (ghostDeltasByCell[uiCell] ??= []).push({ kind: d.kind, id: d.id, summary: d.summary, at: d.at })
+    }
+  const active = useUi.getState().activeCs
+  const draftDeltas: DraftDelta[] = active
+    ? (ghosts.changesets.get(active.csId)?.deltas ?? []).map((d) => ({ kind: d.kind, id: d.id, summary: d.summary, at: d.at }))
+    : []
+  useUi.setState({ locks, ghostCells, ghostDeltasByCell, draftDeltas })
 }
 
 function projectToasts(): void {
@@ -98,13 +110,13 @@ function maybeToast(env: Envelope): void {
   const settings = useUi.getState().settings
   if (env.kind === "changeset.aborted" && p.reason === "ttl_expired") {
     pushToast(p.csId, `${p.csId} abortado por TTL`, p.cells?.[0])
-  } else if (env.kind === "lock.acquired" && focusedCell && p.cell === focusedCell && p.holder !== myUserId()) {
-    pushToast(p.csId ?? p.cell, `${nameOf(p.holder)} abriu turno em [${p.cell}] — você perdeu prioridade`, p.cell)
+  } else if (env.kind === "lock.acquired" && focusedCell && toUiCell(p.cell ?? "") === focusedCell && p.holder !== myUserId()) {
+    pushToast(p.csId ?? p.cell, `${nameOf(p.holder)} abriu turno em [${toUiCell(p.cell)}] — você perdeu prioridade`, toUiCell(p.cell))
   } else if (env.kind === "changeset.committed" && settings.notifyCommits) {
     // payload não tem byUser — a entrada ghost (removida só depois deste handler) conhece o dono
     const opener = ghosts.changesets.get(p.csId)?.byUser
     if (opener && opener === myUserId()) return // não toastar o próprio commit
-    const cell = p.cells?.[0]
+    const cell = p.cells?.[0] ? toUiCell(p.cells[0]) : undefined
     pushToast(p.csId, `${opener ? nameOf(opener) : "alguém"} commitou ${p.csId} em [${cell ?? "?"}]`, cell)
   }
 }
@@ -159,7 +171,7 @@ function refetchDeltas(csId: string): void {
 
 function toGhostDelta(d: any): GhostDelta {
   const pl = d.payload ?? {}
-  return { kind: d.kind, subject: pl.subject, domain: pl.domain ?? null, level: pl.level, summary: pl.subject ?? pl.cell ?? d.kind, at: d.createdAt ?? d.at }
+  return { kind: d.kind, id: pl.id, subject: pl.subject, domain: pl.domain ?? null, level: pl.level, summary: pl.subject ?? pl.cell ?? d.kind, at: d.createdAt ?? d.at }
 }
 
 async function loadOpenChangesets(): Promise<void> {
@@ -230,8 +242,129 @@ function applyEvent(env: Envelope): void {
     const r = ghosts.apply(env)
     if (r.refetch) refetchDeltas(r.refetch)
     if (r.committed) loadSnapshot()
+    // turno ativo morreu (commit meu confirmado, ou abort por TTL/rollback do gate final)
+    if (
+      (env.kind === "changeset.committed" || env.kind === "changeset.aborted") &&
+      env.payload?.csId === useUi.getState().activeCs?.csId
+    ) {
+      useUi.setState({ activeCs: null })
+      listMine()
+    }
     projectGhosts()
   }
+}
+
+// ---- turnos (UI-2) ---------------------------------------------------------
+export type OpenTurnResult = { ok: true } | { ok: false; denied?: true }
+
+/** Abre turno nas cells (dialeto de exibição); converte pro server aqui (cells.ts). */
+export async function openTurn(uiCells: string[], intent: string): Promise<OpenTurnResult> {
+  const h = handle
+  if (!h) return { ok: false }
+  const res: any = await h.call("changeset.open", { cells: uiCells.map(toServerCell), intent })
+  if (res?.ok === false) {
+    if (res.reason === "cell_locked") {
+      useUi.setState({ denied: { cell: toUiCell(res.cell), holder: res.holder, csId: res.csId, expiresAt: res.expiresAt } })
+      return { ok: false, denied: true }
+    }
+    return { ok: false }
+  }
+  const active: ActiveCs = { csId: res.csId, intent, cells: uiCells, expiresAt: res.expiresAt }
+  ghosts.track({
+    csId: res.csId,
+    intent,
+    cells: uiCells.map(toServerCell),
+    byUser: myUserId(),
+    openedAt: Date.now(),
+    expiresAt: res.expiresAt,
+    deltaCount: 0,
+    deltas: [],
+  })
+  useUi.setState({ activeCs: active, denied: null })
+  projectGhosts()
+  listMine()
+  return { ok: true }
+}
+
+export type ClaimForm = {
+  id: string
+  subject: string
+  domain: string
+  level: string | number
+  refs: string[]
+  anchor?: string
+  file?: string
+}
+
+/** Claim do form; level marshallado numérico (gate real). Retorna reasons/warnings pro painel. */
+export async function claimDraft(form: ClaimForm | Record<string, unknown>, rawJson?: string): Promise<{ ok: boolean; reasons: string[]; warnings: string[] }> {
+  const h = handle
+  const cs = useUi.getState().activeCs
+  if (!h || !cs) return { ok: false, reasons: ["sem turno ativo"], warnings: [] }
+  const payload = rawJson
+    ? JSON.parse(rawJson)
+    : { ...(form as ClaimForm), level: levelNum((form as ClaimForm).level) }
+  const res: any = await h.call("changeset.claim", { csId: cs.csId, delta: { kind: "claim.add", payload } })
+  if (res?.ok === false) return { ok: false, reasons: res.reasons ?? [], warnings: [] }
+  refetchDeltas(cs.csId)
+  return { ok: true, reasons: [], warnings: res?.warnings ?? [] }
+}
+
+async function csAction(tool: string): Promise<{ ok: boolean; reasons: string[]; expiresAt?: string }> {
+  const h = handle
+  const cs = useUi.getState().activeCs
+  if (!h || !cs) return { ok: false, reasons: ["sem turno ativo"] }
+  const res: any = await h.call(tool, { csId: cs.csId })
+  if (res?.ok === false) return { ok: false, reasons: res.reasons ?? ["recusado"] }
+  return { ok: true, reasons: [], expiresAt: res?.expiresAt }
+}
+
+export async function commitTurn(): Promise<{ ok: boolean; reasons: string[] }> {
+  const r = await csAction("changeset.commit")
+  if (r.ok) {
+    useUi.setState({ activeCs: null })
+    listMine()
+    projectGhosts()
+  }
+  return r
+}
+
+export async function abortTurn(): Promise<{ ok: boolean; reasons: string[] }> {
+  const r = await csAction("changeset.abort")
+  if (r.ok) {
+    useUi.setState({ activeCs: null })
+    listMine()
+    projectGhosts()
+  }
+  return r
+}
+
+export async function extendTurn(): Promise<{ ok: boolean; reasons: string[] }> {
+  const r = await csAction("changeset.extend")
+  if (r.ok && r.expiresAt) {
+    const cs = useUi.getState().activeCs
+    if (cs) useUi.setState({ activeCs: { ...cs, expiresAt: r.expiresAt } })
+  }
+  return r
+}
+
+export async function listMine(): Promise<void> {
+  const h = handle
+  if (!h || !tokenStore.get()) return
+  try {
+    const res: any = await h.call("changeset.list_mine", {})
+    useUi.setState({
+      myTurns: (res?.changesets ?? []).map((c: any) => ({ ...c, cells: (c.cells ?? []).map(toUiCell) })),
+    })
+  } catch (e) {
+    console.error("list_mine failed", e)
+  }
+}
+
+/** Reabre o draft dum turno meu já aberto (widget "meus turnos" / reattach). */
+export function reopenTurn(t: { csId: string; intent: string; cells: string[]; expiresAt: string | null }): void {
+  useUi.setState({ activeCs: { csId: t.csId, intent: t.intent, cells: t.cells.map(toUiCell), expiresAt: t.expiresAt ?? "" } })
+  refetchDeltas(t.csId)
 }
 
 /**
@@ -270,7 +403,14 @@ export async function connectOg(name?: string): Promise<void> {
           })
           refetchDeltas(cs.csId ?? cs.id)
         }
+        // reconectou com turno aberto → draft volta sozinho (02-scope item 6);
+        // não rouba o draft se o user já está com um aberto na UI
+        const first = mine[0]
+        if (first && !useUi.getState().activeCs) {
+          reopenTurn({ csId: first.csId ?? first.id, intent: first.intent ?? "", cells: first.cells ?? [], expiresAt: first.expiresAt ?? null })
+        }
         projectGhosts()
+        listMine()
         pollWho()
       },
       onReauth: (ev: ReauthEvent) => {
@@ -298,5 +438,6 @@ export async function connectOg(name?: string): Promise<void> {
     // registro pode ter trocado o tenant efetivo — re-lê com a credencial certa
     await loadSnapshot()
     pollWho()
+    listMine()
   }
 }

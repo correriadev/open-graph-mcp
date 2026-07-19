@@ -14,10 +14,11 @@ import { BaseCard } from "./flow/base-card"
 import { toFlow, type CellRect } from "./flow/to-flow"
 import { connectOg, pollWho, pushToast, refreshFocus, setFocus, toastTarget } from "./og"
 import { useUi } from "./store"
+import { CellOverlays, DraftPanel, MyTurns, TurnModal } from "./turn"
 
 const nodeTypes = { card: BaseCard }
 
-function Topbar({ onSettings }: { onSettings: () => void }) {
+function Topbar({ onSettings, onOpenTurn }: { onSettings: () => void; onOpenTurn: () => void }) {
   const conn = useUi((s) => s.conn)
   const name = useUi((s) => s.name)
   const seq = useUi((s) => s.seq)
@@ -28,6 +29,7 @@ function Topbar({ onSettings }: { onSettings: () => void }) {
       <span id="conn" className={conn}>{conn === "on" ? "● conectado" : "○ offline"}</span>
       <span id="seq" className="mono">seq {seq}</span>
       {demotions > 0 && <span id="drift-badge">{demotions} drifts</span>}
+      {name && <button id="openturn" onClick={onOpenTurn}>Abrir turno</button>}
       {name && <span id="who">{name}</span>}
       <input
         id="name"
@@ -306,12 +308,18 @@ function Shell() {
             if (wrapRef.current) wrapRef.current.dataset.lod = lodForZoom(vp.zoom)
           }}
           onNodeClick={(_, n) => {
+            const st = useUi.getState()
+            if (st.refPicking) {
+              st.pickRef(n.id) // modo ref-por-clique: nó vira ref, sem seleção/focus
+              return
+            }
             select(n.id)
             setFocus((n.data as { cell?: string }).cell ?? null) // clicar nó = focar a cell dele (spec §7)
           }}
           onPaneClick={() => select(null)}
         >
           <AvatarsLayer cells={flow.cells} />
+          <CellOverlays cells={flow.cells} />
           <CameraDriver cells={flow.cells} />
         </ReactFlow>
       </div>
@@ -322,15 +330,19 @@ function Shell() {
 
 export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [turnOpen, setTurnOpen] = useState(false)
   return (
     <ReactFlowProvider>
-      <Topbar onSettings={() => setSettingsOpen(true)} />
+      <Topbar onSettings={() => setSettingsOpen(true)} onOpenTurn={() => setTurnOpen(true)} />
       <Shell />
       <Roster />
       <Feed />
       <TypingIndicator />
       <Toasts />
+      <DraftPanel />
+      <MyTurns />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <TurnModal open={turnOpen} onClose={() => setTurnOpen(false)} />
     </ReactFlowProvider>
   )
 }

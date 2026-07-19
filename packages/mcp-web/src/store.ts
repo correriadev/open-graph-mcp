@@ -28,6 +28,11 @@ export function loadSettings(): Settings {
   return { showPresence: true, notifyCommits: true }
 }
 
+export type ActiveCs = { csId: string; intent: string; cells: string[]; expiresAt: string }
+export type MyTurn = { csId: string; intent: string; cells: string[]; openedAt: string; expiresAt: string | null }
+export type Denied = { cell: string; holder: string; csId: string; expiresAt: string }
+export type DraftDelta = { kind: string; summary: string; id?: string; at?: number }
+
 type UiState = {
   graph: Graph | null
   conn: ConnState
@@ -50,12 +55,27 @@ type UiState = {
   /** cell pedida por clique em toast/feed — App centra a câmera e zera. */
   centerCell: string | null
 
+  // UI-2: turno ativo (verdade dos deltas fica no server; aqui só a projeção)
+  activeCs: ActiveCs | null
+  /** Deltas do turno ativo, re-hidratados de graph://changeset/{id} (risco 1). */
+  draftDeltas: DraftDelta[]
+  /** Deltas ghost por cell (dialeto de exibição) — sub-cards tracejados. */
+  ghostDeltasByCell: Record<string, DraftDelta[]>
+  myTurns: MyTurn[]
+  denied: Denied | null
+  /** Modo ref-por-clique: clique em nó/ghost appenda id em refDraft. */
+  refPicking: boolean
+  refDraft: string[]
+
   setGraph: (g: Graph | null) => void
   setConn: (c: ConnState) => void
   setIdentity: (name: string, userId: string) => void
   select: (id: string | null) => void
   setSettings: (s: Settings) => void
   requestCenter: (cell: string | null) => void
+  setRefPicking: (on: boolean) => void
+  pickRef: (id: string) => void
+  clearRefDraft: () => void
 }
 
 export const useUi = create<UiState>((set) => ({
@@ -76,6 +96,14 @@ export const useUi = create<UiState>((set) => ({
   settings: loadSettings(),
   centerCell: null,
 
+  activeCs: null,
+  draftDeltas: [],
+  ghostDeltasByCell: {},
+  myTurns: [],
+  denied: null,
+  refPicking: false,
+  refDraft: [],
+
   setGraph: (graph) => set({ graph }),
   setConn: (conn) => set({ conn }),
   setIdentity: (name, userId) => set({ name, userId }),
@@ -85,4 +113,7 @@ export const useUi = create<UiState>((set) => ({
     set({ settings })
   },
   requestCenter: (centerCell) => set({ centerCell }),
+  setRefPicking: (refPicking) => set({ refPicking }),
+  pickRef: (id) => set((s) => (s.refDraft.includes(id) ? s : { refDraft: [...s.refDraft, id] })),
+  clearRefDraft: () => set({ refDraft: [], refPicking: false }),
 }))
