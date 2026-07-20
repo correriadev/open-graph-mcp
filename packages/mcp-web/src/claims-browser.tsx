@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo } from "react"
 import { useUi, type ClaimRecord } from "./store"
-import { readClaims, invalidateReverseIndex, buildReverseIndexStatic, navigateToClaim } from "./og"
+import { readClaims, readSnapshotClaims, invalidateReverseIndex, buildReverseIndexStatic, navigateToClaim } from "./og"
 
 function Provenance({ c }: { c: ClaimRecord }) {
   return <div className="provenance">
@@ -92,10 +92,14 @@ export function ClaimsBrowser(): JSX.Element {
   const claimsByCell = useUi((s) => s.claimsByCell)
   useEffect(() => {
     if (selectedClaimId) {
-      const flat = Object.values(claimsByCell).flat()
-      if (flat.length > 0) setReverseIndex(buildReverseIndexStatic(claimsByCell))
+      readSnapshotClaims().then(() => {
+        const snapshotClaims = useUi.getState().claimsByCell
+        if (Object.values(snapshotClaims).some((cellClaims) => cellClaims.length > 0)) {
+          setReverseIndex(buildReverseIndexStatic(snapshotClaims))
+        }
+      })
     }
-  }, [selectedClaimId, claimsByCell, setReverseIndex])
+  }, [selectedClaimId, graph, setReverseIndex])
 
   if (!cell) return null as unknown as JSX.Element
   if (loading && !claims) return <div id="claims-panel"><div className="skeleton">carregando claims…</div></div>

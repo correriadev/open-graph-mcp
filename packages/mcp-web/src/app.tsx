@@ -6,21 +6,34 @@
  * Ids #conn/#name/#who/#panel/#pcount/#plist/#ptoggle/#typing/#toasts/#evlist/
  * #modal/#settingsBtn são API do e2e (fixture.ts + specs desta fase).
  */
-import { ReactFlow, ReactFlowProvider, ViewportPortal, useReactFlow, type Viewport } from "@xyflow/react"
+import { MiniMap, ReactFlow, ReactFlowProvider, ViewportPortal, useReactFlow, type Viewport } from "@xyflow/react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { dotColor, initials, type PresenceEntry } from "@open-graph-mcp/client"
 import { lodForZoom } from "@open-graph-mcp/graph-core/layout"
 import { BaseCard } from "./flow/base-card"
-import { toFlow, type CellRect } from "./flow/to-flow"
+import { CARD_H, CARD_W, toFlow, type CellRect } from "./flow/to-flow"
 import { connectOg, pollWho, pushToast, refreshFocus, setFocus, toastTarget } from "./og"
 import { useUi } from "./store"
-import { CellOverlays, DraftPanel, MyTurns, TurnModal } from "./turn"
+import { DraftPanel, MyTurns, TurnModal } from "./turn"
 import { ClaimsBrowser } from "./claims-browser"
 import { QueryBar } from "./query-bar"
 import { HistoryView } from "./history-view"
 import { SidebarTree } from "./sidebar-tree"
+import { CellContainers } from "./cell-container"
+import { StateLegend } from "./state-legend"
+import { domainColor } from "./flow/rich-node"
 
 const nodeTypes = { card: BaseCard }
+
+function GraphMiniMap() {
+  const reactFlow = useReactFlow()
+  return <MiniMap
+    pannable
+    zoomable
+    nodeColor={(node) => domainColor((node.data as { node?: { domain?: string | null } })?.node?.domain)}
+    onClick={(_, position) => reactFlow.setCenter(position.x, position.y, { zoom: reactFlow.getZoom(), duration: 0 })}
+  />
+}
 
 function Topbar({ onSettings, onOpenTurn }: { onSettings: () => void; onOpenTurn: () => void }) {
   const conn = useUi((s) => s.conn)
@@ -175,9 +188,10 @@ function Feed() {
     <aside id="events">
       <h3>Atividade recente</h3>
       <ul id="evlist" className="mono">
-        {events.map((e) => (
+        {[...events].sort((a, b) => a.seq - b.seq).map((e) => (
           <li
             key={e.seq}
+            data-seq={e.seq}
             data-kind={e.kind.split(".")[0]}
             onClick={() => e.target && requestCenter(e.target)}
           >
@@ -291,7 +305,25 @@ function CameraDriver({ cells }: { cells: Record<string, CellRect> }) {
   }, [centerCell, cells, graph, rf, requestCenter])
   useEffect(() => {
     // hooks de e2e (QA-2): funções de produção reais, só disparadas fora dos timers/gestos
-    ;(window as any).__og_e2e = { setFocus, pushToast, pollWho, getViewport: () => rf.getViewport() }
+    ;(window as any).__og_e2e = {
+      setFocus,
+      pushToast,
+      pollWho,
+      getViewport: () => rf.getViewport(),
+      setViewport: (viewport: Viewport) => rf.setViewport(viewport),
+      zoomTo: (zoom: number) => rf.setViewport({ ...rf.getViewport(), zoom }),
+      focusNode: (id: string, zoom: number) => {
+        const node = rf.getNode(id)
+        if (node) rf.setCenter(node.position.x + CARD_W / 2, node.position.y + CARD_H / 2, { zoom, duration: 0 })
+      },
+      setNodeResponsibility: (id: string, responsibility: string) => useUi.setState((state) => ({
+        graph: state.graph ? { ...state.graph, nodes: state.graph.nodes.map((node) => node.id === id ? { ...node, responsibility } : node) } : null,
+      })),
+      setNodeDrift: (id: string, grade: string) => useUi.setState((state) => ({ drift: { ...state.drift, [id]: grade } })),
+      setCellAuthority: (cell: string, authority: "source" | "graph" | "suspended") => useUi.setState((state) => ({
+        graph: state.graph ? { ...state.graph, authority: { ...state.graph.authority, [cell]: authority } } : null,
+      })),
+    }
   }, [rf])
   return null
 }
@@ -329,23 +361,19 @@ function Shell() {
           onPaneClick={() => select(null)}
         >
           <AvatarsLayer cells={flow.cells} />
-          <CellOverlays cells={flow.cells} />
+          <CellContainers cells={flow.cells} />
           <CameraDriver cells={flow.cells} />
+          <GraphMiniMap />
         </ReactFlow>
       </div>
       <NodePanel />
+      <StateLegend />
     </>
   )
 }
 
 function RouteDriver(): JSX.Element {
   const route = useUi((s) => s.route)
-  const navigate = useUi((s) => s.navigate)
-  useEffect(() => {
-    const onHash = () => navigate(window.location.hash.replace(/^#/, "") || "/")
-    window.addEventListener("hashchange", onHash)
-    return () => window.removeEventListener("hashchange", onHash)
-  }, [navigate])
   if (route.startsWith("/history")) return <HistoryView />
   return <></>
 }
@@ -353,10 +381,18 @@ function RouteDriver(): JSX.Element {
 export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [turnOpen, setTurnOpen] = useState(false)
+  const [requestedCell, setRequestedCell] = useState<string | null>(null)
   const route = useUi((s) => s.route)
   const openTurnRequest = useUi((s) => s.openTurnRequest)
   useEffect(() => {
+    const syncRoute = () => useUi.setState({ route: window.location.hash.replace(/^#/, "").split("?")[0] || "/" })
+    syncRoute()
+    window.addEventListener("hashchange", syncRoute)
+    return () => window.removeEventListener("hashchange", syncRoute)
+  }, [])
+  useEffect(() => {
     if (openTurnRequest) {
+      setRequestedCell(openTurnRequest)
       setTurnOpen(true)
       useUi.getState().requestOpenTurn(null) // consume
     }
@@ -380,7 +416,7 @@ export function App() {
       <MyTurns />
       <QueryBar />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <TurnModal open={turnOpen} onClose={() => setTurnOpen(false)} />
+      <TurnModal open={turnOpen} initialCell={requestedCell} onClose={() => { setTurnOpen(false); setRequestedCell(null) }} />
     </ReactFlowProvider>
   )
 }

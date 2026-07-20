@@ -10,7 +10,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0, // QD2/roadmap-qa: flake is a bug, never masked by retry
-  reporter: process.env.CI ? "line" : "list",
+  reporter: process.env.CI ? [["line"], ["json", { outputFile: "test-results/results.json" }]] : "list",
   use: {
     trace: "retain-on-failure",
   },

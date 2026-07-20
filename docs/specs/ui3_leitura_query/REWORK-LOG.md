@@ -57,3 +57,18 @@ L. graph.rebuilt invalidates ReverseIndex but lazy-build effect never rebuilds f
 - [e2e] history.e2e.ts: assert filter-change → URL update → round-trip preserves.
 - [DoD] Reconcile 03-scope-ui-3-leitura-query.md: items resolved by RETRY flip to [x] honestly; items still deferred (e.g. Phase B turn-modal cross-cell) flipped back to [ ].
 - [CI] tsc + bun test + build + e2e chromium + mcp-server suite green.
+
+# F002 REWORK-LOG — RETRY #2 (2026-07-20)
+
+Trigger: Phase C scores TL=0.68 (<0.70), QA=0.82 (PASS). No HIGH/CRITICAL vulnerabilities. Reworks 1→2.
+
+## Required work for RETRY #2
+
+- Replace per-domain P0-P5 claims fan-out with a bounded snapshot-scoped claims projection or equivalent single-fetch design.
+- Isolate loading/error state per request so concurrent cell reads cannot overwrite each other.
+- Make dangling-reference negative caching bounded and expiring; reload claim data after snapshot refresh.
+- Implement by-user matching as a true union of `byUser`, `openedBy`, `holder`, and `by`.
+- Sequence or abort query requests so stale responses cannot overwrite newer terms.
+- Parse corrupt persisted refs defensively without failing the entire cell read.
+- Add scale/fan-out coverage and an out-of-order query-response test.
+- Keep all existing unit, server, build, and Chromium E2E gates green.

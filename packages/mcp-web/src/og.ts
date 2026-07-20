@@ -146,6 +146,10 @@ export async function pollWho(): Promise<void> {
   }
 }
 
+export function signalTyping(): void {
+  handle?.call("presence.typing", {}).catch((e) => console.error("presence.typing failed", e))
+}
+
 // Timers armed on connect, disarmed on close (RETRY #1 REWORK-LOG openPoint 5).
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let presenceTimer: ReturnType<typeof setInterval> | null = null
@@ -161,8 +165,9 @@ function disarmTimers(): void {
 // navigateToClaim negative cache + debounce (RETRY #1 REWORK-LOG openPoint 9): a dangling RefChip
 // clicked repeatedly shouldn't re-fire loadSnapshot per click. Anchor a 300ms debounce + a Set of
 // refIds already known absent.
-const danglingRefIds = new Set<string>()
-let danglingRefTimer: ReturnType<typeof setTimeout> | null = null
+const danglingRefIds = new Map<string, number>()
+const DANGLING_REF_TTL_MS = 5_000
+const DANGLING_REF_CACHE_MAX = 128
 
 // ---- ghost deltas: refetch com debounce de graph://changeset/{id} ----------
 const refetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -385,8 +390,11 @@ export async function listMine(): Promise<void> {
 export async function readClaims(cell: string): Promise<ClaimRecord[]> {
   const cached = useUi.getState().claimsByCell[cell]
   if (cached) return cached
-  useUi.getState().setClaimsLoading(true)
-  useUi.getState().setClaimsError(null)
+  const isActiveRequest = () => useUi.getState().selectedCell === cell
+  if (isActiveRequest()) {
+    useUi.getState().setClaimsLoading(true)
+    useUi.getState().setClaimsError(null)
+  }
   try {
     const res: any = await resourceRead(serverBase(), `graph://claims?cell=${encodeURIComponent(cell)}`, tokenStore.get()?.token)
     const claims: ClaimRecord[] = (res?.claims ?? []).map((c: any) => ({
@@ -405,10 +413,26 @@ export async function readClaims(cell: string): Promise<ClaimRecord[]> {
     useUi.getState().setClaimsForCell(cell, claims)
     return claims
   } catch (e) {
-    useUi.getState().setClaimsError((e as Error).message)
+    if (isActiveRequest()) useUi.getState().setClaimsError((e as Error).message)
     return []
   } finally {
-    useUi.getState().setClaimsLoading(false)
+    if (isActiveRequest()) useUi.getState().setClaimsLoading(false)
+  }
+}
+
+let snapshotClaimsRequest: Promise<Record<string, ClaimRecord[]>> | null = null
+export async function readSnapshotClaims(force = false): Promise<Record<string, ClaimRecord[]>> {
+  if (!force && snapshotClaimsRequest) return snapshotClaimsRequest
+  snapshotClaimsRequest = (async () => {
+    const res: any = await resourceRead(serverBase(), "graph://claims?scope=snapshot", tokenStore.get()?.token)
+    const claimsByCell = (res?.claimsByCell ?? {}) as Record<string, ClaimRecord[]>
+    useUi.setState({ claimsByCell })
+    return claimsByCell
+  })()
+  try {
+    return await snapshotClaimsRequest
+  } finally {
+    snapshotClaimsRequest = null
   }
 }
 
@@ -478,7 +502,7 @@ export const buildReverseIndexStatic = buildReverseIndexPure
  *  the owner's cell (setCenter RF on the node) + open the target claim. If ref is dangling, toast
  *  'ref não encontrado' once + debounced snapshot refresh (negative cache on the refId).
  */
-export function navigateToClaim(refId: string): void {
+export async function navigateToClaim(refId: string): Promise<void> {
   const st = useUi.getState()
   const ownerEntry = Object.entries(st.claimsByCell).find(([, list]) => (list ?? []).some((c) => c.id === refId))
   if (ownerEntry) {
@@ -490,14 +514,19 @@ export function navigateToClaim(refId: string): void {
     return
   }
   // Negative cache + debounce to avoid re-firing loadSnapshot on every repeat click.
-  if (danglingRefIds.has(refId)) return
-  danglingRefIds.add(refId)
-  if (danglingRefTimer) clearTimeout(danglingRefTimer)
-  danglingRefTimer = setTimeout(() => { danglingRefTimer = null }, 300)
+  const now = Date.now()
+  const expiresAt = danglingRefIds.get(refId) ?? 0
+  if (expiresAt > now) return
+  if (danglingRefIds.size >= DANGLING_REF_CACHE_MAX) danglingRefIds.delete(danglingRefIds.keys().next().value!)
+  danglingRefIds.set(refId, now + DANGLING_REF_TTL_MS)
   pushToast(`ref-${refId}`, `ref não encontrado, snapshot refresh`)
-  loadSnapshot()
+  await loadSnapshot()
+  await readSnapshotClaims(true)
+  danglingRefIds.delete(refId)
 }
 export function invalidateReverseIndex(): void {
+  danglingRefIds.clear()
+  snapshotClaimsRequest = null
   useUi.getState().setReverseIndex(null)
   useUi.getState().setClaimsError(null)
   // claims per snapshot are stale after rebuild — drop caches so next ClaimsBrowser re-fetches.

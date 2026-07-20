@@ -12,6 +12,7 @@
  *    sempre. Emite UMA transição final → quiet antes de sumir.
  */
 import { broadcastEphemeral, type Presence, type ServerState } from "../state"
+import { requireToken } from "./session"
 
 const now = () => Date.now()
 
@@ -20,6 +21,12 @@ type TypingState = Presence["typingState"]
 export function touchDelta(state: ServerState, tenant: string, userId: string): void {
   const t = now()
   for (const p of state.presence.values()) if (p.tenant === tenant && p.userId === userId) p.lastDeltaAt = t
+}
+
+export function presenceTyping(state: ServerState, args: { token: string }): { ok: true } {
+  const actor = requireToken(state, args?.token)
+  touchDelta(state, actor.tenantId, actor.userId)
+  return { ok: true }
 }
 
 function classify(state: ServerState, sinceMs: number): TypingState {

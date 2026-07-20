@@ -1,0 +1,29 @@
+{
+  "featureId": "F003",
+  "score": 0.91,
+  "verdict": "PASS",
+  "passedAdversarial": true,
+  "vulnerabilities": [],
+  "edgeCasesMissed": [
+    "MiniMap navigation is verified by pointer click but not by keyboard or an explicit accessible-name assertion.",
+    "The narrowed card presence selector serializes names with a pipe delimiter; a display name containing '|' would split into multiple rendered avatar initials.",
+    "The browser overflow scenario covers a representative table but not an extremely long unbroken URL or oversized table cell.",
+    "Empty locked cells are exposed in a neutral fixed list, but no browser assertion verifies their removal on natural TTL expiry without an explicit abort event."
+  ],
+  "highCriticalVulns": [],
+  "evidence": {
+    "passed": [
+      "packages/mcp-web unit suite: 31/31",
+      "packages/mcp-web production build with markdown code split",
+      "Chromium semantic zoom, rich markdown, collaboration states, cell targeting, minimap, and snapshot flows: 2/2 functional scenarios",
+      "Chromium deterministic 202-node pan: 60.0 FPS median, samples 60.0/60.0/60.9 FPS, hard floor 50 FPS",
+      "Unsafe script and iframe markup absent from rendered rich content",
+      "Unknown lock holders resolve to a neutral label and raw identifiers are absent from the lock badge"
+    ],
+    "accessibility": [
+      "Visual states include text labels in cards and legend, not color alone.",
+      "Cell headers are native buttons and the legend uses native details/summary controls.",
+      "Lock and presence projections expose descriptive accessible labels."
+    ]
+  }
+}

@@ -19,6 +19,7 @@ test("snapshot renderiza, pan/zoom navega, painel abre, identidade registra", as
 
   const context = await browser.newContext()
   const page = await context.newPage()
+  page.on("pageerror", (error) => console.error("browser pageerror", error))
   await page.goto(h.pageUrl())
 
   // snapshot anônimo: todos os cards do fixture (poucos nós — culling não esconde nenhum)

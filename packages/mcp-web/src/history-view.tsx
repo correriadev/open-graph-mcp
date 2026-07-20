@@ -13,8 +13,8 @@ function matchesFilters(e: HistoryEvent, f: HistoryFilters): boolean {
   // RETRY #1 (REWORK-LOG openPoint E): union across payload slot kinds. lock.acquired/released
   // carry holder; authority.demoted carries by; opened/committed carry byUser/openedBy.
   if (f.byUser) {
-    const u = e.payload?.byUser ?? e.payload?.openedBy ?? e.payload?.holder ?? e.payload?.by
-    if (u !== f.byUser) return false
+    const users = [e.payload?.byUser, e.payload?.openedBy, e.payload?.holder, e.payload?.by]
+    if (!users.includes(f.byUser)) return false
   }
   if (f.target) {
     const has = e.target === f.target || (e.payload?.cells ?? []).includes(f.target) || (e.payload?.cell === f.target)
@@ -32,7 +32,7 @@ function writeFilterUrl(f: HistoryFilters): void {
   if (f.target) p.set("target", f.target)
   if (f.kind) p.set("kind", f.kind)
   const qs = p.toString()
-  window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname)
+  window.history.replaceState(null, "", `#/history${qs ? `?${qs}` : ""}`)
 }
 
 export function HistoryView(): JSX.Element {
@@ -47,7 +47,9 @@ export function HistoryView(): JSX.Element {
 
   // Initial filter population from URL params (?user=&target=&kind=)
   useEffect(() => {
-    const u = new URLSearchParams(window.location.search)
+    const query = window.location.hash.split("?")[1] ?? ""
+    const u = new URLSearchParams(query)
+    if ([...u.keys()].length === 0) return
     const f: HistoryFilters = {
       byUser: u.get("user") || undefined,
       target: u.get("target") || undefined,
@@ -65,8 +67,9 @@ export function HistoryView(): JSX.Element {
   const users = useMemo(() => {
     const s = new Map<string, string>()
     for (const e of events) {
-      const u = e.payload?.byUser ?? e.payload?.openedBy ?? e.payload?.holder ?? e.payload?.by
-      if (u) s.set(u, u)
+      for (const u of [e.payload?.byUser, e.payload?.openedBy, e.payload?.holder, e.payload?.by]) {
+        if (typeof u === "string" && u) s.set(u, u)
+      }
     }
     return [...s.keys()].sort()
   }, [events])

@@ -30,13 +30,16 @@ async function setupClaimsAsAlice(alicePage: import("@playwright/test").Page) {
   // the reverse index records cBase -> [c1, c2]. Server-form cells ("auth:P4"|"auth:P5") and
   // NUMERIC levels (so roundtrip's Math.abs(level_a - level_b) === 1 passes — string "P4"/"P5"
   // would coerce to NaN and trip the level-gap check).
-  const cs = await turns(h, token).open(["auth:P5", "auth:P4"], "setup cross-cell claims")
-  if (!cs.ok || !cs.csId) throw new Error("open changeset failed: " + JSON.stringify(cs))
-  await turns(h, token).claim(cs.csId, { kind: "claim.add", payload: { id: "cBase", subject: "auth floor root", domain: "auth", level: 5, refs: [] } })
-  await turns(h, token).claim(cs.csId, { kind: "claim.add", payload: { id: "c1", subject: "login regression coverage", domain: "auth", level: 4, refs: ["cBase"] } })
-  await turns(h, token).claim(cs.csId, { kind: "claim.add", payload: { id: "c2", subject: "login token verify", domain: "auth", level: 4, refs: ["cBase"] } })
-  const commit = await turns(h, token).commit(cs.csId)
-  expect(commit.ok).toBe(true)
+  const base = await turns(h, token).open(["auth:5"], "setup base claim")
+  if (!base.ok || !base.csId) throw new Error("open base changeset failed: " + JSON.stringify(base))
+  expect((await turns(h, token).claim(base.csId, { kind: "claim.add", payload: { id: "cBase", subject: "auth floor root", domain: "auth", level: 5, refs: [] } })).ok).toBe(true)
+  expect((await turns(h, token).commit(base.csId)).ok).toBe(true)
+
+  const refs = await turns(h, token).open(["auth:4"], "setup referencing claims")
+  if (!refs.ok || !refs.csId) throw new Error("open refs changeset failed: " + JSON.stringify(refs))
+  expect((await turns(h, token).claim(refs.csId, { kind: "claim.add", payload: { id: "c1", subject: "login regression coverage", domain: "auth", level: 4, refs: ["cBase"] } })).ok).toBe(true)
+  expect((await turns(h, token).claim(refs.csId, { kind: "claim.add", payload: { id: "c2", subject: "login token verify", domain: "auth", level: 4, refs: ["cBase"] } })).ok).toBe(true)
+  expect((await turns(h, token).commit(refs.csId)).ok).toBe(true)
 }
 
 test("query-and-read: ⌘K gap → known term match → ClaimsBrowser → OpenClaim → open turn (leitura→escrita)", async ({ browser }) => {
@@ -75,27 +78,27 @@ test("query-and-read: ⌘K gap → known term match → ClaimsBrowser → OpenCl
   await expect(alice.page.locator(".open-claim .provenance")).toBeVisible()
 
   // RETRY #1 (REWORK-LOG openPoint A / edgeCase A): assert cross-cell RefChip navigation.
-  // Find the OpenClaim whose RefChip points at cRootBilling (owner cell billing:P2). Clicking the
-  // ref chip must: setSelectedCell(billing:P2) → openClaim(cRootBilling) → requestCenter(billing:P2).
-  // The browser panel now renders billing:P2 with cRootBilling's OpenClaim.
-  let refChip = alice.page.locator(".ref-chip", { hasText: "cRootBilling" }).first()
+  // Find the OpenClaim whose RefChip points at cBase (owner cell auth:P5). Clicking the
+  // ref chip must: setSelectedCell(auth:P5) → openClaim(cBase) → requestCenter(auth:P5).
+  // The browser panel now renders auth:P5 with cBase's OpenClaim.
+  let refChip = alice.page.locator(".ref-chip", { hasText: "cBase" }).first()
   if (await refChip.count() === 0) {
     // first claim happened to lack refs; try the second/third claim-row.
     const rows = await alice.page.locator(".claim-row").all()
     for (const row of rows.slice(1)) {
       await row.click()
       await expect(alice.page.locator(".open-claim")).toBeVisible()
-      refChip = alice.page.locator(".ref-chip", { hasText: "cRootBilling" }).first()
+      refChip = alice.page.locator(".ref-chip", { hasText: "cBase" }).first()
       if (await refChip.count() > 0) break
     }
   }
   expect(await refChip.count()).toBeGreaterThan(0)
   await refChip.click()
   // ClaimsBrowser panel now shows billing:P2 (data-cell pivot).
-  await expect(alice.page.locator("#claims-panel")).toHaveAttribute("data-cell", "billing:P2", { timeout: 5_000 })
-  // OpenClaim target claim is cRootBilling (the ref target).
-  await expect(alice.page.locator(".open-claim").first()).toHaveAttribute("data-id", "cRootBilling", { timeout: 5_000 })
-  // Reverse index side: cRootBilling should be "referenciado por" c1 (snapshot-wide build).
+  await expect(alice.page.locator("#claims-panel")).toHaveAttribute("data-cell", "auth:P5", { timeout: 5_000 })
+  // OpenClaim target claim is cBase (the ref target).
+  await expect(alice.page.locator(".open-claim").first()).toHaveAttribute("data-id", "cBase", { timeout: 5_000 })
+  // Reverse index side: cBase should be "referenciado por" c1 (snapshot-wide build).
   const referencedBy = alice.page.locator(".referenced-by")
   await expect(referencedBy).toBeVisible()
   await expect(referencedBy).toContainText("c1", { timeout: 5_000 })

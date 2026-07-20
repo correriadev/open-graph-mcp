@@ -8,7 +8,7 @@
 import { ViewportPortal } from "@xyflow/react"
 import { useEffect, useRef, useState } from "react"
 import type { CellRect } from "./flow/to-flow"
-import { abortTurn, claimDraft, commitTurn, extendTurn, openTurn, reopenTurn } from "./og"
+import { abortTurn, claimDraft, commitTurn, extendTurn, openTurn, reopenTurn, signalTyping } from "./og"
 import { useUi } from "./store"
 
 const LEVELS = ["P1", "P2", "P3", "P4", "P5"]
@@ -29,7 +29,7 @@ function useCountdown(expiresAt: string | null): string {
 }
 
 // ---- modal de abertura ------------------------------------------------------
-export function TurnModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function TurnModal({ open, onClose, initialCell }: { open: boolean; onClose: () => void; initialCell?: string | null }) {
   const graph = useUi((s) => s.graph)
   const denied = useUi((s) => s.denied)
   const locks = useUi((s) => s.locks)
@@ -37,6 +37,11 @@ export function TurnModal({ open, onClose }: { open: boolean; onClose: () => voi
   const [intent, setIntent] = useState("")
   const [rows, setRows] = useState<{ d: string; l: string }[]>([{ d: "", l: "P5" }])
   const [err, setErr] = useState("")
+  useEffect(() => {
+    if (!open || !initialCell) return
+    const cut = initialCell.lastIndexOf(":")
+    setRows([{ d: initialCell.slice(0, cut), l: initialCell.slice(cut + 1) }])
+  }, [open, initialCell])
   const deniedCountdown = useCountdown(denied?.expiresAt ?? null)
   if (!open) return null
 
@@ -125,6 +130,10 @@ export function DraftPanel() {
   const [warnings, setWarnings] = useState<string[]>([])
   const refsInput = useRef(form.refs)
   refsInput.current = form.refs
+  const updateForm = (patch: Partial<typeof form>) => {
+    setForm((current) => ({ ...current, ...patch }))
+    signalTyping()
+  }
 
   // ref-por-clique: ids escolhidos no canvas entram no campo refs (texto do form preservado)
   useEffect(() => {
@@ -217,12 +226,12 @@ export function DraftPanel() {
         ))}
       </ul>
       <h4>novo claim</h4>
-      <input id="f_id" placeholder="id (obrigatório no gate)" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} />
-      <input id="f_subject" placeholder="subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
-      <input id="f_domain" placeholder="domain" value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} />
-      <input id="f_level" placeholder="level (P1..P5)" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} />
+      <input id="f_id" placeholder="id (obrigatório no gate)" value={form.id} onChange={(e) => updateForm({ id: e.target.value })} />
+      <input id="f_subject" placeholder="subject" value={form.subject} onChange={(e) => updateForm({ subject: e.target.value })} />
+      <input id="f_domain" placeholder="domain" value={form.domain} onChange={(e) => updateForm({ domain: e.target.value })} />
+      <input id="f_level" placeholder="level (P1..P5)" value={form.level} onChange={(e) => updateForm({ level: e.target.value })} />
       <div className="refsrow">
-        <input id="f_refs" placeholder="refs (vírgula)" value={form.refs} onChange={(e) => setForm({ ...form, refs: e.target.value })} />
+        <input id="f_refs" placeholder="refs (vírgula)" value={form.refs} onChange={(e) => updateForm({ refs: e.target.value })} />
         <button
           type="button"
           id="refpick"
@@ -233,11 +242,11 @@ export function DraftPanel() {
           {refPicking ? "escolhendo… (esc)" : "ref por clique"}
         </button>
       </div>
-      <input id="f_anchor" placeholder="anchor (trecho verbatim)" value={form.anchor} onChange={(e) => setForm({ ...form, anchor: e.target.value })} />
-      <input id="f_file" placeholder="file (pro anchor check)" value={form.file} onChange={(e) => setForm({ ...form, file: e.target.value })} />
+      <input id="f_anchor" placeholder="anchor (trecho verbatim)" value={form.anchor} onChange={(e) => updateForm({ anchor: e.target.value })} />
+      <input id="f_file" placeholder="file (pro anchor check)" value={form.file} onChange={(e) => updateForm({ file: e.target.value })} />
       <details>
         <summary>raw JSON payload</summary>
-        <textarea id="f_json" rows={4} placeholder='{"id":..., "subject":...}' value={rawJson} onChange={(e) => setRawJson(e.target.value)} />
+        <textarea id="f_json" rows={4} placeholder='{"id":..., "subject":...}' value={rawJson} onChange={(e) => { setRawJson(e.target.value); signalTyping() }} />
       </details>
       <button id="addclaim" onClick={submitClaim}>Add delta</button>
     </section>

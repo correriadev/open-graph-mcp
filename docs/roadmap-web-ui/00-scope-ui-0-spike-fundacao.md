@@ -40,6 +40,7 @@
    | 5000 | 6 | on | 40 |
    | 5000 | 30 | on | 49 |
    | 5000 | 6 | off | **15** |
+   | 202 rich nodes | 2 | on | **60.0 median**, 1/2/2 slow frames (UI-4 real pan, 3 × 2s) |
 
    **GATE: APROVADO nos dois regimes.** Obrigatório: 59-60 FPS ≥ 50 ✅.
    Desejável: 40-49 FPS ≥ 30 ✅. Conclusões vinculantes:

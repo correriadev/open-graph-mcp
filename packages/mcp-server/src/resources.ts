@@ -100,6 +100,39 @@ function redactFile(raw: string | null, repoPath: string): string | undefined {
   return norm
 }
 
+type ClaimRow = {
+  id: string; seq: number; subject: string | null; domain: string | null; level: string | null
+  refs: string | null; anchor: string | null; file: string | null
+  verdict_confidence: number | null; verdict_overclaim: number | null; supersedes: string | null
+}
+
+function parseRefs(raw: string | null): string[] {
+  try {
+    const parsed = JSON.parse(raw ?? "[]")
+    return Array.isArray(parsed) ? parsed.filter((ref): ref is string => typeof ref === "string") : []
+  } catch {
+    return []
+  }
+}
+
+function claimFromRow(row: ClaimRow, repoPath: string, fallbackDomain = "") {
+  const normalizedLevel = row.level?.replace(/^P/, "")
+  return {
+    id: row.id,
+    subject: row.subject ?? row.id,
+    domain: row.domain ?? fallbackDomain,
+    level: normalizedLevel && /^\d+$/.test(normalizedLevel) ? Number(normalizedLevel) : undefined,
+    refs: parseRefs(row.refs),
+    anchor: row.anchor ?? "",
+    file: redactFile(row.file, repoPath),
+    seq: row.seq,
+    verdict: row.verdict_confidence != null || row.verdict_overclaim != null
+      ? { confidence: row.verdict_confidence ?? undefined, overclaim: !!row.verdict_overclaim }
+      : undefined,
+    supersedes: row.supersedes ?? undefined,
+  }
+}
+
 function claimsOfCell(state: ServerState, tenant: string, cell: string) {
   if (!cell) throw new Error("cell key required")
   const cut = cell.indexOf(":")
@@ -116,29 +149,24 @@ function claimsOfCell(state: ServerState, tenant: string, cell: string) {
     .query(
       "SELECT id, seq, subject, domain, level, refs, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? AND domain = ? AND level IN (?, ?)",
     )
-    .all(tenant, d, `P${lNorm}`, lNorm) as {
-    id: string; seq: number; subject: string | null; domain: string | null; level: string | null
-    refs: string | null; anchor: string | null; file: string | null
-    verdict_confidence: number | null; verdict_overclaim: number | null; supersedes: string | null
-  }[]
+    .all(tenant, d, `P${lNorm}`, lNorm) as ClaimRow[]
   return {
     cell,
-    claims: rows.map((r) => ({
-      id: r.id,
-      subject: r.subject ?? r.id,
-      domain: r.domain ?? d,
-      level: r.level != null ? (isNaN(Number(r.level)) ? undefined : Number(r.level)) : undefined,
-      refs: JSON.parse(r.refs ?? "[]"),
-      anchor: r.anchor ?? "",
-      file: redactFile(r.file, state.repoPath),
-      seq: r.seq,
-      verdict:
-        r.verdict_confidence != null || r.verdict_overclaim != null
-          ? { confidence: r.verdict_confidence ?? undefined, overclaim: !!r.verdict_overclaim }
-          : undefined,
-      supersedes: r.supersedes ?? undefined,
-    })),
+    claims: rows.map((row) => claimFromRow(row, state.repoPath, d)),
   }
+}
+
+function claimsOfSnapshot(state: ServerState, tenant: string) {
+  const rows = state.db.query(
+    "SELECT id, seq, subject, domain, level, refs, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? ORDER BY seq",
+  ).all(tenant) as ClaimRow[]
+  const claimsByCell: Record<string, ReturnType<typeof claimFromRow>[]> = {}
+  for (const row of rows) {
+    if (!row.domain || !row.level) continue
+    const cell = `${row.domain}:P${row.level.replace(/^P/, "")}`
+    ;(claimsByCell[cell] ??= []).push(claimFromRow(row, state.repoPath))
+  }
+  return { claimsByCell }
 }
 
 export function resolveResource(state: ServerState, uri: string, tenant = DEFAULT_TENANT): unknown {
@@ -181,6 +209,7 @@ export function resolveResource(state: ServerState, uri: string, tenant = DEFAUL
       return { changesets: rows.map((r) => changesetView(state, tenant, r.id)) }
     }
     case "claims":
+      if (params.get("scope") === "snapshot") return claimsOfSnapshot(state, tenant)
       return claimsOfCell(state, tenant, params.get("cell") ?? "")
     default:
       throw new Error(`unknown resource: ${uri}`)

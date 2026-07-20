@@ -1,0 +1,19 @@
+{
+  "featureId": "F002",
+  "status": "SUCCESS",
+  "metrics": {
+    "totalTests": 123,
+    "passed": 123,
+    "failed": 0,
+    "coverage": 0.0
+  },
+  "modifiedFiles": [
+    "packages/mcp-web/e2e/query-and-read.e2e.ts",
+    "packages/mcp-web/src/app.tsx",
+    "packages/mcp-web/src/claims-browser.tsx",
+    "packages/mcp-web/src/history-view.tsx",
+    "packages/mcp-web/src/og.ts",
+    "packages/mcp-web/src/query-bar.tsx"
+  ],
+  "reworksCount": 1
+}
