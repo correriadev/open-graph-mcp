@@ -55,3 +55,21 @@ test("typing indicator appears on claim, disappears when quiet, disappears when 
   await s1.context.close()
   await s2.context.close()
 })
+
+test("typing in the web draft is observable by another session", async ({ browser }) => {
+  const alice = await h.openSession(browser, "alice-web-typing")
+  const bob = await h.openSession(browser, "bob-web-typing")
+  await alice.page.evaluate((cell) => (window as any).__og_e2e.setFocus(cell), h.firstCell)
+  await bob.page.evaluate((cell) => (window as any).__og_e2e.setFocus(cell), h.firstCell)
+
+  await alice.page.locator("#openturn").click()
+  await alice.page.locator("#intent").fill("web typing")
+  await alice.page.locator("#doopen").click()
+  await expect(alice.page.locator("#draft")).toBeVisible()
+  await alice.page.locator("#f_subject").fill("typed from browser input")
+  await h.control("tickTypingNow")
+
+  await expect(bob.page.locator("#typing")).toContainText("alice-web-typing")
+  await alice.context.close()
+  await bob.context.close()
+})

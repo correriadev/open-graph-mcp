@@ -19,13 +19,35 @@
 
 .canvas-wrap { position: fixed; inset: 40px 0 0 0; }
 
+.og-cell-container { position: absolute; border: 1px solid var(--border); border-radius: 12px; pointer-events: none; }
+.og-cell-container.review { border: 2px solid var(--warn); }
+.og-cell-container.ghosted:not(.review) { border: 1px dashed var(--accent); }
+.og-cell-header { position: absolute; top: 4px; left: 8px; right: 8px; height: 28px; display: flex; gap: 10px; align-items: center; pointer-events: auto; background: color-mix(in srgb, var(--panel) 90%, transparent); color: var(--text); border: 0; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+.og-cell-header > span { color: var(--muted); font-size: 10px; }
+.og-cell-header .og-lock-badge { position: static; margin-left: auto; }
+.og-cell-avatars { display: flex; gap: 2px; }
+.og-cell-avatars > span { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; align-items: center; justify-content: center; background: var(--accent); color: white; }
+#state-legend { position: fixed; left: 252px; bottom: 12px; z-index: 15; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+#state-legend summary { cursor: pointer; }
+#state-legend ul { list-style: none; margin: 6px 0 0; padding: 0; }
+#state-legend li { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+.legend-swatch { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+[data-state="review"] .legend-swatch { background: var(--warn); }
+[data-state="draft"] .legend-swatch { background: var(--accent); }
+[data-state="drift"] .legend-swatch { background: var(--err); }
+.react-flow__minimap { z-index: 11; }
+#empty-cell-locks { position: fixed; left: 252px; top: 52px; z-index: 15; background: var(--panel); border: 1px solid var(--warn); padding: 6px 8px; font-size: 11px; }
+
 /* ---- BaseCard + LOD (data-lod no wrapper; CSS decide card/chip/dot) ---- */
 .og-card {
-  width: 190px; min-height: 96px; position: relative;
+  width: 280px; height: 220px; position: relative; overflow: hidden;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 10px; font-size: 11px; color: var(--text);
 }
 .og-card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.og-card.state-published { border-color: var(--ok); }
+.og-card.state-review { border-color: var(--warn); }
+.og-card.state-drift, .og-card.state-suspended { border-color: var(--err); }
 .og-card.over { border-color: var(--warn); }
 .og-card-top { display: flex; align-items: center; justify-content: space-between; }
 .og-chip {
@@ -37,8 +59,13 @@
   font-weight: 600; margin: 5px 0 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .og-card-body {
-  color: var(--muted); font-size: 10px; line-height: 1.35; max-height: 41px; overflow: hidden;
+  color: var(--muted); font-size: 10px; line-height: 1.35; max-height: 142px; overflow: auto; overflow-wrap: anywhere;
 }
+.og-markdown > :first-child { margin-top: 0; }
+.og-markdown > :last-child { margin-bottom: 0; }
+.og-markdown table { max-width: 100%; border-collapse: collapse; display: block; overflow-x: auto; }
+.og-markdown th, .og-markdown td { border: 1px solid var(--border); padding: 2px 4px; }
+.og-card-avatars { float: right; color: var(--accent); }
 .og-card-status { margin-top: 6px; font-size: 9px; }
 .og-card-status.ok { color: var(--ok); }
 .og-card-status.warn { color: var(--warn); }
@@ -48,18 +75,28 @@
 
 /* floor: chip compacto — título + domínio, sem corpo */
 [data-lod="floor"] .og-card { min-height: 0; }
-[data-lod="floor"] .og-card-body,
-[data-lod="floor"] .og-card-status { display: none; }
+[data-lod="floor"] .og-markdown { display: none; }
 
 /* tower: dot por domínio — card some, resta o marcador */
 [data-lod="tower"] .og-card {
-  background: none; border: none; padding: 0; min-height: 0;
+  width: 14px; height: 14px; background: none; border: none; padding: 0; min-height: 0;
 }
 [data-lod="tower"] .og-card > :not(.og-dot) { display: none; }
 [data-lod="tower"] .og-dot {
   display: block; width: 14px; height: 14px; border-radius: 50%;
-  background: var(--accent); opacity: 0.8;
+  background: var(--domain-color); opacity: 0.8;
 }
+
+/* Selection pins the same mounted root in full-card regime. */
+[data-lod="floor"] .og-card[data-pinned="true"],
+[data-lod="tower"] .og-card[data-pinned="true"] {
+  width: 280px; height: 220px; background: var(--panel); border: 1px solid var(--accent); padding: 8px 10px;
+}
+[data-lod="floor"] .og-card[data-pinned="true"] .og-card-body,
+[data-lod="floor"] .og-card[data-pinned="true"] .og-card-status,
+[data-lod="tower"] .og-card[data-pinned="true"] > :not(.og-dot) { display: block; }
+[data-lod="tower"] .og-card[data-pinned="true"] .og-card-top { display: flex; }
+[data-lod="tower"] .og-card[data-pinned="true"] .og-dot { display: none; }
 
 /* ---- UI-1: badges vivos no card ---- */
 .og-card.locked { border-color: var(--warn); }

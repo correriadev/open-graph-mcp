@@ -1,0 +1,28 @@
+{
+  "capabilities": [
+    { "id": "P01", "capability": "Presence roster", "status": "proven", "evidence": ["presence-bar.e2e.ts"] },
+    { "id": "P02", "capability": "Avatars", "status": "proven", "evidence": ["avatar-overlay.e2e.ts"] },
+    { "id": "P03", "capability": "Typing receive", "status": "proven", "evidence": ["typing-indicator.e2e.ts"] },
+    { "id": "P04", "capability": "Typing send", "status": "proven", "evidence": ["typing-indicator.e2e.ts"] },
+    { "id": "P05", "capability": "Toast rules", "status": "proven", "evidence": ["toast-notifications.e2e.ts"] },
+    { "id": "P06", "capability": "Activity feed", "status": "proven", "evidence": ["activity-feed.e2e.ts"] },
+    { "id": "P07", "capability": "Reconnect/reauth", "status": "proven", "evidence": ["reconnect.e2e.ts"] },
+    { "id": "P08", "capability": "Turn reattach", "status": "proven", "evidence": ["turn-recovery.e2e.ts"] },
+    { "id": "P09", "capability": "Settings", "status": "proven", "evidence": ["settings-invisible.e2e.ts", "toast-notifications.e2e.ts"] },
+    { "id": "P10", "capability": "History", "status": "proven", "evidence": ["history.e2e.ts"] },
+    { "id": "P11", "capability": "Node panel", "status": "proven", "evidence": ["snapshot-render.e2e.ts"] },
+    { "id": "P12", "capability": "Multi-cell turn", "status": "proven", "evidence": ["turn-lifecycle.e2e.ts"] },
+    { "id": "P13", "capability": "Claim/commit", "status": "proven", "evidence": ["turn-lifecycle.e2e.ts"] },
+    { "id": "P14", "capability": "Abort", "status": "proven", "evidence": ["turn-recovery.e2e.ts"] },
+    { "id": "P15", "capability": "Extend", "status": "proven", "evidence": ["turn-recovery.e2e.ts"] },
+    { "id": "P16", "capability": "Lock contention", "status": "proven", "evidence": ["lock-contention.e2e.ts"] },
+    { "id": "P17", "capability": "Ghosts", "status": "proven", "evidence": ["turn-lifecycle.e2e.ts"] },
+    { "id": "P18", "capability": "Admin re-bootstrap", "status": "pending", "evidence": [] },
+    { "id": "G01", "capability": "Query gaps", "status": "proven", "evidence": ["query-and-read.e2e.ts"] },
+    { "id": "G02", "capability": "Claims navigation", "status": "proven", "evidence": ["query-and-read.e2e.ts"] },
+    { "id": "G03", "capability": "Web typing", "status": "proven", "evidence": ["typing-indicator.e2e.ts"] },
+    { "id": "G04", "capability": "Rich markdown", "status": "proven", "evidence": ["snapshot-render.e2e.ts"] },
+    { "id": "G05", "capability": "Semantic zoom", "status": "proven", "evidence": ["semantic-zoom.e2e.ts"] },
+    { "id": "G06", "capability": "Cell containers", "status": "proven", "evidence": ["rich-canvas-performance.e2e.ts"] }
+  ]
+}

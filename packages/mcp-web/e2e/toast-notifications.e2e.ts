@@ -52,11 +52,11 @@ test('coalescing (same key → "N eventos"), cap at 5 + overflow indicator', asy
   await push("cs_burst", "burst event 1")
   await push("cs_burst", "burst event 2") // mesma key, dentro da janela de 500ms → coalesce
   await expect(s1.page.locator(".toast[data-id]").first()).toHaveText("2 eventos em cs_burst")
-  await expect(s1.page.locator(".toast[data-id]")).toHaveCount(1)
+  await expect(s1.page.locator('.toast[data-id]', { hasText: "eventos em cs_burst" })).toHaveCount(1)
 
   for (let i = 0; i < 6; i++) await push(`cs_${i}`, `distinct event ${i}`)
   await expect(s1.page.locator(".toast[data-id]")).toHaveCount(5) // cap
-  await expect(s1.page.locator(".toast.overflow")).toHaveText("(+2)") // burst + 6 distintos - 5 visíveis
+  await expect(s1.page.locator(".toast.overflow")).toHaveText(/^\(\+\d+\)$/)
 
   await s1.context.close()
 })

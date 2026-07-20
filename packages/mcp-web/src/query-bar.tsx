@@ -10,13 +10,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useUi } from "./store"
 import { queryClaims } from "./og"
-
-let debounce: ReturnType<typeof setTimeout> | null = null
-let callCounter = 0
-// ponytail: dev-only introspection hook — gating here keeps the prod global namespace clean.
-if (import.meta.env && (import.meta.env as any).DEV) {
-  ;(window as any).__og_query_call_count = () => callCounter
-}
+import { createLatestRequest } from "./latest-request"
 
 export function QueryBar(): JSX.Element | null {
   const open = useUi((s) => s.queryOpen)
@@ -32,7 +26,18 @@ export function QueryBar(): JSX.Element | null {
   const requestCenter = useUi((s) => s.requestCenter)
   const graph = useUi((s) => s.graph)
   const inputRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const callCounterRef = useRef(0)
+  const requestSequenceRef = useRef(createLatestRequest())
   const [term, setTerm] = useState("")
+
+  useEffect(() => {
+    if (import.meta.env.DEV) (window as any).__og_query_call_count = () => callCounterRef.current
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (import.meta.env.DEV) delete (window as any).__og_query_call_count
+    }
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -52,18 +57,19 @@ export function QueryBar(): JSX.Element | null {
 
   const onChange = (v: string) => {
     setTerm(v)
-    if (debounce) clearTimeout(debounce)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const requestSequence = requestSequenceRef.current.next()
     if (!v.trim()) { setResults(null); return }
-    debounce = setTimeout(async () => {
+    debounceRef.current = setTimeout(async () => {
       setLoading(true); setError(null)
       try {
-        callCounter++
+        callCounterRef.current++
         const r = await queryClaims(v.trim())
-        setResults(r)
+        if (requestSequenceRef.current.isLatest(requestSequence)) setResults(r)
       } catch (e) {
-        setError((e as Error).message)
+        if (requestSequenceRef.current.isLatest(requestSequence)) setError((e as Error).message)
       } finally {
-        setLoading(false)
+        if (requestSequenceRef.current.isLatest(requestSequence)) setLoading(false)
       }
     }, 200)
   }

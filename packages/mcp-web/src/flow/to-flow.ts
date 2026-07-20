@@ -10,11 +10,12 @@
 import type { Graph, GraphNode } from "@open-graph-mcp/graph-core/build"
 import type { Edge, Node } from "@xyflow/react"
 
-export const CARD_W = 190
-export const CARD_H = 96
-const GAP = 18
+export const CARD_W = 280
+export const CARD_H = 220
+const GAP = 24
 const COLS = 4
-const CELL_PAD = 24
+const CELL_PAD = 32
+const HEADER_H = 34
 const BAND_GAP = 80
 
 export type CardData = { node: GraphNode; cell: string }
@@ -61,7 +62,7 @@ export function toFlow(graph: Graph): { nodes: Node<CardData>[]; edges: Edge[]; 
   for (const [key, list] of byCell) {
     const level = key.split(":")[1] ?? "P5"
     const x0 = domainIdx(list[0]!.domain) * bandW + CELL_PAD
-    const y0 = (bandY.get(level) ?? y) + CELL_PAD
+    const y0 = (bandY.get(level) ?? y) + CELL_PAD + HEADER_H
     list.forEach((n, i) => {
       nodes.push({
         id: n.id,
@@ -73,9 +74,9 @@ export function toFlow(graph: Graph): { nodes: Node<CardData>[]; edges: Edge[]; 
     const rows = rowsOfCell(list.length)
     cells[key] = {
       x: x0,
-      y: y0,
+      y: y0 - HEADER_H,
       w: Math.min(list.length, COLS) * (CARD_W + GAP) - GAP,
-      h: rows * (CARD_H + GAP) - GAP,
+      h: rows * (CARD_H + GAP) - GAP + HEADER_H,
     }
   }
 

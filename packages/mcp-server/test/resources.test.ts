@@ -137,3 +137,36 @@ test("graph://claims pure SQL predicate avoids N+1 tenant scan (frozen claimsCou
     s.stop()
   }
 })
+
+test("graph://claims?scope=snapshot returns all cells in one bounded projection", async () => {
+  const s = startServer()
+  try {
+    const a = await register(s.url, "alice")
+    for (const [cell, id, level] of [["auth:P5", "root", "P5"], ["billing:P5", "bill", "P5"]] as const) {
+      const cs = await callTool(s.url, "changeset.open", { token: a.token, cells: [cell], intent: id })
+      await callTool(s.url, "changeset.claim", { token: a.token, csId: cs.csId, delta: { kind: "claim.add", payload: { id, subject: id, domain: cell.split(":")[0], level, refs: [] } } })
+      expect((await callTool(s.url, "changeset.commit", { token: a.token, csId: cs.csId })).ok).toBe(true)
+    }
+    const env = await readResource(s.url, "graph://claims?scope=snapshot", a.token)
+    expect(env.claimsByCell["auth:P5"].map((claim: any) => claim.id)).toContain("root")
+    expect(env.claimsByCell["billing:P5"].map((claim: any) => claim.id)).toContain("bill")
+    expect(Object.keys(env.claimsByCell).length).toBe(2)
+  } finally {
+    s.stop()
+  }
+})
+
+test("snapshot claims projection isolates corrupt persisted refs", async () => {
+  const s = startServer()
+  try {
+    const a = await register(s.url, "alice")
+    const cs = await callTool(s.url, "changeset.open", { token: a.token, cells: ["auth:P5"], intent: "legacy" })
+    await callTool(s.url, "changeset.claim", { token: a.token, csId: cs.csId, delta: { kind: "claim.add", payload: { id: "legacy", subject: "legacy", domain: "auth", level: "P5", refs: [] } } })
+    await callTool(s.url, "changeset.commit", { token: a.token, csId: cs.csId })
+    s.state.db.query("UPDATE claims SET refs = ? WHERE tenant_id = ? AND id = ?").run("{broken", "default", "legacy")
+    const env = await readResource(s.url, "graph://claims?scope=snapshot", a.token)
+    expect(env.claimsByCell["auth:P5"][0].refs).toEqual([])
+  } finally {
+    s.stop()
+  }
+})

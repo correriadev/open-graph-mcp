@@ -1,6 +1,6 @@
 # UI-5 — Escopo fechado (paridade + gate de retomada do beta)
 
-> Status: **proposto** — último; exige UI-0..4 verdes. **Gate de
+> Status: **automação em validação; gate humano pendente** — último; exige UI-0..4 verdes. **Gate de
 > retomada do roadmap-beta-test** (WD5). Índice-pai: `README.md`.
 >
 > **Objetivo:** provar que a UI nova cobre tudo que a velha cobria
@@ -79,3 +79,19 @@
 3. **Pressa de retomar o beta pula o gate.** O gate existe porque a
    primeira impressão do produto não se remarca (risco 1 do BT-5);
    assinatura datada é o freio.
+
+---
+
+## 5. Checklist de paridade
+
+Fonte executável: `packages/mcp-web/e2e/parity-manifest.json`.
+
+- [x] P01–P17 e G01–G06 possuem evidência automatizada declarada.
+- [ ] P18 re-bootstrap admin: pendente; o boundary público atual não modela papel admin e `graph.bootstrap` ainda não diferencia usuário autorizado.
+- [ ] Suíte completa CI verde na revisão candidata, sem skips.
+- [ ] Mini-sessão LAN humana executada e registrada.
+- [ ] Bloqueantes rechecados.
+
+## 6. Gate humano
+
+**Decisão:** `HOLD` operacional por condições ausentes, sem assinatura inferida. O campo de decisão final permanece pendente até uma pessoa dona registrar `RESUME` ou `HOLD`, com nome, data e revisão, após a mini-sessão.

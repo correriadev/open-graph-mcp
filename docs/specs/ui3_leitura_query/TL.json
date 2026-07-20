@@ -1,88 +1,11 @@
 {
   "featureId": "F002",
-  "score": 0.62,
-  "findings": [
-    {
-      "severity": "HIGH",
-      "location": "packages/mcp-server/src/resources.ts:93",
-      "smell": "N+1 anti-pattern: claimsOfCell SELECTs ALL tenant claims then filters in JS",
-      "risk": "At 1M claims, every graph://claims?cell= request materialises the entire tenant claims table into the server process and runs a JS predicate per row. Single-cell read becomes O(tenant) instead of O(cell). Under concurrent readers the server burns CPU + heap proportional to total tenant size, not request scope. Memory pressure and latency scale with the wrong axis."
-    },
-    {
-      "severity": "HIGH",
-      "location": "packages/mcp-web/src/claims-browser.tsx:90",
-      "smell": "ReverseIndex built from one cell's claims only — 'referenciado por' is structurally incomplete",
-      "risk": "buildReverseIndexStatic(claims ?? []) receives only the currently selected cell's ClaimRecord[]. Spec 003 §1 demands O(edges) over the SNAPSHOT. A referrer in cell B pointing into cell A is invisible when A is open — the user reads 'nenhum referenciado' even when referrers exist. The feature's core promise (reverse provenance) is silently wrong for any cross-cell ref graph. The cell-scope rebuild also re-runs O(c*refs) on every cell switch with no reuse."
-    },
-    {
-      "severity": "HIGH",
-      "location": "packages/mcp-web/src/history-view.tsx:34",
-      "smell": "Hash-routing / query-routing mismatch: filter hydration reads location.search while the app routes via location.hash",
-      "risk": "App.vue router sets window.location.hash (store.ts:212); HistoryView mounts and reads window.location.search for ?user=&target=&kind=. Shareable filter links (acceptance 06) never load — the URL is always empty here, so deep-links silently drop filters. The acceptance criterion is unmet yet the DoD was flipped to [x]."
-    },
-    {
-      "severity": "MEDIUM",
-      "location": "packages/mcp-web/src/og.ts:461",
-      "smell": "navigateToClaim cross-cell deferral leaves the leitura→escrita DoD path broken for the documented ref-graph case",
-      "risk": "TDD-OUTPUT adaptation 08 explicitly defers cross-cell RefChip navigation to 'Phase B' with only a toast. DoD item 1 ('navegar por ref') was checked [x] anyway. A user clicking a RefChip whose target lives outside the loaded cell gets 'ref não encontrado' + a snapshot re-fetch every click — no path to the target claim exists this phase. The closure of the read→write cycle that the feature is named for is conditional on an unfunded Phase B."
-    },
-    {
-      "severity": "MEDIUM",
-      "location": "packages/mcp-web/src/og.ts:149,151",
-      "smell": "Module-level setInterval(pollWho) and setInterval(projectPresence) never cleared",
-      "risk": "Two setInterval timers start at module load and have no clearInterval on disconnect or HMR dispose. A user who disconnects, closes the tab background, or triggers HMR retains ghost timers polling presence.who against a dead handle every 10s — accumulating 401/network errors and preventing GC of the handle closure. Long-running tabs leak timers proportional to module reloads."
-    },
-    {
-      "severity": "MEDIUM",
-      "location": "packages/mcp-web/src/query-bar.tsx:13-15",
-      "smell": "Module-level mutable debounce timer + callCounter + window.__og_query_call_count global",
-      "risk": "let debounce is shared across any QueryBar instance — under React StrictMode double-mount or HMR the second mount's onChange clears the first's timer mid-flight. window.__og_query_call_count is test instrumentation shipped to production; e2e assertions about debounce sizing leak into the runtime global namespace. Call-counter also races across concurrent keystroke bursts since setTimeout closure captures stale counter value."
-    },
-    {
-      "severity": "MEDIUM",
-      "location": "packages/mcp-web/src/og.ts",
-      "smell": "God module: 557 lines fold connection + presence + ghosts + toasts + turns + claims + query + history + reverse-index into one file",
-      "risk": "SRP breach. Every UI-3 concern (and all UI-2 turn logic) lives in og.ts — any change to one vertical re-imports the whole graph. Unit testing the read vertical in isolation requires mocking connect/PresenceStore/GhostStore. Future verticals (Phase B cross-cell nav, draft-after-commit) will pile in here too. The 'ponytail: pure function in reverse-index.ts' extraction is the only seam — every other concern is unextracted."
-    },
-    {
-      "severity": "MEDIUM",
-      "location": "packages/mcp-web/src/history-view.tsx:30,53",
-      "smell": "No pagination / cursor for graph://history?limit=1000 hardcoded — client-side filter over bounded slice",
-      "risk": "HistoryView hardcodes limit=1000 and filters in-memory. A tenant with 10k+ events shows the latest 1000 only — older events are silently unreachable. The spec acceptance says 'query strings update URL' but there is no since-cursor control exposed to the user; the audit surface is incomplete by default. Memory: holding 1k envelopes + their payloads in zustand forever."
-    },
-    {
-      "severity": "MEDIUM",
-      "location": "packages/mcp-web/src/og.ts:468-470",
-      "smell": "navigateToClaim fallback triggers full loadSnapshot() on every dangling ref",
-      "risk": "A missing refId (stale snapshot, or any malformed ref string a claim carries) fires loadSnapshot — which re-reads graph://snapshot + graph://changesets?status=open, re-runs loadOpenChangesets with per-cs refetchDeltas. Adversarial or buggy ref content can thrash the snapshot pipeline. No debounce, no negative cache, no 'last refetch timestamp' guard. Cost is unbounded per click."
-    },
-    {
-      "severity": "LOW",
-      "location": "packages/mcp-server/src/resources.ts:126",
-      "smell": "resolveResource tenant parameter defaults to DEFAULT_TENANT",
-      "risk": "If a caller forgets to thread the authenticated tenant, the resolver happily serves the default tenant's data. Defense-in-depth missing: the resource layer trusts the caller instead of deriving tenant from a verified token. Spec WD5 calls server 'not frozen' — but read paths should still refuse cross-tenant reads by default, not fall back to a known tenant."
-    },
-    {
-      "severity": "LOW",
-      "location": "packages/mcp-server/src/resources.ts:103",
-      "smell": "Silent level normalization: String(r.level ?? '5').replace(/^P/, '')",
-      "risk": "NULL levels are silently coerced to '5' inside the filter, hiding upstream data-quality issues in the claims table. A dangling row with NULL level still matches cells at level 5 — readers see phantom claims they did not commit. The fallback should be explicit reject, not a guessed default."
-    },
-    {
-      "severity": "LOW",
-      "location": "packages/mcp-web/src/sidebar-tree.tsx:38",
-      "smell": "Mine-set smuggled into the Tree via (out as any).__mine — non-typed side channel on a typed Map",
-      "risk": "buildTree returns Tree<Map> but hides a Set<string> under an any-cast key. Consumers must know to filter '__mine' out of domain iteration (sidebar-tree.tsx:70) and to read the side channel separately. DRY/typing breach: any future Tree consumer forgets the filter and renders '__mine' as a domain. The mine-set should be a return tuple, not a hidden field."
-    }
-  ],
+  "score": 0.79,
   "openPoints": [
-    "If 50 tenants each hold 20k claims, what is the P99 latency and RSS of a single graph://claims?cell=auth:P4 read — and when does that exceed the SSE heartbeat budget?",
-    "How does 'referenciado por' remain truthful when the reverse index is built from one cell's claims but the spec derivation promised a snapshot-wide O(edges) walk?",
-    "Why was the cross-cell RefChip navigation deferred to an unfunded Phase B while the DoD checkbox asserting it was flipped to [x]?",
-    "If the app routes via location.hash, what is the user-visible behaviour when a HistoryView filter deep-link (?user=bob&kind=changeset.committed) is opened cold?",
-    "What bounds the cost of navigateToClaim when a claim carries a malformed ref string — and why is the full loadSnapshot on the failure path considered acceptable per click?",
-    "When og.ts grows to absorb Phase B (cross-cell nav, draft-after-commit), at what line count does the god-module become un-maintainable — and what is the extraction seam you wish you had built now?",
-    "The two setInterval timers in og.ts run forever after disconnect — what production incident taught you that background tabs poll indefinitely, and why is no clearInterval wired on onClose?",
-    "Why is test instrumentation (window.__og_query_call_count) shipped to the production global namespace — and what does its presence in the bundle say about the boundary between e2e harness and app code?"
-  ]
+    "What bounds the memory and response-size impact of graph://claims?scope=snapshot when a tenant grows from thousands to millions of claims, given that the endpoint currently materializes every row and the browser replaces its complete claims cache in one operation?",
+    "How does QueryBar leave loading state when a request is already in flight and the user clears the input, since clearing advances the sequence and returns before setting loading false while the superseded request is no longer allowed to clear it?",
+    "What prevents an older snapshot claims request from overwriting a newer forced refresh when readSnapshotClaims(true) replaces the shared promise but does not sequence or abort the underlying requests?",
+    "How should navigation behave when loadSnapshot or the forced claims projection fails after a dangling-reference click, given that the async RefChip handler has no local error boundary and recovery feedback depends on the earlier generic toast?"
+  ],
+  "architectureTip": "Keep the snapshot projection as the consistency boundary, then add pagination or versioned responses and apply the same latest-request discipline used by QueryBar to all cache-refresh paths."
 }

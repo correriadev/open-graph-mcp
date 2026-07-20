@@ -1,6 +1,6 @@
 # UI-4 — Escopo fechado (nós ricos + zoom semântico)
 
-> Status: **proposto** — depois de UI-3. Índice-pai: `README.md`.
+> Status: **concluído** — depois de UI-3. Índice-pai: `README.md`.
 >
 > **Objetivo:** a razão estética da reescrita: nós deixam de ser
 > cards básicos e viram entidades que renderizam o próprio conteúdo
@@ -33,15 +33,15 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] **Nó ADR-like renderiza** markdown com seções/listas legíveis
+- [x] **Nó ADR-like renderiza** markdown com seções/listas legíveis
       no card, e degrada pra chip/dot nos regimes de zoom.
-- [ ] **60/50 FPS de pan mantidos** no regime sessão com nós ricos
+- [x] **60/50 FPS de pan mantidos** no regime sessão com nós ricos
       (re-medição do spike com conteúdo real; número na tabela do 00).
-- [ ] **Cell container** exibe lock/countdown/presença e é o alvo de
+- [x] **Cell container** exibe lock/countdown/presença e é o alvo de
       clique para "abrir turno aqui".
-- [ ] **e2e da fase**: `semantic-zoom.e2e.ts` (3 regimes visíveis) e
+- [x] **e2e da fase**: `semantic-zoom.e2e.ts` (3 regimes visíveis) e
       atualização de `snapshot-render.e2e.ts` pros cards ricos.
-- [ ] CI verde.
+- [x] CI verde.
 
 ---
 

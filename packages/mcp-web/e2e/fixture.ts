@@ -36,7 +36,7 @@ function ensureBuilt(): Promise<void> {
 }
 
 /** Two-domain fixture repo (auth/billing) so tests have real cells to focus/lock, not just "(unassigned)". */
-function tempFixtureRepo(): { root: string; cleanup: () => void } {
+function tempFixtureRepo(sessionNodes = 0): { root: string; cleanup: () => void } {
   const root = mkdtempSync(path.join(tmpdir(), "og-e2e-"))
   mkdirSync(path.join(root, "src", "auth"), { recursive: true })
   mkdirSync(path.join(root, "src", "billing"), { recursive: true })
@@ -46,6 +46,10 @@ function tempFixtureRepo(): { root: string; cleanup: () => void } {
   // navigation can have a root claim (refs=[]) at the floor of one domain referenced from a mid-cell.
   writeFileSync(path.join(root, "src", "auth", "icon.svg"), "<svg/>\n")
   writeFileSync(path.join(root, "src", "billing", "charge.ts"), "export function charge() {}\n")
+  for (let index = 0; index < sessionNodes; index++) {
+    const domain = index % 2 ? "auth" : "billing"
+    writeFileSync(path.join(root, "src", domain, `session-${index}.ts`), `/** # Session node ${index}\n * - rich content\n */\nexport function sessionNode${index}() { return ${index} }\n`)
+  }
   mkdirSync(path.join(root, ".graph"), { recursive: true })
   writeFileSync(
     path.join(root, ".graph", "domains.json"),
@@ -135,11 +139,12 @@ const DEFAULT_KNOBS: StartOptions = {
   focusDebounceMs: 10,
 }
 
-export async function startHarness(opts: StartOptions = {}): Promise<Harness> {
+export async function startHarness(opts: StartOptions & { sessionNodes?: number } = {}): Promise<Harness> {
   await ensureBuilt()
-  const { root, cleanup: cleanupRepo } = tempFixtureRepo()
+  const { sessionNodes = 0, ...serverOptions } = opts
+  const { root, cleanup: cleanupRepo } = tempFixtureRepo(sessionNodes)
   const stateDir = mkdtempSync(path.join(tmpdir(), "og-e2e-state-"))
-  const startOpts: StartOptions = { repoPath: root, stateDir, autoBootstrap: true, ...DEFAULT_KNOBS, ...opts }
+  const startOpts: StartOptions = { repoPath: root, stateDir, autoBootstrap: true, ...DEFAULT_KNOBS, ...serverOptions }
 
   let proc = await spawnServer(startOpts)
   const port = new URL(proc.mcpUrl).port

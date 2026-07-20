@@ -10,7 +10,8 @@
     "build": "vite build",
     "serve": "vite preview",
     "test": "bun test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:parity": "bun test test/parity-manifest.test.ts && playwright test --project=chromium --workers=1"
   },
   "dependencies": {
     "@open-graph-mcp/client": "workspace:*",
@@ -18,6 +19,8 @@
     "@xyflow/react": "^12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
     "zustand": "^5"
   },
   "devDependencies": {

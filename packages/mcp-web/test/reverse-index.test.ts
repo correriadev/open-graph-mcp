@@ -48,3 +48,13 @@ test("snapshot-wide build: source in cell A targeting claim in cell B is capture
   expect(idx.get("root")?.slice().sort()).toEqual(["downstream", "lateral"].sort())
   expect(idx.get("downstream")).toBeUndefined()
 })
+
+test("snapshot-wide build remains bounded across 1000 cells", () => {
+  const claimsByCell: Record<string, ClaimRecord[]> = {}
+  for (let i = 0; i < 1000; i++) {
+    claimsByCell[`domain-${i}:P4`] = [{ id: `c-${i}`, subject: "s", domain: `domain-${i}`, refs: i ? [`c-${i - 1}`] : [], anchor: "a" }]
+  }
+  const started = performance.now()
+  expect(buildReverseIndex(claimsByCell).size).toBe(999)
+  expect(performance.now() - started).toBeLessThan(50)
+})
