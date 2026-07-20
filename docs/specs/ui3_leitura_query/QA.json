@@ -1,0 +1,104 @@
+{
+  "featureId": "F002",
+  "score": 0.45,
+  "verdict": "FAIL",
+  "edgeCasesMissed": [
+    {
+      "where": "packages/mcp-web/src/og.ts:461-470 (navigateToClaim)",
+      "case": "RefChip navigation: spec 003 §3 `navigateToClaim` and §21 RefChip require setCenter RF on target node AND open OpenClaim of target. Implementation calls only `st.openClaim(refId)` — never calls `requestCenter`/`setCenter`. Canvas does not center on the referenced claim. Half of the invariant is missing. e2e (query-and-read.e2e.ts:15-17) explicitly self-deprecates with comment 'RefChip path coberto por alternate-flow ref-not-found separado (TBD fase B)' — the happy-path RefChip navigation is assert-skipped rather than validated.",
+      "impact": "Spec invariant Broken: 'ref-chip click centra nó alvo + abre OpenClaim do alvo'. Camera stays put; claimant cannot visually cross-reference. e2e void hides the bug."
+    },
+    {
+      "where": "packages/mcp-web/src/og.ts:462-465 + claims-browser.tsx:85 (navigateToClaim → openClaim → active lookup)",
+      "case": "Cross-cell refs silently swallowed. `navigateToClaim` checks `Object.values(st.claimsByCell).flat().some(c => c.id === refId)` across all cached cells, but then calls `st.openClaim(refId)` which only sets `selectedClaimId` WITHOUT switching `selectedCell`. ClaimsBrowser computes `active = bySeqDesc.find(c => c.id === selectedClaimId)` where `bySeqDesc` is the CURRENT cell's claims. If refId belongs to a different cell, `active` is null, OpenClaim disappears, no toast, no setCenter — user gets nothing. claim-id gating is broken across cell boundaries.",
+      "impact": "Cross-cell reference navigation (the whole point of 'referenciado por') fails silently. User clicks chip → UI stares blankly. No recovery path triggered; the dangling-ref branch (toast+refresh) is skipped because the claim IS cached — only in another cell."
+    },
+    {
+      "where": "packages/mcp-web/src/claims-browser.tsx:88-92 + reverse-index.ts:20-30",
+      "case": "ReverseIndex scope narrower than spec 003 §3 (`ReverseIndex: construir Map<claimId, claimId[]> O(edges) from snapshot edges`). The component builds the index from `claims-by-current-cell` only (`buildReverseIndexStatic(claims ?? [])` where `claims` is the selected cell). reverse-index.ts:8-10 adaptation note claims 'bounded by snapshot claim volume', but the actual call site passes only one cell's claims. So claims in OTHER cells referencing this one are invisible in 'referenciado por'.",
+      "impact": "'referenciado por' under-reports: any cross-cell referrer is missing. Spec §3 ReverseIndex service invariant broken. Test reverse-index.test.ts uses only intra-cell edges, masks the bug."
+    },
+    {
+      "where": "packages/mcp-web/src/sidebar-tree.tsx:35 (entry.claimCount += n.claims.length)",
+      "case": "claimCount per cell sums `n.claims.length` across all nodes in the cell without de-duplication. Spec 003 §352 / §351 'claimCount per cell derived from GraphNode.claims[] (id count — unique)'. If two nodes in the same cell carry the same claimId (claim spanning files), the displayed count double-counts. Multiple files are common and reasonable.",
+      "impact": "Sidebar 'Células' badge misleads orchestrator: falsely higher claim counts; quick filter sizing wrong. Spec 'unique' invariant violated."
+    },
+    {
+      "where": "packages/mcp-web/src/history-view.tsx:13 (matchesFilters byUser)",
+      "case": "byUser filter only matches `payload.byUser === f.byUser || payload.openedBy === f.byUser`. lock.acquired events put the user in `payload.holder`; lock.released puts it in `payload.holder`; authority.demoted puts actor in `payload.by`. e2e scenario in 004 §3.1 (alice+bob, lock.acquired+lock.released generated) would filter bob's lock.acquired events OUT when filtering byUser=bob, contradicting the test scenario 'ao menos 2 rows (open+abort do bob)' — the open/abort produce changeset.opened/aborted (covered by openedBy) but lock events are dropped. Truth: should also check payload.holder.",
+      "impact": "History filter silently drops lock events for the active user — broken auditability of lock activity. e2e might pass by accident (lock events outside filter scope) but rule is incomplete."
+    },
+    {
+      "where": "packages/mcp-web/src/history-view.tsx:33-41 (initial URL filter population; no pushState on change)",
+      "case": "Spec 003 §333 'query strings update URL (?user=&target=&kind=) for shareable links' and 004 §3.3 'Should preserve filters when navigating away and back to /history — URL preserva querystring'. Implementation only reads URL params on mount; it NEVER writes filter changes back to the URL via history.pushState. So applyFilters updates the store, but on route-out/route-in the same mount runs again and loads the ORIGINAL URL params, discarding any user-applied filter changes made in-flight.",
+      "impact": "Filter state is not actually preserved when round-tripping through another route. 'Shareable links' (the spec's second half) is impossible: any filter the user picks vanishes into the store, never the URL."
+    },
+    {
+      "where": "packages/mcp-web/src/query-bar.tsx:116 (c.score.toFixed(2))",
+      "case": "Render uses `c.score.toFixed(2)` unconditionally. `MatchResult` from og.ts queryClaims maps `score: c.score ?? 0`, so nullish server scores become 0 (safe). But if a future server payload returns score as a non-number string (e.g. '0.88'), `Number.toFixed` throws TypeError → React render crashes the QueryBar with white-screen. Defensive parse (`Number(c.score)||0`) is missing. Server contract has no schema enforcement here.",
+      "impact": "Malformed `score` field from server (string/null) drops the entire QueryBar render into a throw. Spec 003 §100 'score' is `number` typed but client trusts server with no validator."
+    },
+    {
+      "where": "packages/mcp-server/src/resources.ts:88-124 (claimsOfCell level normalization)",
+      "case": "Several malformed `cell=` values pass through without error contradicting 003 §251 'Unknown cell returns empty claims array (not error)' but also the implicit 'malformed cell should error' norm. cell='auth' (no ':') → d='auth', lp=undefined → lNorm='' → '(lNorm || \"5\")' = '5'. So claims with stored level=5 (or null normalized to 5) RETURNED for `graph://claims?cell=auth`. Cell=':P3' → d='', same exhaustion. Cell=':P3' returns auth-degenerate garbage silently. Spec 004 §58 only tests missing cell arg throws 'cell key required'; partial-cell or colon-less forms are uncovered.",
+      "impact": "Clients querying malformed cell keys silently get unintended claims instead of error/empty. Cache key collision: 'auth' and 'auth:5' both cache under same key in store.claimsByCell. Some downstream logic choosing which cache to read may pair the wrong cell label with returned claims."
+    },
+    {
+      "where": "packages/mcp-server/src/resources.ts:88-124 (claimsOfCell returns full row set then client-side filter on level)",
+      "case": "SQL SELECTs ALL claims of the tenant (`WHERE tenant_id = ?` only), then filters by domain+level in JS. On a 100k-claim tenant, every `graph://claims?cell=auth:P3` resourceRead pulls every claim row over the wire processed in JS, doing O(N) work on each call. Spec 004 §174 performance budget 'Open-to-render under 200ms on 50-claim cell' is only met because of client caching; the first read of an uncached cell violates that on large tenants. ALSO no SQL parameterization on domain/level → silent tenant-wide scan even though indexed columns exist.",
+      "impact": "Unbounded server query cost on large tenants; bandwidth amplification. Outside 004 non-functional budget ignoring 50k+ tenants but a regression risk identified."
+    },
+    {
+      "where": "packages/mcp-server/src/resources.ts:106-123 + claim-store.ts ClaimRecord (file field)",
+      "case": "claimRecord.file is an internal filesystem path/anchor on the server. The spec grounds it as `file:string` in ClaimRecord (003 §97) and the resource serializes it verbatim to any caller possessing a tenant token. There is no redaction or path-prefix trimming. An attacker with a valid tenant token (e.g., a member tenant) can enumerate internal repo layout and source-tree via just `graph://claims?cell=...` reads.",
+      "impact": "Info-disclosure of server-side filesystem layout to any tokenized member; corroborates lateral movement once any tenant token leaks. Spec does not specify redaction."
+    },
+    {
+      "where": "packages/mcp-web/src/history-view.tsx:84 (ts ternary redundancy)",
+      "case": "Both branches of `typeof e.ts === 'string' ? new Date(e.ts) : new Date(e.ts)` produce the same call. The dead ternary masks the intent — if the author meant to use `Number(e.ts)` for the numeric branch, the current code may parse epoch-stored ts as a Date and render 'Invalid Date' when server persists ts as an epoch number that is malformed (negative seq, low seq). No test scenario covers this — only nominal strings exist in fixture.",
+      "impact": "Subtle: ts numeric payloads from server render as 'Invalid Date' on malformed ts (e.g., 0, negative) without guard; spec 003 §148 'payload expandido não é editável' bars edit but display still must not corrupt silently."
+    },
+    {
+      "where": "packages/mcp-web/src/claims-browser.tsx:88-92 (reverse index lazy-build effect dep on `claims`) + og.ts:474-476 invalidate flushes claimsByCell",
+      "case": "On graph.rebuilt, `invalidateReverseIndex` clears `claimsByCell` store-wide. But the lazy-build effect at ClaimsBrowser:88 fires only when `selectedClaimId && !reverseIndex && claims?.length > 0`. There's a window where after rebuild, claimsByCell is empty, so the effect does NOT rebuild even if `OpenClaim` is rendered against stale UI. Build never triggers until user re-selects a claim. If `active` is null (no selectedClaimId), it never rebuilds, so 'referenciado por' stays empty forever for that claim until manual click — silently degrading 'referenciado por' across `graph.rebuilt` events while the user has an OpenClaim open.",
+      "impact": "ReverseIndex after graph.rebuilt silently absent for claims already in OpenClaim; spec §4 'ReverseIndexInvalidated → discard', then 'rebuild on next OpenClaim' — but 'next OpenClaim' triggered only by selection change, not graph reboot. UX regression mid-browsing."
+    }
+  ],
+  "highCriticalVulns": [
+    {
+      "where": "packages/mcp-web/src/og.ts:461-470 (navigateToClaim)",
+      "vuln": "BrokenClaimNavigationInvariant",
+      "severity": "high",
+      "detail": "Spec 003 §3 + §21 require setCenter on ref target + OpenClaim of target. Implementation only sets `selectedClaimId`. Two coupled failures: (a) canvas never centers, (b) cross-cell refs silently fail because ClaimsBrowser computes `active` from current-cell-`bySeqDesc` only. No recovery path fires — the dangling-ref branch is gated on claim-not-in-cache, but cross-cell claims ARE in cache (different cell key), so no toast/refresh either. The claim-id gating documented in spec §3 (navigateToClaim) is structurally broken when refId ∈ another cell.",
+      "remediation": "`navigateToClaim(refId)` must (1) locate the cell owning refId by scanning ` claimsByCell`; (2) call `setSelectedCell(ownerCell)` BEFORE `openClaim(refId)`; (3) `requestCenter(nodeById(refId))` or `requestCenter(ownerCell)` if RF node lookup fails. e2e must assert cross-cell chip navigation explicitly."
+    },
+    {
+      "where": "packages/mcp-web/src/claims-browser.tsx:88-92 → reverse-index.ts:20-30",
+      "vuln": "ReverseIndexScopeDrift",
+      "severity": "high",
+      "detail": "ReverseIndex is built per-cell rather than from the snapshot's full claim set. Spec 003 §3 mandates `Map<claimId, claimId[]>` over snapshot edges (claim→claim refs). Any claim outside the currently selected cell referencing the open claim is invisible in 'referenciado por'. reverse-index.ts:8-10 adaptation note claims 'production GraphEdge.type is only depends-on|survey — no typed claim→claim edge' but the fix taken (walk current-cell claims only) is STILL narrower than walking all claims of the snapshot via ClaimRecord refs. The unit test reverse-index.test.ts:30-32 verifies ONLY intra-cell edges; the cross-cell bug mates with the e2e self-deprecate at query-and-read.e2e.ts:15-17.",
+      "remediation": "Build the reverse index over `Object.values(st.claimsByCell).flat()` once on first OpenClaim (or from a snapshot-derived claims read), not just claims of the selected cell. Add unit test covering a ref where source lives in cell-A and target lives in cell-B."
+    },
+    {
+      "where": "packages/mcp-server/src/resources.ts:88-124 (claimsOfCell) + tenant scoping",
+      "vuln": "UnboundedTenantWideClaimScanAndSchemaTrust",
+      "severity": "high",
+      "detail": "`SELECT ... FROM claims WHERE tenant_id = ?` with NO domain/level predicate at SQL level; the entire tenant claim set is materialized in JS for every `graph?cell=` read. Pairs with client trusts `Number(r.level)` loosely-pat schema (resources.ts:112 uses `isNaN(Number(r.level)) ? undefined : Number(r.level)`) — diverging level normalisation between write/UI ('P3') and storage ('3' or 'P3') means two claims with the same logical level can land in different cells depending on the stored representation, and the matching predicate `norm === (lNorm || '5')` silently coerces missing-level claims to '5'. Asymmetric storage → leaked cross-level claims impossible to enumerate from client without exhaustive probing.",
+      "remediation": "Push domain/level filtering into SQL with normalized predicate; validate level format on commit (changeset.claim) to one canonical representation. Reject `cell` missing the colon rather than defaulting level to '5'."
+    },
+    {
+      "where": "packages/mcp-web/src/history-view.tsx (filter URL sync only mount→store)",
+      "vuln": "HistoryFilterURLInvariantBroken",
+      "severity": "medium",
+      "detail": "Spec 003 §333 + 004 §3.3 explicitly require URL query string updated on filter change ('query strings update URL (?user=&target=&kind=) for shareable links'). Implementation reads URL once on mount (history-view.tsx:33-41) but never calls `history.pushState`/`replaceState` when filters change. The filter state lives only in zustand (in-memory) — a route-out/route-in does restore from URL, but a filter change chosen by the user after mount will be lost on the same round-trip because mount-time URL still holds the previous parameters, while store changes were never persisted to URL.",
+      "remediation": "Subscribe filter-wheel handlers to call `history.replaceState` with `?user=&target=&kind=` (or hash-routing equivalent). Add e2e that changes filter, navigates away, returns, and asserts URL+state both reflect the LAST chosen filters."
+    },
+    {
+      "where": "packages/mcp-web/src/query-bar.tsx:116 + og.ts:413 queryClaims",
+      "vuln": "ScoreTrustTrustBoundaryViolation",
+      "severity": "medium",
+      "detail": "Client renders `(c.score ?? 0).toFixed(2)` — guards nullish but trusts any non-null server payload to be numeric. If a malformed/antagonised server-side indexer emits `score: 'high'` or `score: true`, `.toFixed(2)` throws a TypeError at render and the entire QueryBar crashes (no error boundary registered). Same trust path for MatchResult.domain used as Map key (query-bar.tsx:72) — `''.toLowerCase()` works but an object domain packs to '[object Object]' literally, groupings pile up. Server contract (graph-query.ts) is not enforced client-side.",
+      "remediation": "Validate MatchResult numerically at og.ts:407-413 with `typeof score === 'number' ? score : 0`; validate `typeof domain === 'string'` likewise. Add unit-test exercising malformedscheinlich server payloads."
+    }
+  ]
+}

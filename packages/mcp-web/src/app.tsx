@@ -15,6 +15,10 @@ import { toFlow, type CellRect } from "./flow/to-flow"
 import { connectOg, pollWho, pushToast, refreshFocus, setFocus, toastTarget } from "./og"
 import { useUi } from "./store"
 import { CellOverlays, DraftPanel, MyTurns, TurnModal } from "./turn"
+import { ClaimsBrowser } from "./claims-browser"
+import { QueryBar } from "./query-bar"
+import { HistoryView } from "./history-view"
+import { SidebarTree } from "./sidebar-tree"
 
 const nodeTypes = { card: BaseCard }
 
@@ -23,12 +27,18 @@ function Topbar({ onSettings, onOpenTurn }: { onSettings: () => void; onOpenTurn
   const name = useUi((s) => s.name)
   const seq = useUi((s) => s.seq)
   const demotions = useUi((s) => s.demotions)
+  const openQuery = useUi((s) => s.openQuery)
+  const navigate = useUi((s) => s.navigate)
+  const route = useUi((s) => s.route)
   return (
     <div id="topbar">
       <span className="title">open-graph</span>
       <span id="conn" className={conn}>{conn === "on" ? "● conectado" : "○ offline"}</span>
       <span id="seq" className="mono">seq {seq}</span>
       {demotions > 0 && <span id="drift-badge">{demotions} drifts</span>}
+      <button id="queryBtn" title="Buscar (⌘K)" onClick={() => openQuery(true)}>⌘K</button>
+      <a id="nav-history" href="#/history" data-active={route.startsWith("/history")} onClick={(e) => { e.preventDefault(); navigate("/history") }}>histórico</a>
+      <a id="nav-canvas" href="/" data-active={!route.startsWith("/history")} onClick={(e) => { e.preventDefault(); navigate("/") }}>canvas</a>
       {name && <button id="openturn" onClick={onOpenTurn}>Abrir turno</button>}
       {name && <span id="who">{name}</span>}
       <input
@@ -328,19 +338,47 @@ function Shell() {
   )
 }
 
+function RouteDriver(): JSX.Element {
+  const route = useUi((s) => s.route)
+  const navigate = useUi((s) => s.navigate)
+  useEffect(() => {
+    const onHash = () => navigate(window.location.hash.replace(/^#/, "") || "/")
+    window.addEventListener("hashchange", onHash)
+    return () => window.removeEventListener("hashchange", onHash)
+  }, [navigate])
+  if (route.startsWith("/history")) return <HistoryView />
+  return <></>
+}
+
 export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [turnOpen, setTurnOpen] = useState(false)
+  const route = useUi((s) => s.route)
+  const openTurnRequest = useUi((s) => s.openTurnRequest)
+  useEffect(() => {
+    if (openTurnRequest) {
+      setTurnOpen(true)
+      useUi.getState().requestOpenTurn(null) // consume
+    }
+  }, [openTurnRequest])
   return (
     <ReactFlowProvider>
       <Topbar onSettings={() => setSettingsOpen(true)} onOpenTurn={() => setTurnOpen(true)} />
-      <Shell />
+      {route.startsWith("/history") ? (
+        <RouteDriver />
+      ) : (
+        <Shell />
+      )}
+      {/*SidebarTree disabled for reconnect-revert investigation */}
+      {!route.startsWith("/history") && <SidebarTree />}
+      {!route.startsWith("/history") && <ClaimsBrowser />}
       <Roster />
       <Feed />
       <TypingIndicator />
       <Toasts />
       <DraftPanel />
       <MyTurns />
+      <QueryBar />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <TurnModal open={turnOpen} onClose={() => setTurnOpen(false)} />
     </ReactFlowProvider>

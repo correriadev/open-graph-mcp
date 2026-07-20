@@ -1,6 +1,6 @@
 # UI-3 — Escopo fechado (leitura e busca)
 
-> Status: **proposto** — depois de UI-2. Índice-pai: `README.md`.
+> Status: **concluído** — depois de UI-2. Índice-pai: `README.md`.
 >
 > **Objetivo:** fechar o gap que motivou a reescrita: hoje a UI
 > escreve mas não lê. Claims browser (o conteúdo criado vira legível e
@@ -30,14 +30,25 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] **Ciclo leitura→escrita**: achar claim via query → abrir no
+- [x] **Ciclo leitura→escrita**: achar claim via query → abrir no
       browser → navegar por ref → abrir turno na cell do claim lido —
       sem sair do fluxo (é a missão 3 do BT-4 executável 100% na web).
-- [ ] **Gaps visíveis**: query com termo inexistente mostra o gap (não
+      *RETRY #1 nåo-diferido:* RefChip cross-cell nav (setSelectedCell
+      + requestCenter) coberto em e2e (`query-and-read.e2e.ts`).
+- [x] **Gaps visíveis**: query com termo inexistente mostra o gap (não
       lista vazia muda) — validado em e2e.
-- [ ] **e2e da fase**: `query-and-read.e2e.ts` (query → gap → query ok
-      → abrir claim → navegar ref) e `history.e2e.ts` (filtro + payload).
-- [ ] CI verde.
+- [x] **e2e da fase**: `query-and-read.e2e.ts` (query → gap → query ok
+      → abrir claim → navegar ref cross-cell) e `history.e2e.ts`
+      (filtro + payload + round-trip URL).
+- [x] CI verde.
+
+**Itens explicitamente diferidos (Phase B):**
+
+- [ ] **TurnModal commit DraftPanel**: clicar 'abrir turno nesta cell'
+      abre o TurnModal UI-2; o commit integral do claim-draft via UI
+      permanece em Phase B (sessão LLM stub completa — fora do budget
+      desta fase). Path aberto honestamente: Phase A fecha o
+      leitura→escrita ao surfacear o modal; Phase B fecha o submit.
 
 ---
 

@@ -80,6 +80,67 @@ function changesetView(state: ServerState, tenant: string, csId: string) {
   }
 }
 
+/**
+ * ClaimsEnvelope read-only resource (F002 task 02, RETRY #1): returns full ClaimRecord[] for a cell.
+ * Read-only direct SQLite read with domain+level pushed into the SQL WHERE predicate (REWORK-LOG
+ * openPoint 1 / H / I — kills the O(tenant) JS post-filter and respects the 004 §174 200ms budget).
+ * Rejects malformed cell keys (require exactly `domain:level`, both non-empty) — REWORK-LOG H.
+ * Redacts the `file` path prefix (server filesystem layout disclosure — REWORK-LOG J).
+ */
+function redactFile(raw: string | null, repoPath: string): string | undefined {
+  if (!raw) return undefined
+  const norm = raw.replace(/\\/g, "/")
+  if (repoPath) {
+    const rp = repoPath.replace(/\\/g, "/").replace(/\/$/, "")
+    if (norm === rp || norm.startsWith(rp + "/")) return norm.slice(rp.length).replace(/^\/+/, "")
+  }
+  const idx = norm.indexOf("/src/")
+  if (idx >= 0) return norm.slice(idx + 1) // keep `src/…` relative
+  if (norm.startsWith("/")) return norm.slice(norm.lastIndexOf("/") + 1)
+  return norm
+}
+
+function claimsOfCell(state: ServerState, tenant: string, cell: string) {
+  if (!cell) throw new Error("cell key required")
+  const cut = cell.indexOf(":")
+  if (cut <= 0 || cut >= cell.length - 1) {
+    throw new Error(`cell key malformed: '${cell}' — expected 'domain:level'`)
+  }
+  const d = cell.slice(0, cut)
+  const lpRaw = cell.slice(cut + 1)
+  if (!d || !lpRaw) throw new Error(`cell key malformed: '${cell}' — expected 'domain:level'`)
+  const lNorm = lpRaw.replace(/^P/, "")
+  if (!/^\d+$/.test(lNorm)) throw new Error(`cell key malformed: '${cell}' — level must be numeric`)
+  // claims.level is stored as either "P<n>" (UI string) or "<n>" (agent numeric) — match both via IN.
+  const rows = state.db
+    .query(
+      "SELECT id, seq, subject, domain, level, refs, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? AND domain = ? AND level IN (?, ?)",
+    )
+    .all(tenant, d, `P${lNorm}`, lNorm) as {
+    id: string; seq: number; subject: string | null; domain: string | null; level: string | null
+    refs: string | null; anchor: string | null; file: string | null
+    verdict_confidence: number | null; verdict_overclaim: number | null; supersedes: string | null
+  }[]
+  return {
+    cell,
+    claims: rows.map((r) => ({
+      id: r.id,
+      subject: r.subject ?? r.id,
+      domain: r.domain ?? d,
+      level: r.level != null ? (isNaN(Number(r.level)) ? undefined : Number(r.level)) : undefined,
+      refs: JSON.parse(r.refs ?? "[]"),
+      anchor: r.anchor ?? "",
+      file: redactFile(r.file, state.repoPath),
+      seq: r.seq,
+      verdict:
+        r.verdict_confidence != null || r.verdict_overclaim != null
+          ? { confidence: r.verdict_confidence ?? undefined, overclaim: !!r.verdict_overclaim }
+          : undefined,
+      supersedes: r.supersedes ?? undefined,
+    })),
+  }
+}
+
 export function resolveResource(state: ServerState, uri: string, tenant = DEFAULT_TENANT): unknown {
   const rest = uri.replace(/^graph:\/\//, "")
   const [pathPart, queryPart] = rest.split("?")
@@ -119,6 +180,8 @@ export function resolveResource(state: ServerState, uri: string, tenant = DEFAUL
       ) as { id: string }[]
       return { changesets: rows.map((r) => changesetView(state, tenant, r.id)) }
     }
+    case "claims":
+      return claimsOfCell(state, tenant, params.get("cell") ?? "")
     default:
       throw new Error(`unknown resource: ${uri}`)
   }
@@ -131,4 +194,5 @@ export const RESOURCE_LIST = [
   { uri: "graph://domain/{domain}", name: "domain", mimeType: "application/json", description: "All cells of a domain." },
   { uri: "graph://changeset/{id}", name: "changeset", mimeType: "application/json", description: "Changeset state, deltas and participants." },
   { uri: "graph://changesets", name: "changesets", mimeType: "application/json", description: "Changesets of the tenant (?status=open)." },
+  { uri: "graph://claims", name: "claims", mimeType: "application/json", description: "Claims of a cell (?cell=domain:level)." },
 ]
