@@ -283,3 +283,96 @@
 #panel dd { word-break: break-word; font-size: 12px; }
 #panel .auth-graph { color: var(--ok); }
 #panel .auth-suspended { color: var(--warn); }
+
+/* ─── UI-3 (F002): QueryBar (⌘K), ClaimsBrowser, SidebarTree, HistoryView ─── */
+/* canvas yields left/right strips to UI-3 panels when route is canvas mode */
+.canvas-wrap { left: 200px !important; right: 0 !important; }
+/* reuses right panel area same as #panel — rendered only when selectedCell set */
+#query-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 50;
+  display: flex; justify-content: center; align-items: center;
+}
+#query-backdrop .query-modal {
+  background: var(--panel, #fff); color: var(--text); min-width: 480px; max-width: 720px;
+  padding: 12px; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); max-height: 70vh;
+  display: flex; flex-direction: column;
+}
+#query-input { width: 100%; padding: 8px; font-size: 14px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; }
+.query-gap {
+  margin: 8px 0; padding: 8px; background: rgba(255,180,0,0.12); border-left: 3px solid #ffb400;
+}
+.query-gap .gap-text { font-weight: 600; }
+.query-gap .refinements { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+.refinement-suggestion { background: #f1f3ff; padding: 2px 6px; border-radius: 3px; font-size: 12px; cursor: pointer; }
+.query-results { overflow-y: auto; }
+.query-group { margin: 4px 0; }
+.query-group .group-header { font-weight: 600; padding: 4px 0 4px 4px; background: #f7f7f7; }
+.query-result {
+  display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 4px 8px;
+  background: transparent; border: none; border-bottom: 1px solid #eee; cursor: pointer;
+}
+.query-result:hover { background: #f5f7ff; }
+.query-result .id { font-size: 11px; color: #666; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
+.query-result .resp { flex: 1; padding: 0 8px; }
+.query-result .score { font-size: 11px; color: #888; }
+
+/* ClaimsBrowser panel */
+#claims-panel {
+  position: fixed; right: 12px; top: 52px; bottom: 12px; width: 320px; z-index: 40;
+  background: var(--panel, #fff); border: 1px solid #ddd; border-radius: 4px;
+  padding: 8px; overflow-y: auto;
+}
+#claims-panel .claim-row {
+  display: flex; gap: 6px; padding: 4px 6px; border-bottom: 1px solid #eee; cursor: pointer;
+}
+#claims-panel .claim-row:hover { background: #f7f7ff; }
+#claims-panel .claim-row .id { font-size: 11px; color: #666; max-width: 30%; overflow: hidden; text-overflow: ellipsis; }
+#claims-panel .claim-row .subject { flex: 1; }
+#claims-panel .claim-row .seq { font-size: 11px; color: #999; }
+#claims-panel .open-claim { margin-top: 8px; padding: 8px; border-top: 2px solid #ddd; }
+#claims-panel .open-claim h4 { margin: 0 0 4px; }
+#claims-panel .open-claim .anchor { background: #f7f7f7; padding: 4px; font-size: 12px; white-space: pre-wrap; }
+#claims-panel .open-claim .ref-chip {
+  display: inline-block; padding: 2px 6px; margin: 2px 2px 0 0; background: #eef1ff;
+  border: 1px solid #ccc; border-radius: 3px; font-size: 11px; cursor: pointer;
+}
+#claims-panel .open-claim .referenced-by { margin-top: 6px; }
+#claims-panel .open-claim .none { font-size: 11px; color: #888; }
+#claims-panel .open-claim .provenance { margin-top: 6px; font-size: 11px; color: #888; }
+#claims-panel .open-claim-footer button {
+  margin-top: 6px; padding: 4px 8px; background: #4a73d8; color: white; border: none; border-radius: 3px; cursor: pointer;
+}
+#close-claims { position: absolute; right: 6px; top: 6px; }
+
+/* SidebarTree (left) */
+#sidebar-tree {
+  position: fixed; left: 0; top: 40px; bottom: 0; width: 200px; z-index: 12;
+  background: var(--panel, #fff); border-right: 1px solid #ddd; padding: 6px; overflow-y: auto;
+}
+#sidebar-tree .quick-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+#sidebar-tree .quick-filter { padding: 2px 6px; font-size: 11px; border: 1px solid #ddd; background: transparent; cursor: pointer; border-radius: 3px; }
+#sidebar-tree .quick-filter[data-active="true"] { background: #d7e2ff; }
+#sidebar-tree .domain { margin: 4px 0; }
+#sidebar-tree .domain-head { font-weight: 600; font-size: 12px; }
+#sidebar-tree .level-list { list-style: none; padding-left: 12px; }
+#sidebar-tree .sidebar-cell { display: flex; gap: 4px; padding: 2px 6px; border: none; background: transparent; cursor: pointer; width: 100%; }
+#sidebar-tree .sidebar-cell.selected { background: #d7e2ff; }
+#sidebar-tree .sidebar-cell .lvl { font-size: 11px; min-width: 24px; }
+#sidebar-tree .sidebar-cell .count { font-size: 11px; color: #666; flex: 1; }
+#sidebar-tree .lock-badge { font-size: 12px; }
+
+#queryBtn { margin-left: 4px; }
+#nav-history, #nav-canvas { margin: 0 4px; color: #4a73d8; cursor: pointer; font-size: 12px; }
+
+/* HistoryView */
+#history-view {
+  position: fixed; top: 40px; left: 200px; right: 0; bottom: 0; padding: 12px; overflow-y: auto;
+  background: var(--panel, #fff);
+}
+#history-view .filters { display: flex; gap: 8px; margin-bottom: 8px; }
+#history-view .history-row { padding: 4px 6px; border-bottom: 1px solid #eee; cursor: pointer; }
+#history-view .row-head { display: flex; gap: 6px; }
+#history-view .row-head .kind { font-size: 11px; }
+#history-view .history-payload {
+  margin-top: 4px; background: #f7f7f7; padding: 6px; font-size: 11px; white-space: pre-wrap;
+}

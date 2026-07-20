@@ -18,7 +18,7 @@ import { toServerCell, toUiCell, levelNum } from "./cells"
 import { colorForCsId, GhostStore, type GhostDelta } from "./ghosts"
 import { localStorageTokenStore } from "./token-store"
 import { ToastQueue } from "./toasts"
-import { useUi, type ActiveCs, type DraftDelta } from "./store"
+import { useUi, type ActiveCs, type DraftDelta, type ClaimRecord, type HistoryEvent, type MatchResult, type GapResult } from "./store"
 
 const DRIFT_KINDS = new Set(["drift.node", "drift.cell"])
 const CS_KINDS = new Set([
@@ -146,9 +146,23 @@ export async function pollWho(): Promise<void> {
   }
 }
 
-setInterval(pollWho, 10_000)
-// dots de idade (dotColor) mudam sem tráfego novo — re-projeta o roster periodicamente
-setInterval(projectPresence, 5_000)
+// Timers armed on connect, disarmed on close (RETRY #1 REWORK-LOG openPoint 5).
+let pollTimer: ReturnType<typeof setInterval> | null = null
+let presenceTimer: ReturnType<typeof setInterval> | null = null
+function armTimers(): void {
+  if (pollTimer === null) pollTimer = setInterval(pollWho, 10_000)
+  if (presenceTimer === null) presenceTimer = setInterval(projectPresence, 5_000)
+}
+function disarmTimers(): void {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null }
+}
+
+// navigateToClaim negative cache + debounce (RETRY #1 REWORK-LOG openPoint 9): a dangling RefChip
+// clicked repeatedly shouldn't re-fire loadSnapshot per click. Anchor a 300ms debounce + a Set of
+// refIds already known absent.
+const danglingRefIds = new Set<string>()
+let danglingRefTimer: ReturnType<typeof setTimeout> | null = null
 
 // ---- ghost deltas: refetch com debounce de graph://changeset/{id} ----------
 const refetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -224,7 +238,10 @@ function applyEvent(env: Envelope): void {
     demotions.delete(env.target)
     refreshDemotions()
   }
-  if (env.kind === "graph.rebuilt" || env.kind === "graph.bootstrapped") loadSnapshot()
+  if (env.kind === "graph.rebuilt" || env.kind === "graph.bootstrapped") {
+    loadSnapshot()
+    invalidateReverseIndex()
+  }
 
   if (env.kind === "server.restarted") {
     // presença vive só na memória do server (spec §9.1); a recuperação em si é do connect()
@@ -348,6 +365,9 @@ export async function extendTurn(): Promise<{ ok: boolean; reasons: string[] }> 
   return r
 }
 
+// ---- UI-3 (F002): claims/query/history/reverse-index ----------------------
+export type { ClaimRecord, HistoryEvent, MatchResult, GapResult }
+
 export async function listMine(): Promise<void> {
   const h = handle
   if (!h || !tokenStore.get()) return
@@ -359,6 +379,129 @@ export async function listMine(): Promise<void> {
   } catch (e) {
     console.error("list_mine failed", e)
   }
+}
+
+/** Read-only `graph://claims?cell=<domain:level>` → ClaimRecord[]. Cached in store per snapshot. */
+export async function readClaims(cell: string): Promise<ClaimRecord[]> {
+  const cached = useUi.getState().claimsByCell[cell]
+  if (cached) return cached
+  useUi.getState().setClaimsLoading(true)
+  useUi.getState().setClaimsError(null)
+  try {
+    const res: any = await resourceRead(serverBase(), `graph://claims?cell=${encodeURIComponent(cell)}`, tokenStore.get()?.token)
+    const claims: ClaimRecord[] = (res?.claims ?? []).map((c: any) => ({
+      id: c.id,
+      subject: c.subject ?? c.id,
+      domain: c.domain,
+      level: c.level,
+      refs: c.refs ?? [],
+      anchor: c.anchor ?? "",
+      file: c.file,
+      seq: c.seq,
+      verdict: c.verdict,
+      status: c.status,
+      supersedes: c.supersedes,
+    }))
+    useUi.getState().setClaimsForCell(cell, claims)
+    return claims
+  } catch (e) {
+    useUi.getState().setClaimsError((e as Error).message)
+    return []
+  } finally {
+    useUi.getState().setClaimsLoading(false)
+  }
+}
+
+/** og.call('graph.query', {terms}) → normalised {candidates, gaps}. Gap is always 1st-class.
+ *  RETRY #1 (REWORK-LOG openPoint G): validate `score` (number → return; otherwise → 0) and
+ *  `domain` (string → return; otherwise → null) so a malformed server response can't TypeError
+ *  on `score.toFixed(2)` or other renders. */
+export async function queryClaims(term: string): Promise<{ candidates: MatchResult[]; gaps: GapResult[] }> {
+  const h = og()
+  if (!h) return { candidates: [], gaps: [{ term, suggestions: [] }] }
+  const res: any = await h.call("graph.query", { terms: [term] })
+  const candidates: MatchResult[] = (res?.candidates ?? []).map((c: any) => ({
+    id: c.id,
+    domain: typeof c.domain === "string" ? c.domain : null,
+    layer: c.layer,
+    subject: typeof c.subject === "string" ? c.subject : String(c.subject ?? c.id),
+    file: typeof c.file === "string" ? c.file : "",
+    anchor: typeof c.anchor === "string" ? c.anchor : "",
+    score: typeof c.score === "number" ? c.score : 0,
+  }))
+  const rawGaps: string[] = res?.gaps ?? []
+  const gaps: GapResult[] = rawGaps.map((t) => ({ term: t, suggestions: refinementFor(t) }))
+  return { candidates, gaps }
+}
+
+function refinementFor(term: string): string[] {
+  // Naive refinement hints from snapshot domain lexicon; ponytail: domain names are how the
+  // orchestrator should drill — server-side semantic suggestions are a later slice.
+  const g = useUi.getState().graph
+  const domains = new Set<string>()
+  for (const n of g?.nodes ?? []) if (n.domain) domains.add(n.domain)
+  const near = [...domains].filter((d) => d.toLowerCase().includes(term.toLowerCase().slice(0, 3)) || term.toLowerCase().includes(d.toLowerCase().slice(0, 3)))
+  return near.length ? near : [...domains]
+}
+
+/** resourceRead('graph://history?since=0&limit=1000') → EventEnvelope[]. */
+export async function readHistory(since = 0, limit = 1000): Promise<HistoryEvent[]> {
+  useUi.getState().setHistoryLoading(true)
+  useUi.getState().setHistoryError(null)
+  try {
+    const res: any = await resourceRead(serverBase(), `graph://history?since=${since}&limit=${limit}`, tokenStore.get()?.token)
+    const events: HistoryEvent[] = (res?.events ?? []).map((e: any) => ({
+      seq: e.seq,
+      ts: e.ts,
+      kind: e.kind,
+      target: e.target,
+      payload: e.payload,
+      graphId: e.graphId,
+    }))
+    useUi.getState().setHistoryEvents(events)
+    return events
+  } catch (e) {
+    useUi.getState().setHistoryError((e as Error).message)
+    return []
+  } finally {
+    useUi.getState().setHistoryLoading(false)
+  }
+}
+
+/** Reverse index builder — pure derivation moved to reverse-index.ts (unit-testable in
+ * isolation; og.ts is browser-side and not importable under bun:test). */
+import { buildReverseIndex as buildReverseIndexPure } from "./reverse-index"
+export const buildReverseIndexStatic = buildReverseIndexPure
+
+/** RefChip navigation (F002 task 03 acceptance, RETRY #1 REWORK-LOG openPoint A / edgeCase A):
+ *  ownerCell lookup over claimsByCell → setSelectedCell BEFORE openClaim → requestCenter on
+ *  the owner's cell (setCenter RF on the node) + open the target claim. If ref is dangling, toast
+ *  'ref não encontrado' once + debounced snapshot refresh (negative cache on the refId).
+ */
+export function navigateToClaim(refId: string): void {
+  const st = useUi.getState()
+  const ownerEntry = Object.entries(st.claimsByCell).find(([, list]) => (list ?? []).some((c) => c.id === refId))
+  if (ownerEntry) {
+    const [ownerCell] = ownerEntry
+    // Cross-cell: ensure ClaimsBrowser is on the OWNER cell so OpenClaim's bySeqDesc includes the ref.
+    if (st.selectedCell !== ownerCell) st.setSelectedCell(ownerCell)
+    st.openClaim(refId)
+    st.requestCenter(ownerCell)
+    return
+  }
+  // Negative cache + debounce to avoid re-firing loadSnapshot on every repeat click.
+  if (danglingRefIds.has(refId)) return
+  danglingRefIds.add(refId)
+  if (danglingRefTimer) clearTimeout(danglingRefTimer)
+  danglingRefTimer = setTimeout(() => { danglingRefTimer = null }, 300)
+  pushToast(`ref-${refId}`, `ref não encontrado, snapshot refresh`)
+  loadSnapshot()
+}
+export function invalidateReverseIndex(): void {
+  useUi.getState().setReverseIndex(null)
+  useUi.getState().setClaimsError(null)
+  // claims per snapshot are stale after rebuild — drop caches so next ClaimsBrowser re-fetches.
+  useUi.setState({ claimsByCell: {} })
 }
 
 /** Reabre o draft dum turno meu já aberto (widget "meus turnos" / reattach). */
@@ -383,8 +526,8 @@ export async function connectOg(name?: string): Promise<void> {
       agentKind: "web",
       tenant,
       ...(cached || finalName ? { store: tokenStore, name: finalName || undefined } : {}),
-      onOpen: () => useUi.getState().setConn("on"),
-      onClose: () => useUi.getState().setConn("off"),
+      onOpen: () => { useUi.getState().setConn("on"); armTimers() },
+      onClose: () => { useUi.getState().setConn("off"); disarmTimers() },
       onReset: () => loadSnapshot(),
       // pós-(re)conexão: user.* efêmeros não são re-emitidos pra sessão nova — poll imediato;
       // changesets ainda abertos desta identidade voltam pros ghosts (spec §9)

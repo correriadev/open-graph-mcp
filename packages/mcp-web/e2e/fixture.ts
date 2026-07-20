@@ -41,6 +41,10 @@ function tempFixtureRepo(): { root: string; cleanup: () => void } {
   mkdirSync(path.join(root, "src", "auth"), { recursive: true })
   mkdirSync(path.join(root, "src", "billing"), { recursive: true })
   writeFileSync(path.join(root, "src", "auth", "login.ts"), "export function login() {}\n")
+  // RETRY #1: asset only present so classify.ts maps it to P5 (.svg ext -> P5_EXTS) and the auth
+  // domain gains a `auth:P5` node — gives SidebarTree a navigable level-5 cell so cross-cell chip
+  // navigation can have a root claim (refs=[]) at the floor of one domain referenced from a mid-cell.
+  writeFileSync(path.join(root, "src", "auth", "icon.svg"), "<svg/>\n")
   writeFileSync(path.join(root, "src", "billing", "charge.ts"), "export function charge() {}\n")
   mkdirSync(path.join(root, ".graph"), { recursive: true })
   writeFileSync(
