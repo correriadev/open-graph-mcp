@@ -1,0 +1,13 @@
+# Autonomous Decision Audit Trail
+
+| Timestamp | Feature | Decision | Scores | Rationale |
+| --- | --- | --- | --- | ---|
+| 2026-07-19 | BOOTSTRAP | Init backlog F001..F004 from docs/roadmap-web-ui/; projectPaths=packages/mcp-web; thresholds TL/Adv=0.70; maxReworks=2 | — | Sprint retomada UI-2..UI-5; code audited; UI-0/UI-1 green; UI-2 com código sem e2e; UI-3/4/5 não iniciados |
+| 2026-07-19 | F001 | Started planning for F001. Phase A done: docs/specs/ui2_turnos_e2e/ (001..004) created by software-architect. 8 tasks parsed from 003-mcp-web-tactical-design.md §6. | — | Specs written autonomously; tasks cover turn-lifecycle + lock-contention e2e specs + DoD flip + local CI gate. |
+| 2026-07-19 | F001 | Phase B: tdd-orchestrator rodou 8/8 tasks; TDD-OUTPUT.json allCompleted=true, CI green. Specs admitted three honest adaptations (refs-to-claim-ids, advisory gate, .gate-reasons→#dreasons). | TL:- Adv:- |turn-lifecycle.e2e.ts + lock-contention.e2e.ts created; 02-scope-ui-2-turnos.md DoD flipado pra concluído. |
+| 2026-07-19 | F001 | Phase C: TL=0.88 PASS, Adv=0.58 RETRY. Gate RETRY #1 (Reworks < maxReworks=2). | TL:0.88 Adv:0.58 | Top finding QA: §3.3 PII non-leak unidirecional (sem negação de userId); §3.2 ref inexistente substituído por branch mais fraco; §3.1 prova visual cross-browser substituída por toast+#seq; recovery/TTL/malformed-JSON ausentes. REWORK-LOG.md escrito; tasks resetadas. Reverter header 02-scope pra "proposto (em rework)" durante retry. |
+| 2026-07-19 | F001 | Phase B RETRY #1: tdd-orchestrator aplicou REWORK-LOG plan A/B/C. PII non-leak negativa adicionada; gate-fail decomposto (commit-reject API bypass + out-of-scope + recovery); cross-browser proof via #seq numérico + .og-ghost-card count; malformed JSON; TTL-abort (com honest N/A); #seq endurance; refpick explicit; DoD reconciled. CI green (18/18 specs). | TL:- Adv:- | src/* intocado. 4 arquivos modificados (2 e2e + 02-scope + 004-spec). |
+| 2026-07-19 | F001 | Phase C RETRY #1: TL=0.90 PASS, Adv=0.84 PASS. Gate PASS. | TL:0.90 Adv:0.84 | F001 ACCEPTED. TTL-abort risk #1 permanece MEDIUM residual (honest adaptation; e2e knob de changeset TTL não exposto pelo harness). |
+| 2026-07-19 | F001 | Feature F001 COMPLETED — cycle #1 closed. ${completedCycles}=1. | — | Próximo: F002 (UI-3 leitura/query). |
+| 2026-07-19 | F001 | Phase E: project-memory escreveu docs/feature/ui2_turnos_e2e.md (9.8K). Nenhum ADR tocado (ciclo sem mudança arquitetural). | — | — |
+| 2026-07-19 | F002 | Started planning for F002. Phase A begins. | — | Domain: ui3_leitura_query. depends F001 (COMPLETED). |

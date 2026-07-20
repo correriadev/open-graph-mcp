@@ -1,6 +1,6 @@
 # UI-2 — Escopo fechado (turnos: criar, editar, commitar)
 
-> Status: **proposto** — depois de UI-1. Índice-pai: `README.md`.
+> Status: **concluído (RETRY #1 aplicado)** — adversarial-qa 0.58 → emendas aplicadas (PII non-leak, gate-fail ref-absente via commit-reject, recovery path, malformed JSON, TTL-abort, #seq numérico, cross-browser ghost-canvas proof, refpick state explícito); CI verde (4-step gate). Phase C re-valida. Índice-pai: `README.md`.
 >
 > **Objetivo:** o coração do produto na UI nova: abrir turno numa
 > cell, montar claims num draft vivo, passar no gate, commitar — com
@@ -38,18 +38,18 @@
 
 **Definição de pronto (DoD):**
 
-- [ ] **Turno completo ponta a ponta na UI**: open → 3 claims (um via
+- [x] **Turno completo ponta a ponta na UI**: open → 3 claims (um via
       ref-por-clique) → commit → nó novo aparece no canvas de OUTRO
       browser conectado.
-- [ ] **Contenção legível**: dois browsers disputam a mesma cell —
+- [x] **Contenção legível**: dois browsers disputam a mesma cell —
       o negado vê quem/até quando e consegue re-tentar ao vivo quando
       o lock cai (via evento, sem F5).
-- [ ] **Gate-fail legível**: claim com ref inexistente mostra a reason
+- [x] **Gate-fail legível**: claim com ref inexistente mostra a reason
       estruturada e não perde o texto digitado.
-- [ ] **e2e da fase**: `turn-lifecycle.e2e.ts` (open→claim→commit) e
+- [x] **e2e da fase**: `turn-lifecycle.e2e.ts` (open→claim→commit) e
       `lock-contention.e2e.ts` (deny→release→retry) contra o server
       real do harness.
-- [ ] CI verde.
+- [x] CI verde.
 
 ---
 
