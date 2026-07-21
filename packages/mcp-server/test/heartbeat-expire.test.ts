@@ -25,6 +25,7 @@ test("a session that stops beating expires after presenceTtlMs and broadcasts us
     // presence.who no longer lists Alice.
     const who = await callTool(s.url, "presence.who", { token: bob.token })
     expect(who.users.map((u: any) => u.id)).not.toContain(alice.userId)
+    expect(s.state.actorSessions.get(alice.tenantId)?.has(alice.userId) ?? false).toBe(false)
 
     aliceSse.close()
     bobSse.close()

@@ -22,6 +22,7 @@ import { SidebarTree } from "./sidebar-tree"
 import { CellContainers } from "./cell-container"
 import { StateLegend } from "./state-legend"
 import { domainColor } from "./flow/rich-node"
+import { installE2EBridge, type E2EBridgeTarget } from "./e2e-bridge"
 
 const nodeTypes = { card: BaseCard }
 
@@ -287,7 +288,7 @@ function NodePanel() {
   )
 }
 
-/** Centra a câmera na cell/nó pedido por toast/feed; expõe hooks de e2e. */
+/** Centra a câmera na cell/nó pedido por toast/feed; e2e builds additionally expose test controls. */
 function CameraDriver({ cells }: { cells: Record<string, CellRect> }) {
   const rf = useReactFlow()
   const centerCell = useUi((s) => s.centerCell)
@@ -304,14 +305,13 @@ function CameraDriver({ cells }: { cells: Record<string, CellRect> }) {
     requestCenter(null)
   }, [centerCell, cells, graph, rf, requestCenter])
   useEffect(() => {
-    // hooks de e2e (QA-2): funções de produção reais, só disparadas fora dos timers/gestos
-    ;(window as any).__og_e2e = {
+    if (!__OG_E2E__) return
+    return installE2EBridge(window as Window & E2EBridgeTarget, {
       setFocus,
       pushToast,
       pollWho,
       getViewport: () => rf.getViewport(),
       setViewport: (viewport: Viewport) => rf.setViewport(viewport),
-      zoomTo: (zoom: number) => rf.setViewport({ ...rf.getViewport(), zoom }),
       focusNode: (id: string, zoom: number) => {
         const node = rf.getNode(id)
         if (node) rf.setCenter(node.position.x + CARD_W / 2, node.position.y + CARD_H / 2, { zoom, duration: 0 })
@@ -323,7 +323,7 @@ function CameraDriver({ cells }: { cells: Record<string, CellRect> }) {
       setCellAuthority: (cell: string, authority: "source" | "graph" | "suspended") => useUi.setState((state) => ({
         graph: state.graph ? { ...state.graph, authority: { ...state.graph.authority, [cell]: authority } } : null,
       })),
-    }
+    })
   }, [rf])
   return null
 }

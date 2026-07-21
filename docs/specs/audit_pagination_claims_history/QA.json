@@ -1,0 +1,43 @@
+{
+  "featureId": "F005",
+  "score": 0.8,
+  "passedAdversarial": true,
+  "vulnerabilities": [
+    {
+      "type": "RETRY_GUARD_MISMATCH",
+      "severity": "MEDIUM",
+      "description": "The retry controls own separate cell and snapshot errors, but both call continuation helpers with terminal/uninitialized guards. After an initial snapshot page fails, claimsHasMore is false and loadMoreClaims() returns without retrying. After a dedicated cell page-zero failure over an existing snapshot fragment, loadMoreCellClaims() returns because the cell page is not initialized. Closing/reopening the claim or cell can recover, but the displayed retry itself is a no-op."
+    }
+  ],
+  "edgeCasesMissed": [
+    "Fail the initial tenant snapshot page before hasMore is established and assert the snapshot retry explicitly repeats cursor zero.",
+    "Fail the dedicated cell cursor-zero request when a snapshot fragment already exists and assert the cell retry repeats cursor zero rather than requiring initialized continuation state.",
+    "Resolve different history cursor flights out of order during a route reset and prove an older continuation cannot overwrite the reset cursor or hasMore state.",
+    "Add an interaction-level browser test that traverses more than one cell page and more than one reverse-reference page, rather than validating only projection/control helpers."
+  ],
+  "topFinding": "All prior HIGH defects are fixed; the remaining issue is a medium-severity mismatch where initial-load retry buttons call continuation functions whose guards can suppress the retry.",
+  "impact": {
+    "causesCrash": false,
+    "breaksCoreFunctionality": false,
+    "rationale": "Normal bounded traversal, isolation, stale-generation rejection, and multi-page reachability remain functional. A transient failure on an initial cell or snapshot page can leave the visible retry inert, but reopening the affected view restarts the request."
+  },
+  "retest": {
+    "cacheCompletenessFixed": true,
+    "retryOwnershipSeparated": true,
+    "staleSnapshotStateRejected": true,
+    "staleCellStateRejected": true,
+    "historyFlightsKeyedByCursorAndLimit": true,
+    "multiPageServerReachabilityVerified": true,
+    "multiPageClientProjectionVerified": true
+  },
+  "tests": {
+    "commands": [
+      "rtk bun run test",
+      "rtk bun run --cwd packages/mcp-web test",
+      "rtk bunx tsc --noEmit -p packages/mcp-web/tsconfig.json"
+    ],
+    "passed": 129,
+    "failed": 0,
+    "typecheckPassed": true
+  }
+}

@@ -6,7 +6,8 @@ import { defineConfig } from "vite"
 // viewer never calls. Stub them so the browser bundle links (seedLayout/lodForZoom are pure).
 const stub = fileURLToPath(new URL("./src/node-stub.ts", import.meta.url))
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  define: { __OG_E2E__: JSON.stringify(mode === "e2e") },
   plugins: [react()],
   resolve: {
     alias: {
@@ -17,4 +18,4 @@ export default defineConfig({
   },
   server: { port: 5175 },
   build: { target: "esnext", sourcemap: true },
-})
+}))

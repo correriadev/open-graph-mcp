@@ -54,6 +54,45 @@ export type HistoryEvent = { seq: number; ts: number | string; kind: string; tar
 export type HistoryFilters = { byUser?: string; target?: string; kind?: string }
 export type QuickFilter = "all" | "open-turn" | "locked" | "mine"
 
+export function mergeClaimPage(current: Record<string, ClaimRecord[]>, page: ClaimRecord[]): Record<string, ClaimRecord[]> {
+  const next = { ...current }
+  for (const claim of page) {
+    const level = String(claim.level ?? "").replace(/^P/, "")
+    if (!claim.domain || !level) continue
+    const cell = `${claim.domain}:P${level}`
+    const byId = new Map((next[cell] ?? []).map((item) => [item.id, item]))
+    byId.set(claim.id, claim)
+    next[cell] = [...byId.values()].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+  }
+  return next
+}
+
+export function mergeHistoryPage(current: HistoryEvent[], page: HistoryEvent[], append: boolean): HistoryEvent[] {
+  const bySeq = new Map((append ? current : []).map((event) => [event.seq, event]))
+  for (const event of page) bySeq.set(event.seq, event)
+  return [...bySeq.values()].sort((a, b) => a.seq - b.seq)
+}
+
+export function shouldReadCellPage(cached: ClaimRecord[] | undefined, page: { initialized: boolean } | undefined, continuation: boolean): boolean {
+  if (continuation) return page?.initialized === true
+  return !cached || page?.initialized !== true
+}
+
+export function claimsPaginationControls(input: {
+  hasOpenClaim: boolean
+  cellHasMore: boolean
+  snapshotHasMore: boolean
+  cellError: string | null
+  snapshotError: string | null
+}) {
+  return {
+    showCellContinuation: input.cellHasMore,
+    showSnapshotContinuation: input.hasOpenClaim && input.snapshotHasMore,
+    retryCell: !!input.cellError,
+    retrySnapshot: !!input.snapshotError,
+  }
+}
+
 type UiState = {
   graph: Graph | null
   conn: ConnState
@@ -93,6 +132,13 @@ type UiState = {
   claimsByCell: Record<string, ClaimRecord[]>
   claimsLoading: boolean
   claimsError: string | null
+  claimsCellError: string | null
+  claimsSnapshotError: string | null
+  claimsCursor: number
+  claimsHasMore: boolean
+  claimsLoadingMore: boolean
+  claimsGeneration: number
+  claimCellPages: Record<string, { cursor: number; hasMore: boolean; loading: boolean; initialized: boolean }>
   selectedClaimId: string | null
   queryOpen: boolean
   queryResults: QueryResults | null
@@ -103,6 +149,9 @@ type UiState = {
   historyFilters: HistoryFilters
   historyLoading: boolean
   historyError: string | null
+  historyCursor: number
+  historyHasMore: boolean
+  historyLoadingMore: boolean
   sidebarFilter: QuickFilter
   route: string
 
@@ -168,6 +217,13 @@ export const useUi = create<UiState>((set) => ({
   claimsByCell: {},
   claimsLoading: false,
   claimsError: null,
+  claimsCellError: null,
+  claimsSnapshotError: null,
+  claimsCursor: 0,
+  claimsHasMore: false,
+  claimsLoadingMore: false,
+  claimsGeneration: 0,
+  claimCellPages: {},
   selectedClaimId: null,
   queryOpen: false,
   queryResults: null,
@@ -178,6 +234,9 @@ export const useUi = create<UiState>((set) => ({
   historyFilters: {},
   historyLoading: false,
   historyError: null,
+  historyCursor: 0,
+  historyHasMore: false,
+  historyLoadingMore: false,
   sidebarFilter: "all",
   route: typeof window !== "undefined" ? (window.location.hash.replace(/^#/, "") || "/") : "/",
 

@@ -67,6 +67,22 @@ function clearDebounce(state: ServerState, sessionId: string): void {
 
 const NOT_OWNED = { ok: false as const, reasons: ["session not owned by caller"] }
 
+export function registerActorSession(state: ServerState, p: Presence): void {
+  let tenant = state.actorSessions.get(p.tenant)
+  if (!tenant) state.actorSessions.set(p.tenant, tenant = new Map())
+  let actor = tenant.get(p.userId)
+  if (!actor) tenant.set(p.userId, actor = new Set())
+  actor.add(p.sessionId)
+}
+
+export function unregisterActorSession(state: ServerState, p: Presence): void {
+  const tenant = state.actorSessions.get(p.tenant)
+  const actor = tenant?.get(p.userId)
+  actor?.delete(p.sessionId)
+  if (actor?.size === 0) tenant!.delete(p.userId)
+  if (tenant?.size === 0) state.actorSessions.delete(p.tenant)
+}
+
 /**
  * Cria (se ausente) ou toca a Presence da sessão. `isNew` sinaliza a primeira chamada
  * presence-registering. SEGURANÇA: sessionIds são aleatórios (UUID, sse.ts) — capability opaca que
@@ -76,6 +92,12 @@ const NOT_OWNED = { ok: false as const, reasons: ["session not owned by caller"]
  * tenant) retorna null e o caller rejeita, sem tocar o estado da vítima nem emitir broadcast.
  */
 function touch(state: ServerState, sessionId: string, tenant: string, userId: string, agentKind?: string): { presence: Presence; isNew: boolean } | null {
+  if (!/^s_[0-9a-f-]{12}$/i.test(sessionId)) return null
+  const session = state.sessions.get(sessionId)
+  if (!session || session.tenant !== tenant || (session.userId !== null && session.userId !== userId)) return null
+  // A post-restart SSE may begin with an unknown old token; once the client re-registers, bind its
+  // opaque live session capability to the newly authenticated actor exactly once.
+  if (session.userId === null) session.userId = userId
   let p = state.presence.get(sessionId)
   const isNew = !p
   if (p && (p.userId !== userId || p.tenant !== tenant)) return null
@@ -98,11 +120,11 @@ function touch(state: ServerState, sessionId: string, tenant: string, userId: st
     if (agentKind) p.agentKind = agentKind
     p.openCsIds = openCsIdsFor(state, tenant, userId)
   }
+  registerActorSession(state, p)
   // Fase 3 §8/§9.1: consome o sinal de restart da Session (sse.ts) assim que o agentKind é conhecido —
   // primeira chamada presence-registering desta sessão desde a reconexão. Só non-web recebe a versão
   // texto (web já trata o envelope `server.restarted` cru — Task 4); consumido uma vez (flag limpa)
   // pra não repetir em beats subsequentes.
-  const session = state.sessions.get(sessionId)
   if (session?.restartPending) {
     session.restartPending = false
     if (p.agentKind !== "web") {
@@ -192,6 +214,7 @@ export function presenceSessionClosed(state: ServerState, sessionId: string): vo
   const p = state.presence.get(sessionId)
   if (!p) return
   state.presence.delete(sessionId)
+  unregisterActorSession(state, p)
   clearDebounce(state, sessionId)
   emitLeft(state, p, "left")
 }
@@ -202,6 +225,7 @@ export function sweepPresence(state: ServerState): void {
   for (const [sessionId, p] of [...state.presence.entries()]) {
     if (p.lastSeen > cutoff) continue
     state.presence.delete(sessionId)
+    unregisterActorSession(state, p)
     clearDebounce(state, sessionId)
     emitLeft(state, p, "heartbeat_expired")
   }

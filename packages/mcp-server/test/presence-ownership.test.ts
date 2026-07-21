@@ -57,3 +57,20 @@ test("presence.beat/focus with someone else's sessionId is rejected and leaves t
     s.stop()
   }
 })
+
+test("fabricated and malformed session IDs cannot create presence or actor-index state", async () => {
+  const s = startServer()
+  try {
+    const alice = await register(s.url, "alice")
+    const beforePresence = s.state.presence.size
+    const beforeActors = s.state.actorSessions.size
+    for (const sessionId of ["fabricated", "s_000000000000"]) {
+      const result = await callTool(s.url, "presence.beat", { token: alice.token, sessionId })
+      expect(result.ok).toBe(false)
+    }
+    await expect(callTool(s.url, "presence.beat", { token: alice.token, sessionId: "" })).rejects.toThrow()
+    await expect(callTool(s.url, "presence.focus", { token: "invalid", sessionId: "s_000000000000", cell: "ui:4" })).rejects.toThrow()
+    expect(s.state.presence.size).toBe(beforePresence)
+    expect(s.state.actorSessions.size).toBe(beforeActors)
+  } finally { s.stop() }
+})

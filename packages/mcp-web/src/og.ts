@@ -18,7 +18,13 @@ import { toServerCell, toUiCell, levelNum } from "./cells"
 import { colorForCsId, GhostStore, type GhostDelta } from "./ghosts"
 import { localStorageTokenStore } from "./token-store"
 import { ToastQueue } from "./toasts"
-import { useUi, type ActiveCs, type DraftDelta, type ClaimRecord, type HistoryEvent, type MatchResult, type GapResult } from "./store"
+import { useUi, mergeClaimPage, mergeHistoryPage, shouldReadCellPage, type ActiveCs, type DraftDelta, type ClaimRecord, type HistoryEvent, type MatchResult, type GapResult } from "./store"
+import { buildReverseIndex as buildReverseIndexPure, mergeReverseIndex } from "./reverse-index"
+import { SingleFlight } from "./single-flight"
+import { createTypingRateLimiter } from "./typing-rate-limit"
+import { ConnectionOwner } from "./connection-owner"
+import { submitClaimDraft } from "./claim-draft"
+import { createRefNavigator } from "./ref-lookup"
 
 const DRIFT_KINDS = new Set(["drift.node", "drift.cell"])
 const CS_KINDS = new Set([
@@ -146,9 +152,9 @@ export async function pollWho(): Promise<void> {
   }
 }
 
-export function signalTyping(): void {
-  handle?.call("presence.typing", {}).catch((e) => console.error("presence.typing failed", e))
-}
+let typingLimiter: ReturnType<typeof createTypingRateLimiter> | null = null
+const connectionOwner = new ConnectionOwner()
+export function signalTyping(): void { typingLimiter?.signal() }
 
 // Timers armed on connect, disarmed on close (RETRY #1 REWORK-LOG openPoint 5).
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -161,13 +167,6 @@ function disarmTimers(): void {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
   if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null }
 }
-
-// navigateToClaim negative cache + debounce (RETRY #1 REWORK-LOG openPoint 9): a dangling RefChip
-// clicked repeatedly shouldn't re-fire loadSnapshot per click. Anchor a 300ms debounce + a Set of
-// refIds already known absent.
-const danglingRefIds = new Map<string, number>()
-const DANGLING_REF_TTL_MS = 5_000
-const DANGLING_REF_CACHE_MAX = 128
 
 // ---- ghost deltas: refetch com debounce de graph://changeset/{id} ----------
 const refetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -323,13 +322,11 @@ export async function claimDraft(form: ClaimForm | Record<string, unknown>, rawJ
   const h = handle
   const cs = useUi.getState().activeCs
   if (!h || !cs) return { ok: false, reasons: ["sem turno ativo"], warnings: [] }
-  const payload = rawJson
-    ? JSON.parse(rawJson)
-    : { ...(form as ClaimForm), level: levelNum((form as ClaimForm).level) }
-  const res: any = await h.call("changeset.claim", { csId: cs.csId, delta: { kind: "claim.add", payload } })
-  if (res?.ok === false) return { ok: false, reasons: res.reasons ?? [], warnings: [] }
-  refetchDeltas(cs.csId)
-  return { ok: true, reasons: [], warnings: res?.warnings ?? [] }
+  const payload = rawJson ? {} : { ...(form as ClaimForm), level: levelNum((form as ClaimForm).level) }
+  const outcome = await submitClaimDraft(payload, rawJson, (claim) =>
+    h.call("changeset.claim", { csId: cs.csId, delta: { kind: "claim.add", payload: claim } }) as Promise<any>)
+  if (outcome.ok) refetchDeltas(cs.csId)
+  return outcome
 }
 
 async function csAction(tool: string): Promise<{ ok: boolean; reasons: string[]; expiresAt?: string }> {
@@ -387,16 +384,24 @@ export async function listMine(): Promise<void> {
 }
 
 /** Read-only `graph://claims?cell=<domain:level>` → ClaimRecord[]. Cached in store per snapshot. */
-export async function readClaims(cell: string): Promise<ClaimRecord[]> {
-  const cached = useUi.getState().claimsByCell[cell]
-  if (cached) return cached
+const cellClaimsRequests = new SingleFlight<ClaimRecord[]>()
+export async function readClaims(cell: string, continuation = false): Promise<ClaimRecord[]> {
+  const state = useUi.getState()
+  const cached = state.claimsByCell[cell]
+  const pageState = state.claimCellPages[cell] ?? { cursor: 0, hasMore: true, loading: false, initialized: false }
+  if (!shouldReadCellPage(cached, pageState, continuation)) return cached ?? []
+  if (continuation && !pageState.hasMore) return cached ?? []
+  const since = continuation ? pageState.cursor : 0
+  const generation = state.claimsGeneration
+  const requestKey = `${generation}:${cell}:${since}`
   const isActiveRequest = () => useUi.getState().selectedCell === cell
   if (isActiveRequest()) {
     useUi.getState().setClaimsLoading(true)
-    useUi.getState().setClaimsError(null)
+    useUi.setState({ claimsCellError: null })
   }
-  try {
-    const res: any = await resourceRead(serverBase(), `graph://claims?cell=${encodeURIComponent(cell)}`, tokenStore.get()?.token)
+  return cellClaimsRequests.run(requestKey, async () => { try {
+    useUi.setState((current) => ({ claimCellPages: { ...current.claimCellPages, [cell]: { ...pageState, loading: true } } }))
+    const res: any = await resourceRead(serverBase(), `graph://claims?cell=${encodeURIComponent(cell)}&since=${since}&limit=100`, tokenStore.get()?.token)
     const claims: ClaimRecord[] = (res?.claims ?? []).map((c: any) => ({
       id: c.id,
       subject: c.subject ?? c.id,
@@ -410,30 +415,55 @@ export async function readClaims(cell: string): Promise<ClaimRecord[]> {
       status: c.status,
       supersedes: c.supersedes,
     }))
-    useUi.getState().setClaimsForCell(cell, claims)
-    return claims
+    if (useUi.getState().claimsGeneration !== generation) return useUi.getState().claimsByCell[cell] ?? []
+    useUi.setState((current) => ({
+      claimsByCell: mergeClaimPage(current.claimsByCell, claims),
+      claimCellPages: { ...current.claimCellPages, [cell]: { cursor: res?.nextCursor ?? since, hasMore: !!res?.hasMore, loading: false, initialized: true } },
+    }))
+    return useUi.getState().claimsByCell[cell] ?? []
   } catch (e) {
-    if (isActiveRequest()) useUi.getState().setClaimsError((e as Error).message)
-    return []
+    if (useUi.getState().claimsGeneration === generation) {
+      if (isActiveRequest()) useUi.setState({ claimsCellError: (e as Error).message })
+      useUi.setState((current) => ({ claimCellPages: { ...current.claimCellPages, [cell]: { ...pageState, loading: false } } }))
+    }
+    return useUi.getState().claimsByCell[cell] ?? []
   } finally {
-    if (isActiveRequest()) useUi.getState().setClaimsLoading(false)
-  }
+    if (useUi.getState().claimsGeneration === generation && isActiveRequest()) useUi.getState().setClaimsLoading(false)
+  } })
 }
 
-let snapshotClaimsRequest: Promise<Record<string, ClaimRecord[]>> | null = null
+export function loadMoreCellClaims(cell: string): Promise<ClaimRecord[]> { return readClaims(cell, true) }
+
+const snapshotClaimsRequests = new SingleFlight<Record<string, ClaimRecord[]>>()
 export async function readSnapshotClaims(force = false): Promise<Record<string, ClaimRecord[]>> {
-  if (!force && snapshotClaimsRequest) return snapshotClaimsRequest
-  snapshotClaimsRequest = (async () => {
-    const res: any = await resourceRead(serverBase(), "graph://claims?scope=snapshot", tokenStore.get()?.token)
-    const claimsByCell = (res?.claimsByCell ?? {}) as Record<string, ClaimRecord[]>
-    useUi.setState({ claimsByCell })
-    return claimsByCell
-  })()
-  try {
-    return await snapshotClaimsRequest
-  } finally {
-    snapshotClaimsRequest = null
-  }
+  const generation = useUi.getState().claimsGeneration
+  const since = force ? 0 : useUi.getState().claimsCursor
+  const requestKey = `${generation}:${since}`
+  return snapshotClaimsRequests.run(requestKey, async () => {
+    useUi.setState({ claimsLoadingMore: true, claimsSnapshotError: null })
+    try {
+      const res: any = await resourceRead(serverBase(), `graph://claims?scope=snapshot&since=${since}&limit=100`, tokenStore.get()?.token)
+      const claims = (res?.claims ?? []) as ClaimRecord[]
+      if (useUi.getState().claimsGeneration !== generation) return useUi.getState().claimsByCell
+      useUi.setState((state) => ({
+        claimsByCell: mergeClaimPage(state.claimsByCell, claims),
+        reverseIndex: mergeReverseIndex(state.reverseIndex ?? new Map(), claims),
+        claimsCursor: res?.nextCursor ?? since,
+        claimsHasMore: !!res?.hasMore,
+      }))
+      return useUi.getState().claimsByCell
+    } catch (error) {
+      if (useUi.getState().claimsGeneration === generation) useUi.setState({ claimsSnapshotError: (error as Error).message })
+      return useUi.getState().claimsByCell
+    } finally {
+      if (useUi.getState().claimsGeneration === generation) useUi.setState({ claimsLoadingMore: false })
+    }
+  })
+}
+
+export async function loadMoreClaims(): Promise<Record<string, ClaimRecord[]>> {
+  if (!useUi.getState().claimsHasMore) return useUi.getState().claimsByCell
+  return readSnapshotClaims()
 }
 
 /** og.call('graph.query', {terms}) → normalised {candidates, gaps}. Gap is always 1st-class.
@@ -468,11 +498,14 @@ function refinementFor(term: string): string[] {
   return near.length ? near : [...domains]
 }
 
-/** resourceRead('graph://history?since=0&limit=1000') → EventEnvelope[]. */
-export async function readHistory(since = 0, limit = 1000): Promise<HistoryEvent[]> {
-  useUi.getState().setHistoryLoading(true)
-  useUi.getState().setHistoryError(null)
-  try {
+const historyRequests = new SingleFlight<HistoryEvent[]>()
+/** Read an initial bounded history page or append a continuation page. */
+export async function readHistory(since = 0, limit = 100): Promise<HistoryEvent[]> {
+  const append = since > 0
+  return historyRequests.run(`${since}:${limit}`, async () => { try {
+    useUi.getState().setHistoryLoading(!append)
+    useUi.setState({ historyLoadingMore: append })
+    useUi.getState().setHistoryError(null)
     const res: any = await resourceRead(serverBase(), `graph://history?since=${since}&limit=${limit}`, tokenStore.get()?.token)
     const events: HistoryEvent[] = (res?.events ?? []).map((e: any) => ({
       seq: e.seq,
@@ -482,19 +515,29 @@ export async function readHistory(since = 0, limit = 1000): Promise<HistoryEvent
       payload: e.payload,
       graphId: e.graphId,
     }))
-    useUi.getState().setHistoryEvents(events)
-    return events
+    useUi.setState((state) => ({
+      historyEvents: mergeHistoryPage(state.historyEvents, events, append),
+      historyCursor: res?.nextCursor ?? since,
+      historyHasMore: !!res?.hasMore,
+    }))
+    return useUi.getState().historyEvents
   } catch (e) {
     useUi.getState().setHistoryError((e as Error).message)
-    return []
+    return useUi.getState().historyEvents
   } finally {
     useUi.getState().setHistoryLoading(false)
-  }
+    useUi.setState({ historyLoadingMore: false })
+  } })
+}
+
+export async function loadMoreHistory(): Promise<HistoryEvent[]> {
+  const state = useUi.getState()
+  if (!state.historyHasMore) return state.historyEvents
+  return readHistory(state.historyCursor, 100)
 }
 
 /** Reverse index builder — pure derivation moved to reverse-index.ts (unit-testable in
  * isolation; og.ts is browser-side and not importable under bun:test). */
-import { buildReverseIndex as buildReverseIndexPure } from "./reverse-index"
 export const buildReverseIndexStatic = buildReverseIndexPure
 
 /** RefChip navigation (F002 task 03 acceptance, RETRY #1 REWORK-LOG openPoint A / edgeCase A):
@@ -502,35 +545,30 @@ export const buildReverseIndexStatic = buildReverseIndexPure
  *  the owner's cell (setCenter RF on the node) + open the target claim. If ref is dangling, toast
  *  'ref não encontrado' once + debounced snapshot refresh (negative cache on the refId).
  */
-export async function navigateToClaim(refId: string): Promise<void> {
-  const st = useUi.getState()
-  const ownerEntry = Object.entries(st.claimsByCell).find(([, list]) => (list ?? []).some((c) => c.id === refId))
-  if (ownerEntry) {
-    const [ownerCell] = ownerEntry
-    // Cross-cell: ensure ClaimsBrowser is on the OWNER cell so OpenClaim's bySeqDesc includes the ref.
-    if (st.selectedCell !== ownerCell) st.setSelectedCell(ownerCell)
-    st.openClaim(refId)
-    st.requestCenter(ownerCell)
-    return
-  }
-  // Negative cache + debounce to avoid re-firing loadSnapshot on every repeat click.
-  const now = Date.now()
-  const expiresAt = danglingRefIds.get(refId) ?? 0
-  if (expiresAt > now) return
-  if (danglingRefIds.size >= DANGLING_REF_CACHE_MAX) danglingRefIds.delete(danglingRefIds.keys().next().value!)
-  danglingRefIds.set(refId, now + DANGLING_REF_TTL_MS)
-  pushToast(`ref-${refId}`, `ref não encontrado, snapshot refresh`)
-  await loadSnapshot()
-  await readSnapshotClaims(true)
-  danglingRefIds.delete(refId)
-}
+const refNavigator = createRefNavigator({
+  snapshot: () => {
+    const state = useUi.getState()
+    return { generation: state.claimsGeneration, claimsByCell: state.claimsByCell }
+  },
+  read: (encodedId) => resourceRead(serverBase(), `graph://claims?id=${encodedId}`, tokenStore.get()?.token) as Promise<any>,
+  merge: (claim) => useUi.setState((state) => ({ claimsByCell: mergeClaimPage(state.claimsByCell, [claim]) })),
+  navigate: (ownerCell, refId) => {
+    const state = useUi.getState()
+    if (state.selectedCell !== ownerCell) state.setSelectedCell(ownerCell)
+    state.openClaim(refId)
+    state.requestCenter(ownerCell)
+  },
+  notifyMissing: (refId) => pushToast(`ref-${refId}`, "ref não encontrado"),
+  notifyFailure: (refId) => pushToast(`ref-read-${refId}`, "falha ao ler referência"),
+})
+
+export function navigateToClaim(refId: string): Promise<void> { return refNavigator.navigate(refId) }
 export function invalidateReverseIndex(): void {
-  danglingRefIds.clear()
-  snapshotClaimsRequest = null
+  refNavigator.clear()
   useUi.getState().setReverseIndex(null)
-  useUi.getState().setClaimsError(null)
+  useUi.setState({ claimsError: null, claimsCellError: null, claimsSnapshotError: null })
   // claims per snapshot are stale after rebuild — drop caches so next ClaimsBrowser re-fetches.
-  useUi.setState({ claimsByCell: {} })
+  useUi.setState((state) => ({ claimsByCell: {}, claimCellPages: {}, claimsCursor: 0, claimsHasMore: false, claimsLoadingMore: false, claimsGeneration: state.claimsGeneration + 1 }))
 }
 
 /** Reabre o draft dum turno meu já aberto (widget "meus turnos" / reattach). */
@@ -548,15 +586,24 @@ export async function connectOg(name?: string): Promise<void> {
   const cached = tokenStore.get()
   const finalName = (name || localStorage.getItem("og.name") || "").trim()
 
+  typingLimiter?.cancel()
+  typingLimiter = null
   handle?.close()
+  const generation = connectionOwner.replace()
+  let nextHandle: Awaited<ReturnType<typeof connect>>
   try {
-    handle = await connect({
+    nextHandle = await connect({
       server: serverBase(),
       agentKind: "web",
       tenant,
       ...(cached || finalName ? { store: tokenStore, name: finalName || undefined } : {}),
-      onOpen: () => { useUi.getState().setConn("on"); armTimers() },
-      onClose: () => { useUi.getState().setConn("off"); disarmTimers() },
+      onOpen: () => { connectionOwner.ifCurrent(generation, () => { useUi.getState().setConn("on"); armTimers() }) },
+      onClose: () => { connectionOwner.ifCurrent(generation, () => {
+        typingLimiter?.cancel()
+        typingLimiter = null
+        useUi.getState().setConn("off")
+        disarmTimers()
+      }) },
       onReset: () => loadSnapshot(),
       // pós-(re)conexão: user.* efêmeros não são re-emitidos pra sessão nova — poll imediato;
       // changesets ainda abertos desta identidade voltam pros ghosts (spec §9)
@@ -595,10 +642,24 @@ export async function connectOg(name?: string): Promise<void> {
       },
     })
   } catch (e) {
+    if (!connectionOwner.isCurrent(generation)) return
     console.error("connect failed", e)
     handle = null
     return
   }
+
+  // A slower connection attempt may resolve after a replacement has already opened. It never owns
+  // global state: close it immediately instead of installing its handle or typing limiter.
+  if (!connectionOwner.isCurrent(generation)) {
+    nextHandle.close()
+    return
+  }
+  handle = nextHandle
+
+  const connectionHandle = handle
+  typingLimiter = createTypingRateLimiter(() => {
+    connectionHandle.call("presence.typing", {}).catch((e) => console.error("presence.typing failed", e))
+  })
 
   handle.on("*", applyEvent)
 

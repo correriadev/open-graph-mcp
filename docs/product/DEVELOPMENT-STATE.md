@@ -38,3 +38,33 @@
 | F004 | 08 | mcp-web | Execute the mini-session and triage all friction | ui5_paridade_gate | - | BLOCKED |
 | F004 | 09 | mcp-web | Resolve and recheck mini-session blockers | ui5_paridade_gate | - | BLOCKED |
 | F004 | 10 | mcp-web | Record the owner-signed beta resumption decision | ui5_paridade_gate | - | BLOCKED |
+| F005 | 01 | mcp-server | Specify bounded cursor pagination for claims and history resources | audit_pagination_claims_history | - | BLOCKED |
+| F005 | 02 | mcp-server | Implement the shared server cursor contract | audit_pagination_claims_history | - | BLOCKED |
+| F005 | 03 | mcp-server | Document and regress the paginated MCP resource surface | audit_pagination_claims_history | - | BLOCKED |
+| F005 | 01 | mcp-web | Specify idempotent paginated client projections | audit_pagination_claims_history | - | BLOCKED |
+| F005 | 02 | mcp-web | Implement cursor-aware store and resource clients | audit_pagination_claims_history | - | BLOCKED |
+| F005 | 03 | mcp-web | Make reverse references incremental | audit_pagination_claims_history | - | BLOCKED |
+| F005 | 04 | mcp-web | Add claims and history continuation interactions | audit_pagination_claims_history | - | BLOCKED |
+| F005 | 05 | mcp-web | Prove multi-page browser behavior | audit_pagination_claims_history | - | BLOCKED |
+| F006 | 01 | mcp-web | Specify the connection-scoped typing rate limiter | audit_typing_rate_limit | - | COMPLETED |
+| F006 | 02 | mcp-web | Implement bounded browser typing signals | audit_typing_rate_limit | - | COMPLETED |
+| F006 | 03 | mcp-web | Prove typing UX and network call bounds | audit_typing_rate_limit | - | COMPLETED |
+| F006 | 01 | mcp-server | Specify indexed actor-session lifecycle behavior | audit_typing_rate_limit | - | COMPLETED |
+| F006 | 02 | mcp-server | Add the ephemeral actor-session index | audit_typing_rate_limit | - | COMPLETED |
+| F006 | 03 | mcp-server | Make typing touches proportional to actor sessions | audit_typing_rate_limit | - | COMPLETED |
+| F006 | 04 | mcp-server | Regress presence and typing integration | audit_typing_rate_limit | - | COMPLETED |
+| F007 | 01 | mcp-web | Specify bridge eligibility and artifact isolation | audit_dev_only_e2e_bridge | - | COMPLETED |
+| F007 | 02 | mcp-web | Extract the development-only e2e bridge | audit_dev_only_e2e_bridge | - | COMPLETED |
+| F007 | 03 | mcp-web | Add explicit instrumented build ownership | audit_dev_only_e2e_bridge | - | COMPLETED |
+| F007 | 04 | mcp-web | Regress browser observability and production exclusion | audit_dev_only_e2e_bridge | - | COMPLETED |
+| F008 | 01 | mcp-server | Specify tenant-scoped claim point lookup | audit_claimdraft_ref_lookup | - | FAILED |
+| F008 | 02 | mcp-server | Implement bounded claims-by-ID resolution | audit_claimdraft_ref_lookup | - | FAILED |
+| F008 | 03 | mcp-server | Publish and regress the claims resource contract | audit_claimdraft_ref_lookup | - | FAILED |
+| F008 | 01 | mcp-web | Specify safe draft and point-navigation outcomes | audit_claimdraft_ref_lookup | - | FAILED |
+| F008 | 02 | mcp-web | Normalize malformed claim drafts | audit_claimdraft_ref_lookup | - | FAILED |
+| F008 | 03 | mcp-web | Replace snapshot fallback with bounded point lookup | audit_claimdraft_ref_lookup | - | FAILED |
+| F008 | 04 | mcp-web | Prove uncached reference UX and request bounds | audit_claimdraft_ref_lookup | - | FAILED |
+| F009 | 01 | mcp-server | Specify canonical levels and deny-by-default file projection | audit_redactfile_canonical_level | - | FAILED |
+| F009 | 02 | mcp-server | Enforce canonical claim levels at every write boundary | audit_redactfile_canonical_level | - | FAILED |
+| F009 | 03 | mcp-server | Make claim file projection deny by default | audit_redactfile_canonical_level | - | FAILED |
+| F009 | 04 | mcp-server | Regress persistence recovery and claim resources | audit_redactfile_canonical_level | - | FAILED |

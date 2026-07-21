@@ -12,8 +12,14 @@ bun test                                     # 7 testes de aceite (spec §9)
 - `POST /mcp` — JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`,
   `resources/list`, `resources/read`.
   Tools: `graph.bootstrap`, `graph.query`, `graph.subscribe`, `graph.rebuild`.
-  Resources: `graph://snapshot`, `graph://history?since=N`,
-  `graph://cell/{domain:level}`, `graph://domain/{domain}`.
+  Resources: `graph://snapshot`, `graph://history?since=N&limit=N`,
+  `graph://claims?id=claimId`, `graph://claims?cell=domain:P4&since=N&limit=N`,
+  `graph://claims?scope=snapshot&since=N&limit=N`, `graph://cell/{domain:level}`,
+  `graph://domain/{domain}`. Claims and history default to 100 records per page,
+  accept at most 500, and return `nextCursor` plus `hasMore`.
+  SQLite indexes `(tenant_id, seq)` and `(tenant_id, domain, level, seq)` keep
+  snapshot and cell continuation queries aligned with their cursor predicates;
+  claim levels are canonicalized to `P<n>` so cell reads use indexed equality.
 - `GET /events?since=N&filter=...` — SSE. Primeiro frame `session.created
   { sessionId, graphId }`; depois tail do log + eventos ao vivo, filtrados
   server-side. Envelope: `{ schemaVersion: 1, seq, ts, kind, target, payload,

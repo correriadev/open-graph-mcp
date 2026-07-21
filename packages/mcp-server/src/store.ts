@@ -8,6 +8,7 @@ import path from "node:path"
 import { write } from "./db"
 import type { ServerState } from "./state"
 import type { ClaimSnapshot, NodeSnapshot } from "./gates"
+import { normalizeClaimLevel } from "./claim-level"
 
 /**
  * readClaims — QA-5 achou este SELECT rodando a cada `changeset.claim` (não só no commit), custo
@@ -27,15 +28,17 @@ export function readClaims(state: ServerState, tenant: string): ClaimSnapshot[] 
     anchor: string | null
     file: string | null
   }[]
-  const claims = rows.map((r) => ({
+  const claims = rows.map((r) => {
+    const normalized = normalizeClaimLevel(r.level)
+    return ({
     id: r.id,
     subject: r.subject ?? undefined,
     domain: r.domain ?? undefined,
-    level: r.level != null ? Number(r.level) : undefined,
+    level: normalized.ok ? normalized.numeric : undefined,
     refs: JSON.parse(r.refs ?? "[]"),
     anchor: r.anchor ?? undefined,
     file: r.file ?? undefined,
-  }))
+  })})
   state.claimsCache.set(tenant, claims)
   return claims
 }
@@ -79,13 +82,15 @@ export function makeReadFile(state: ServerState): (f: string) => string | undefi
 }
 
 export function writeClaim(state: ServerState, tenant: string, seq: number, c: ClaimSnapshot): void {
+  const normalized = normalizeClaimLevel(c.level)
+  if (!normalized.ok || typeof c.level !== "number") throw new Error("claim.add: invalid level")
   write(state.db, state.stateDir, tenant, "claims", {
     tenant_id: tenant,
     id: c.id,
     seq,
     subject: c.subject ?? null,
     domain: c.domain ?? null,
-    level: c.level != null ? String(c.level) : null,
+    level: normalized.stored,
     refs: JSON.stringify(c.refs ?? []),
     anchor: c.anchor ?? null,
     file: c.file ?? null,

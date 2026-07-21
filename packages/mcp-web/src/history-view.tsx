@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState } from "react"
 import { useUi, type HistoryEvent, type HistoryFilters } from "./store"
-import { readHistory } from "./og"
+import { loadMoreHistory, readHistory } from "./og"
 
 function matchesFilters(e: HistoryEvent, f: HistoryFilters): boolean {
   // RETRY #1 (REWORK-LOG openPoint E): union across payload slot kinds. lock.acquired/released
@@ -39,11 +39,13 @@ export function HistoryView(): JSX.Element {
   const events = useUi((s) => s.historyEvents)
   const loading = useUi((s) => s.historyLoading)
   const error = useUi((s) => s.historyError)
+  const hasMore = useUi((s) => s.historyHasMore)
+  const loadingMore = useUi((s) => s.historyLoadingMore)
   const filters = useUi((s) => s.historyFilters)
   const setFilters = useUi((s) => s.setHistoryFilters)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({})
 
-  useEffect(() => { readHistory(0, 1000) }, [])
+  useEffect(() => { readHistory(0, 100) }, [])
 
   // Initial filter population from URL params (?user=&target=&kind=)
   useEffect(() => {
@@ -78,7 +80,7 @@ export function HistoryView(): JSX.Element {
   const filtered = useMemo(() => events.filter((e) => matchesFilters(e, filters)), [events, filters])
 
   if (loading && events.length === 0) return <div id="history-view"><div className="skeleton">carregando…</div></div>
-  if (error) return <div id="history-view"><div className="error">{error}</div><button onClick={() => readHistory()}>tentar de novo</button></div>
+  if (error && events.length === 0) return <div id="history-view"><div className="error">{error}</div><button onClick={() => readHistory(0, 100)}>tentar de novo</button></div>
 
   return (
     <div id="history-view">
@@ -117,6 +119,8 @@ export function HistoryView(): JSX.Element {
             )
           })}
         </ul>}
+      {error && <div className="error">{error} <button onClick={() => loadMoreHistory()}>tentar de novo</button></div>}
+      {hasMore && <button id="history-load-more" disabled={loadingMore} onClick={() => loadMoreHistory()}>{loadingMore ? "carregando…" : "carregar mais"}</button>}
     </div>
   )
 }

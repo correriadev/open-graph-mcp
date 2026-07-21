@@ -107,6 +107,8 @@ export type ServerState = {
   lastTickHadEvents: boolean
   /** Presença viva por sessionId (Fase 3 §3) — em memória, some no restart. */
   presence: Map<string, Presence>
+  /** Ephemeral collision-safe tenant → actor → live session IDs index for the typing hot path. */
+  actorSessions: Map<string, Map<string, Set<string>>>
   /** Timers de debounce de focus por sessionId (Fase 3 §6.3) — só o último settle broadcast. */
   focusDebounce: Map<string, ReturnType<typeof setTimeout>>
   /** Cache em memória de `readClaims` por tenant (QA-5: full-tenant scan em TODO `changeset.claim`
@@ -114,6 +116,9 @@ export type ServerState = {
    *  primeiro `readClaims`; `writeClaim` empurra incrementalmente (append-only — claims nunca mudam
    *  nem somem); `rebuildFromJsonl` invalida (único caminho que escreve claims por fora de writeClaim). */
   claimsCache: Map<string, import("./gates").ClaimSnapshot[]>
+  /** Aggregate point-lookup observability; deliberately contains no tenant or claim identifiers. */
+  claimLookupMetrics: { hits: number; misses: number; totalLatencyMs: number; maxLatencyMs: number }
+  claimFileProjectionMetrics: { repoRelative: number; basenameFallback: number; omitted: number }
 }
 
 export function createState(opts: {
@@ -143,8 +148,11 @@ export function createState(opts: {
     deltaCounts: new Map(),
     lastTickHadEvents: false,
     presence: new Map(),
+    actorSessions: new Map(),
     focusDebounce: new Map(),
     claimsCache: new Map(),
+    claimLookupMetrics: { hits: 0, misses: 0, totalLatencyMs: 0, maxLatencyMs: 0 },
+    claimFileProjectionMetrics: { repoRelative: 0, basenameFallback: 0, omitted: 0 },
   }
 }
 
