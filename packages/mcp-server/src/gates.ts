@@ -13,12 +13,17 @@ import { verifyIntegrity } from "@open-graph-mcp/graph-core/verify"
 import { claimCoverage } from "@open-graph-mcp/graph-core/claim-store"
 import { canFlip } from "@open-graph-mcp/graph-core/authority"
 import { excerptCheck } from "@open-graph-mcp/graph-core/extract"
+import { normalizeClaimLevel, type CanonicalClaimLevel } from "./claim-level"
 
-export type ClaimSnapshot = { id: string; subject?: string; domain?: string; level?: number; refs: string[]; anchor?: string; file?: string }
+export type ClaimSnapshot = { id: string; subject?: string; domain?: string; level?: CanonicalClaimLevel; refs: string[]; anchor?: string; file?: string }
 export type NodeSnapshot = { id: string; domain: string | null; level: number; file: string; anchor: string }
 export type Delta = { kind: "claim.add" | "authority.flip"; payload: any }
 
 export const cellOfClaim = (c: { domain?: string | null; level?: number }): string => `${c.domain ?? "?"}:${c.level ?? 5}`
+const canonicalCell = (cell: string): string => {
+  const cut = cell.lastIndexOf(":")
+  return cut < 0 ? cell : `${cell.slice(0, cut)}:${cell.slice(cut + 1).replace(/^P/, "")}`
+}
 const toRoundtrip = (c: ClaimSnapshot): RoundtripClaim => ({ id: c.id, level: c.level, refs: c.refs ?? [] })
 
 /** Nós da célula "domain:level" (level numérico) — level do nó é "P<n>" no grafo. */
@@ -60,9 +65,13 @@ export function incrementalGate(delta: Delta, ctx: IncrementalCtx): IncrementalR
     reasons.push("claim.add: missing required fields (id/subject/domain)")
     return { reasons, warnings }
   }
+  if (!normalizeClaimLevel(c.level).ok || typeof c.level !== "number") {
+    reasons.push("claim.add: invalid level")
+    return { reasons, warnings }
+  }
   c.refs = c.refs ?? []
   const cell = cellOfClaim(c)
-  if (!ctx.lockedCells.includes(cell)) reasons.push(`claim out of turn scope: ${cell} not locked by this changeset`)
+  if (!ctx.lockedCells.some((locked) => canonicalCell(locked) === cell)) reasons.push(`claim out of turn scope: ${cell} not locked by this changeset`)
   // anchor check (BLOQUEIA): âncora declarada + arquivo-chão legível → tem que existir verbatim.
   if (c.anchor && c.file) {
     const content = ctx.readFile(c.file)
@@ -87,6 +96,9 @@ export type FinalResult = { ok: boolean; reasons: string[] }
 export function finalGate(deltas: Delta[], ctx: FinalCtx): FinalResult {
   const reasons: string[] = []
   const newClaims = deltas.filter((d) => d.kind === "claim.add").map((d) => d.payload as ClaimSnapshot)
+  if (newClaims.some((claim) => !normalizeClaimLevel(claim.level).ok || typeof claim.level !== "number")) {
+    return { ok: false, reasons: ["claim.add: invalid level"] }
+  }
   const flips = deltas.filter((d) => d.kind === "authority.flip").map((d) => d.payload as { cell: string; to: string })
   const allClaims: ClaimSnapshot[] = [...ctx.existingClaims, ...newClaims]
   const rtSet = allClaims.map(toRoundtrip)

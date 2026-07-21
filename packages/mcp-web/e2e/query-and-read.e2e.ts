@@ -44,6 +44,13 @@ async function setupClaimsAsAlice(alicePage: import("@playwright/test").Page) {
 
 test("query-and-read: ⌘K gap → known term match → ClaimsBrowser → OpenClaim → open turn (leitura→escrita)", async ({ browser }) => {
   const alice = await h.openSession(browser, "alice")
+  const claimReads: string[] = []
+  alice.page.on("request", (request) => {
+    try {
+      const body = request.postDataJSON()
+      if (body?.method === "resources/read" && String(body?.params?.uri).startsWith("graph://claims?")) claimReads.push(body.params.uri)
+    } catch { /* non-JSON request */ }
+  })
   await setupClaimsAsAlice(alice.page)
   // wait for graph.rebuilt / changeset.committed to refresh snapshot
   await expect.poll(async () => {
@@ -93,11 +100,15 @@ test("query-and-read: ⌘K gap → known term match → ClaimsBrowser → OpenCl
     }
   }
   expect(await refChip.count()).toBeGreaterThan(0)
+  const readsBeforeRef = claimReads.length
   await refChip.click()
   // ClaimsBrowser panel now shows billing:P2 (data-cell pivot).
   await expect(alice.page.locator("#claims-panel")).toHaveAttribute("data-cell", "auth:P5", { timeout: 5_000 })
   // OpenClaim target claim is cBase (the ref target).
   await expect(alice.page.locator(".open-claim").first()).toHaveAttribute("data-id", "cBase", { timeout: 5_000 })
+  const refReads = claimReads.slice(readsBeforeRef)
+  expect(refReads.filter((uri) => uri === "graph://claims?id=cBase")).toHaveLength(1)
+  expect(refReads.some((uri) => uri.includes("scope=snapshot"))).toBe(false)
   // Reverse index side: cBase should be "referenciado por" c1 (snapshot-wide build).
   const referencedBy = alice.page.locator(".referenced-by")
   await expect(referencedBy).toBeVisible()

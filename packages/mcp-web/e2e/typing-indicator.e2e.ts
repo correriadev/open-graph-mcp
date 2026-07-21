@@ -66,10 +66,37 @@ test("typing in the web draft is observable by another session", async ({ browse
   await alice.page.locator("#intent").fill("web typing")
   await alice.page.locator("#doopen").click()
   await expect(alice.page.locator("#draft")).toBeVisible()
-  await alice.page.locator("#f_subject").fill("typed from browser input")
+  let typingCalls = 0
+  alice.page.on("request", (request) => {
+    try {
+      const body = request.postDataJSON()
+      if (body?.method === "tools/call" && body?.params?.name === "presence.typing") typingCalls++
+    } catch { /* non-JSON request */ }
+  })
+  await alice.page.locator("#f_subject").evaluate((input: HTMLInputElement) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+    for (let i = 1; i <= 100; i++) {
+      setter.call(input, `typed ${i}`)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+  })
+  await expect.poll(() => typingCalls).toBeGreaterThanOrEqual(1)
   await h.control("tickTypingNow")
-
   await expect(bob.page.locator("#typing")).toContainText("alice-web-typing")
+  await alice.page.waitForTimeout(450)
+  expect(typingCalls).toBeLessThanOrEqual(2)
+  const beforeSustained = typingCalls
+  await alice.page.locator("#f_subject").evaluate(async (input: HTMLInputElement) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+    for (let i = 0; i < 12; i++) {
+      setter.call(input, `sustained ${i}`)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  })
+  const sustainedCalls = typingCalls - beforeSustained
+  expect(sustainedCalls).toBeGreaterThanOrEqual(3)
+  expect(sustainedCalls).toBeLessThanOrEqual(4)
   await alice.context.close()
   await bob.context.close()
 })

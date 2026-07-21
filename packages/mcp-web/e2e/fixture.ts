@@ -30,7 +30,7 @@ let buildOnce: Promise<void> | null = null
 /** `vite build` once per test run (all harnesses share the same dist/); QD4. */
 function ensureBuilt(): Promise<void> {
   if (!buildOnce) {
-    buildOnce = build({ root: MCP_WEB_ROOT, configFile: VITE_CONFIG, logLevel: "warn" }).then(() => undefined)
+    buildOnce = build({ root: MCP_WEB_ROOT, configFile: VITE_CONFIG, mode: "e2e", logLevel: "warn" }).then(() => undefined)
   }
   return buildOnce
 }

@@ -8,8 +8,8 @@
  * .referenced-by, .provenance, .refinement-suggestion (reuso do QueryBar).
  */
 import { useEffect, useMemo } from "react"
-import { useUi, type ClaimRecord } from "./store"
-import { readClaims, readSnapshotClaims, invalidateReverseIndex, buildReverseIndexStatic, navigateToClaim } from "./og"
+import { claimsPaginationControls, useUi, type ClaimRecord } from "./store"
+import { readClaims, loadMoreClaims, loadMoreCellClaims, navigateToClaim, buildReverseIndexStatic } from "./og"
 
 function Provenance({ c }: { c: ClaimRecord }) {
   return <div className="provenance">
@@ -63,12 +63,16 @@ export function ClaimsBrowser(): JSX.Element {
   const cell = useUi((s) => s.selectedCell)
   const claims = useUi((s) => (cell ? s.claimsByCell[cell] : undefined))
   const loading = useUi((s) => s.claimsLoading)
-  const error = useUi((s) => s.claimsError)
+  const cellError = useUi((s) => s.claimsCellError)
+  const snapshotError = useUi((s) => s.claimsSnapshotError)
   const selectedClaimId = useUi((s) => s.selectedClaimId)
   const openClaim = useUi((s) => s.openClaim)
   const setSelectedCell = useUi((s) => s.setSelectedCell)
   const reverseIndex = useUi((s) => s.reverseIndex)
-  const setReverseIndex = useUi((s) => s.setReverseIndex)
+  const claimsByCell = useUi((s) => s.claimsByCell)
+  const claimsHasMore = useUi((s) => s.claimsHasMore)
+  const claimsLoadingMore = useUi((s) => s.claimsLoadingMore)
+  const cellPage = useUi((s) => cell ? s.claimCellPages[cell] : undefined)
   const graph = useUi((s) => s.graph)
   const activeCsNull = useUi((s) => s.activeCs === null)
   const requestOpenTurn = useUi((s) => s.requestOpenTurn)
@@ -83,30 +87,21 @@ export function ClaimsBrowser(): JSX.Element {
   const bySeqDesc = useMemo(() => [...(claims ?? [])].sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0)), [claims])
 
   const active = useMemo(() => bySeqDesc.find((c) => c.id === selectedClaimId) ?? null, [bySeqDesc, selectedClaimId])
+  const controls = claimsPaginationControls({ hasOpenClaim: !!active, cellHasMore: !!cellPage?.hasMore, snapshotHasMore: claimsHasMore, cellError, snapshotError })
 
-  // Lazy reverse-index build (RETRY #1): snapshot-wide (Object.values(claimsByCell).flat()) so a ref
-  // from cell B pointing at a claim in cell A is captured — not just refs within the current cell.
-  // Built on first OpenClaim AND whenever claimsByCell grows (a new cell loaded after the first build
-  // would otherwise miss edges from new claims). Invalidated by graph.rebuilt (og.ts sets
-  // reverseIndex=null + claimsByCell={}); next OpenClaim rebuilds fresh from current cells.
-  const claimsByCell = useUi((s) => s.claimsByCell)
-  useEffect(() => {
-    if (selectedClaimId) {
-      readSnapshotClaims().then(() => {
-        const snapshotClaims = useUi.getState().claimsByCell
-        if (Object.values(snapshotClaims).some((cellClaims) => cellClaims.length > 0)) {
-          setReverseIndex(buildReverseIndexStatic(snapshotClaims))
-        }
-      })
-    }
-  }, [selectedClaimId, graph, setReverseIndex])
+  // Derive from pages already owned by the UI. Missing targets are resolved individually by RefChip;
+  // opening a claim must never trigger an implicit full-snapshot fallback.
+  const visibleReverseIndex = useMemo(
+    () => reverseIndex ?? buildReverseIndexStatic(Object.values(claimsByCell).flat()),
+    [reverseIndex, claimsByCell],
+  )
 
   if (!cell) return null as unknown as JSX.Element
   if (loading && !claims) return <div id="claims-panel"><div className="skeleton">carregando claims…</div></div>
-  if (error) return (
+  if (cellError && !claims?.length) return (
     <div id="claims-panel">
-      <div className="error">{error}</div>
-      <button onClick={() => { invalidateReverseIndex(); cell && readClaims(cell) }}>tentar de novo</button>
+      <div className="error">{cellError}</div>
+      <button onClick={() => cell && readClaims(cell)}>tentar de novo</button>
     </div>
   )
   return (
@@ -126,12 +121,24 @@ export function ClaimsBrowser(): JSX.Element {
       {active && (
         <OpenClaim
           claim={active}
-          referencedBy={reverseIndex?.get(active.id) ?? []}
+          referencedBy={visibleReverseIndex.get(active.id) ?? []}
           onRefClick={navigateToClaim}
           canOpenTurn={activeCsNull}
           onOpenTurn={() => cell && requestOpenTurn(cell)}
         />
       )}
+      {controls.showSnapshotContinuation && (
+        <button id="load-more-claim-refs" disabled={claimsLoadingMore} onClick={() => loadMoreClaims()}>
+          {claimsLoadingMore ? "carregando referências…" : "carregar mais referências"}
+        </button>
+      )}
+      {controls.showCellContinuation && (
+        <button id="load-more-cell-claims" disabled={cellPage?.loading} onClick={() => cell && loadMoreCellClaims(cell)}>
+          {cellPage?.loading ? "carregando claims…" : "carregar mais claims"}
+        </button>
+      )}
+      {controls.retryCell && claims?.length ? <div className="error cell-error">{cellError} <button onClick={() => cell && loadMoreCellClaims(cell)}>tentar de novo claims</button></div> : null}
+      {controls.retrySnapshot ? <div className="error snapshot-error">{snapshotError} <button onClick={() => loadMoreClaims()}>tentar de novo referências</button></div> : null}
       <button id="close-claims" onClick={() => setSelectedCell(null)} aria-label="fechar">×</button>
     </div>
   )

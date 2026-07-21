@@ -10,8 +10,9 @@
  * authority, changesets, cs_deltas, events).
  */
 import { Database } from "bun:sqlite"
-import { appendFileSync, mkdirSync, readFileSync, existsSync } from "node:fs"
+import { appendFileSync, mkdirSync, readFileSync, existsSync, statSync, truncateSync, unlinkSync } from "node:fs"
 import path from "node:path"
+import { normalizeRecoveredClaimLevel } from "./claim-level"
 
 /** Tabelas duráveis espelhadas em JSONL, na ordem de replay do rebuild. */
 export const DURABLE_TABLES = ["users", "nodes", "edges", "claims", "authority", "changesets", "cs_deltas", "events"] as const
@@ -39,6 +40,8 @@ CREATE TABLE IF NOT EXISTS claims (
   refs TEXT, anchor TEXT, file TEXT, verdict_confidence REAL, verdict_overclaim INTEGER, supersedes TEXT,
   PRIMARY KEY (tenant_id, id)
 );
+CREATE INDEX IF NOT EXISTS claims_tenant_seq ON claims (tenant_id, seq);
+CREATE INDEX IF NOT EXISTS claims_tenant_cell_seq ON claims (tenant_id, domain, level, seq);
 CREATE TABLE IF NOT EXISTS authority (
   tenant_id TEXT NOT NULL, cell TEXT NOT NULL, value TEXT NOT NULL, last_flip_seq INTEGER, last_flip_by TEXT,
   PRIMARY KEY (tenant_id, cell)
@@ -78,10 +81,36 @@ export function openDb(sqlitePath: string): Database {
   db.exec("PRAGMA journal_mode = WAL;")
   db.exec("PRAGMA busy_timeout = 5000;")
   db.exec(SCHEMA)
+  // Canonicalize legacy numeric levels once so cell pagination can use equality and the full
+  // (tenant, domain, level, seq) index instead of an IN predicate plus a tenant-scale sort.
+  try {
+    db.transaction(() => {
+      const rows = db.query("SELECT tenant_id, id, level FROM claims WHERE level IS NOT NULL").all() as { tenant_id: string; id: string; level: unknown }[]
+      const update = db.query("UPDATE claims SET level = ? WHERE tenant_id = ? AND id = ?")
+      for (const row of rows) {
+        const normalized = normalizeRecoveredClaimLevel(row.level)
+        if (!normalized.ok) throw new Error(normalized.reason)
+        if (row.level !== normalized.stored) update.run(normalized.stored, row.tenant_id, row.id)
+      }
+    })()
+  } catch (error) {
+    db.close()
+    throw error
+  }
   return db
 }
 
 type Row = Record<string, string | number | null>
+type PendingMirror = { stateDir: string; tenant: string; table: string; row: Row }
+const mirrorUnits = new WeakMap<Database, PendingMirror[]>()
+const mirrorAppendFailures = new WeakMap<Database, { target: number; count: number }>()
+
+/** Per-database deterministic fault injection for durability regression tests. */
+export function injectMirrorAppendFailure(db: Database, appendNumber: number): () => void {
+  if (!Number.isInteger(appendNumber) || appendNumber < 1) throw new Error("invalid mirror append number")
+  mirrorAppendFailures.set(db, { target: appendNumber, count: 0 })
+  return () => mirrorAppendFailures.delete(db)
+}
 
 /** INSERT OR REPLACE genérico a partir das chaves do row (colunas = chaves). */
 export function insertRow(db: Database, table: string, row: Row): void {
@@ -108,8 +137,47 @@ export function mirror(stateDir: string, tenant: string, table: string, row: Row
  * `:memory:`-mode (sem espelho pedido) ainda insere no SQLite; o espelho só é pulado se stateDir vazio.
  */
 export function write(db: Database, stateDir: string, tenant: string, table: string, row: Row): void {
+  if (!mirrorUnits.has(db)) {
+    durableTransaction(db, () => write(db, stateDir, tenant, table, row))
+    return
+  }
   insertRow(db, table, row)
-  if (stateDir) mirror(stateDir, tenant, table, row)
+  if (!stateDir) return
+  const unit = mirrorUnits.get(db)
+  if (unit) unit.push({ stateDir, tenant, table, row })
+  else mirror(stateDir, tenant, table, row)
+}
+
+/** SQLite transaction plus rollbackable synchronous mirror batch. The mirror flush runs before the
+ * SQLite transaction returns; an append failure truncates every touched file to its original size,
+ * then the thrown error rolls SQLite back as well. */
+export function durableTransaction<T>(db: Database, fn: () => T): T {
+  if (mirrorUnits.has(db)) return fn()
+  const pending: PendingMirror[] = []
+  mirrorUnits.set(db, pending)
+  try {
+    return db.transaction(() => {
+      const result = fn()
+      const originals = new Map<string, number | null>()
+      try {
+        for (const item of pending) {
+          const file = path.join(tenantDir(item.stateDir, item.tenant), `${item.table}.jsonl`)
+          if (!originals.has(file)) originals.set(file, existsSync(file) ? statSync(file).size : null)
+          const fault = mirrorAppendFailures.get(db)
+          if (fault && ++fault.count === fault.target) throw new Error("injected mirror append failure")
+          mirror(item.stateDir, item.tenant, item.table, item.row)
+        }
+      } catch (error) {
+        for (const [file, size] of originals) {
+          try { size === null ? unlinkSync(file) : truncateSync(file, size) } catch { /* best effort; original error wins */ }
+        }
+        throw error
+      }
+      return result
+    })()
+  } finally {
+    mirrorUnits.delete(db)
+  }
 }
 
 /**
@@ -123,16 +191,24 @@ export function write(db: Database, stateDir: string, tenant: string, table: str
  * chamador, não desta função.
  */
 export function rebuildFromJsonl(db: Database, stateDir: string, tenant: string): void {
+  const recovered: { table: (typeof DURABLE_TABLES)[number]; row: Row }[] = []
+  for (const table of DURABLE_TABLES) {
+    const file = path.join(tenantDir(stateDir, tenant), `${table}.jsonl`)
+    if (!existsSync(file)) continue
+    for (const line of readFileSync(file, "utf8").split("\n")) {
+      if (!line.trim()) continue
+      const parsed = JSON.parse(line) as Row
+      if (parsed.tenant_id !== tenant) throw new Error("recovery tenant mismatch")
+      if (table === "claims") {
+        const normalized = normalizeRecoveredClaimLevel(parsed.level)
+        if (!normalized.ok) throw new Error(normalized.reason)
+        recovered.push({ table, row: { ...parsed, level: normalized.stored } })
+      } else recovered.push({ table, row: parsed })
+    }
+  }
   const tx = db.transaction(() => {
     for (const t of ALL_TABLES) db.query(`DELETE FROM ${t} WHERE tenant_id = ?`).run(tenant)
-    for (const table of DURABLE_TABLES) {
-      const file = path.join(tenantDir(stateDir, tenant), `${table}.jsonl`)
-      if (!existsSync(file)) continue
-      for (const line of readFileSync(file, "utf8").split("\n")) {
-        if (!line.trim()) continue
-        insertRow(db, table, JSON.parse(line) as Row)
-      }
-    }
+    for (const entry of recovered) insertRow(db, entry.table, entry.row)
   })
   tx()
 }

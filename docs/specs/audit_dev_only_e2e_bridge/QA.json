@@ -1,0 +1,16 @@
+{
+  "featureId": "F007",
+  "score": 0.93,
+  "passedAdversarial": true,
+  "vulnerabilities": [],
+  "edgeCasesMissed": [
+    "There is no browser-level standard-build test that preloads e2e-like query parameters, localStorage keys, or a forged window.__og_e2e value and verifies the application neither installs nor upgrades it; production JavaScript artifact inspection and the compile-time-only mode equality establish non-activation statically.",
+    "The artifact regression test covers explicit production mode but not named staging, test, or development builds; adversarial builds of all three alternate modes were scanned during validation and contained none of the bridge markers."
+  ],
+  "topFinding": "No production activation path was found: __OG_E2E__ is replaced solely from the build-time equality mode === 'e2e', standard and alternate non-e2e JavaScript artifacts contain neither the global marker nor mutation commands, and identity-checked cleanup cannot delete a replacement bridge after remount.",
+  "impact": {
+    "causesCrash": false,
+    "breaksCoreFunctionality": false,
+    "rationale": "The standard build and 52-unit-test suite pass, bridge contract and replacement ownership tests pass, and alternate development/staging/test production builds exclude instrumentation. Remaining findings are missing automated browser assertions, not observed runtime or security defects."
+  }
+}

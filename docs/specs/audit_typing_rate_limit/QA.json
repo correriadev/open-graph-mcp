@@ -1,0 +1,15 @@
+{
+  "featureId": "F006",
+  "score": 0.92,
+  "passedAdversarial": true,
+  "vulnerabilities": [],
+  "edgeCasesMissed": [
+    "Browser E2E proves bounded burst and sustained typing calls plus the visible typing transition, but does not keep the same draft session open long enough to assert the complete typing-to-idle-to-quiet lifecycle after sustained input."
+  ],
+  "topFinding": "No exploitable HIGH or CRITICAL defect remains: presence registration now requires a syntactically valid live SSE session owned by the authenticated tenant/user, actor-session buckets are pruned on close and expiry, and browser connection generations prevent stale close callbacks or cancelled limiters from affecting a replacement connection.",
+  "impact": {
+    "causesCrash": false,
+    "breaksCoreFunctionality": false,
+    "rationale": "Static adversarial inspection and passing pure browser timing/ownership tests support the retry fixes. Server network tests could not bind an ephemeral port in the restricted validation environment (EADDRINUSE on port 0), which is an execution-environment limitation rather than an observed product failure."
+  }
+}

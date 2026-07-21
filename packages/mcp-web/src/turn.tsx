@@ -160,12 +160,7 @@ export function DraftPanel() {
     setWarnings([])
     let res: { ok: boolean; reasons: string[]; warnings: string[] }
     if (rawJson.trim()) {
-      try {
-        res = await claimDraft({}, rawJson.trim())
-      } catch {
-        setReasons(["raw JSON inválido"])
-        return
-      }
+      res = await claimDraft({}, rawJson.trim())
     } else {
       res = await claimDraft({
         id: form.id.trim(),

@@ -9,12 +9,13 @@
  * lock.denied NÃO vai ao SSE (só auditoria na tabela events, spec §6); notificação ao holder é Fase 3.
  */
 import { createHash } from "node:crypto"
-import { write } from "../db"
+import { durableTransaction, write } from "../db"
 import { abortedPayload, appendEvent, pushEnvelope, tenantGraph, type EventEnvelope, type ServerState } from "../state"
 import { requireToken } from "./session"
 import { touchDelta } from "./typing"
 import { readClaims, readNodes, authorityOf, makeReadFile, writeClaim, writeAuthority, maxClaimSeq } from "../store"
 import { incrementalGate, finalGate, cellOfClaim, type Delta } from "../gates"
+import { normalizeClaimLevel } from "../claim-level"
 
 const now = () => new Date().toISOString()
 const nowMs = () => Date.now()
@@ -46,8 +47,18 @@ function releaseLocks(state: ServerState, tenant: string, csId: string): string[
 /** Executa uma mutação numa transação síncrona e difunde os eventos coletados DEPOIS de commitar. */
 function inTx<T extends { __tenant?: string }>(state: ServerState, fn: (envs: EventEnvelope[]) => T): T {
   const envs: EventEnvelope[] = []
-  const tx = state.db.transaction(() => fn(envs))
-  const result = tx() as T
+  const graphs = structuredClone(state.graphs)
+  const claimsCache = structuredClone(state.claimsCache)
+  const deltaCounts = structuredClone(state.deltaCounts)
+  let result: T
+  try {
+    result = durableTransaction(state.db, () => fn(envs)) as T
+  } catch (error) {
+    state.graphs = graphs
+    state.claimsCache = claimsCache
+    state.deltaCounts = deltaCounts
+    throw error
+  }
   const tenant = result.__tenant ?? ""
   for (const e of envs) pushEnvelope(state, tenant, e)
   delete result.__tenant
@@ -114,15 +125,17 @@ export type ClaimResult = { ok: true; warnings: string[]; __tenant?: string } | 
 
 export function changesetClaim(state: ServerState, args: { token: string; csId: string; delta: Delta }): ClaimResult {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
-  // Fase 3 §5.1: TODA chamada de claim atualiza Presence.lastDeltaAt do user (mesmo se o gate rejeitar
-  // depois) — é o sinal de "está mexendo", não um efeito colateral do sucesso da mutação.
-  touchDelta(state, tenant, userId)
   return inTx(state, (): ClaimResult => {
     const cs = loadCs(state, tenant, args.csId)
     if (!cs || cs.status !== "open") return { ok: false, reasons: [`changeset ${args.csId} not open`], __tenant: tenant }
     if (cs.opened_by !== userId) return { ok: false, reasons: ["not the holder of this changeset"], __tenant: tenant }
-    const delta = args.delta
+    let delta = args.delta
     if (!delta || (delta.kind !== "claim.add" && delta.kind !== "authority.flip")) return { ok: false, reasons: ["unknown delta kind"], __tenant: tenant }
+    if (delta.kind === "claim.add") {
+      const normalized = normalizeClaimLevel(delta.payload?.level)
+      if (!normalized.ok) return { ok: false, reasons: [normalized.reason], __tenant: tenant }
+      delta = { kind: "claim.add", payload: { ...delta.payload, level: normalized.numeric } }
+    }
 
     const { reasons, warnings } = incrementalGate(delta, { lockedCells: lockedCells(state, tenant, args.csId), existingClaims: readClaims(state, tenant), readFile: makeReadFile(state) })
     if (reasons.length) return { ok: false, reasons, __tenant: tenant }
@@ -133,6 +146,7 @@ export function changesetClaim(state: ServerState, args: { token: string; csId: 
     const agg = state.deltaCounts.get(args.csId) ?? { count: 0, tenant, byUser: userId }
     agg.count++
     state.deltaCounts.set(args.csId, agg)
+    touchDelta(state, tenant, userId)
     return { ok: true, warnings, __tenant: tenant }
   })
 }

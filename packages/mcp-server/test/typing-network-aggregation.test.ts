@@ -1,6 +1,68 @@
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
 import { callTool, openSse, register } from "./helpers"
+import { touchDelta } from "../src/tools/typing"
+import type { Presence } from "../src/state"
+
+const presence = (sessionId: string, tenant: string, userId: string): Presence => ({
+  sessionId, tenant, userId, agentKind: "web", lastSeen: Date.now(), focusCell: null,
+  openCsIds: [], invisible: false, lastDeltaAt: 0, typingState: "quiet",
+})
+
+test("indexed typing touches only actor sessions and prunes stale membership", () => {
+  const s = startServer()
+  try {
+    const a1 = presence("a1", "tenant-a", "same-user")
+    const a2 = presence("a2", "tenant-a", "same-user")
+    const otherTenant = presence("b1", "tenant-b", "same-user")
+    s.state.presence.set(a1.sessionId, a1); s.state.presence.set(a2.sessionId, a2); s.state.presence.set(otherTenant.sessionId, otherTenant)
+    const unrelated = new Set<string>()
+    for (let i = 0; i < 500; i++) {
+      const p = presence(`other-${i}`, "tenant-a", `user-${i}`)
+      s.state.presence.set(p.sessionId, p); unrelated.add(p.sessionId)
+    }
+    s.state.actorSessions.set("tenant-a", new Map([["same-user", new Set(["a1", "a2", "stale", "b1"])]]))
+    s.state.actorSessions.set("tenant-b", new Map([["same-user", new Set(["b1"])]]))
+
+    touchDelta(s.state, "tenant-a", "same-user")
+    expect(a1.lastDeltaAt).toBeGreaterThan(0); expect(a2.lastDeltaAt).toBe(a1.lastDeltaAt)
+    expect(otherTenant.lastDeltaAt).toBe(0)
+    expect([...unrelated].every((id) => s.state.presence.get(id)!.lastDeltaAt === 0)).toBe(true)
+    expect([...s.state.actorSessions.get("tenant-a")!.get("same-user")!].sort()).toEqual(["a1", "a2"])
+  } finally { s.stop() }
+})
+
+test("presence registration is idempotent and close removes empty actor buckets", async () => {
+  const s = startServer()
+  try {
+    const alice = await register(s.url, "alice")
+    const stream = await openSse(s.url, 0, alice.token)
+    const sessionId = stream.events[0].sessionId
+    await callTool(s.url, "presence.beat", { token: alice.token, sessionId })
+    await callTool(s.url, "presence.beat", { token: alice.token, sessionId })
+    expect(s.state.actorSessions.get(alice.tenantId)?.get(alice.userId)?.size).toBe(1)
+    stream.close()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(s.state.actorSessions.get(alice.tenantId)?.has(alice.userId) ?? false).toBe(false)
+  } finally { s.stop() }
+})
+
+test("public typing tool updates two live SSE sessions for one actor identically", async () => {
+  const s = startServer()
+  try {
+    const alice = await register(s.url, "alice")
+    const first = await openSse(s.url, 0, alice.token)
+    const second = await openSse(s.url, 0, alice.token)
+    const firstId = first.events[0].sessionId
+    const secondId = second.events[0].sessionId
+    await callTool(s.url, "presence.beat", { token: alice.token, sessionId: firstId })
+    await callTool(s.url, "presence.beat", { token: alice.token, sessionId: secondId })
+    expect((await callTool(s.url, "presence.typing", { token: alice.token })).ok).toBe(true)
+    expect(s.state.presence.get(firstId)!.lastDeltaAt).toBeGreaterThan(0)
+    expect(s.state.presence.get(secondId)!.lastDeltaAt).toBe(s.state.presence.get(firstId)!.lastDeltaAt)
+    first.close(); second.close()
+  } finally { s.stop() }
+})
 
 test("100 rapid changeset.claim calls in one window produce exactly ONE quiet→typing transition, none in between", async () => {
   const s = startServer({ focusDebounceMs: 10 })
@@ -79,7 +141,7 @@ test("invisible users emit no typing_state", async () => {
     const alice = await register(s.url, "alice")
     const bob = await register(s.url, "bob")
     const cell = "ui:6"
-    const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: [cell], intent: "typing3" })
+    const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: ["ui:5"], intent: "typing3" })
 
     const bobSse = await openSse(s.url, 0, bob.token, `cell:${cell}`)
     const aliceSse = await openSse(s.url, 0, alice.token)
@@ -87,7 +149,7 @@ test("invisible users emit no typing_state", async () => {
     await callTool(s.url, "presence.focus", { token: alice.token, sessionId: aliceSessionId, cell, invisible: true })
     await new Promise((r) => setTimeout(r, 20))
 
-    await callTool(s.url, "changeset.claim", { token: alice.token, csId, delta: { kind: "claim.add", payload: { id: "cy", subject: "s", domain: "ui", level: 6, refs: [] } } })
+    await callTool(s.url, "changeset.claim", { token: alice.token, csId, delta: { kind: "claim.add", payload: { id: "cy", subject: "s", domain: "ui", level: 5, refs: [] } } })
     s.tickTypingNow()
     await new Promise((r) => setTimeout(r, 20))
 
@@ -106,7 +168,7 @@ test("going invisible while typing emits one final typing→quiet transition, th
     const alice = await register(s.url, "alice")
     const bob = await register(s.url, "bob")
     const cell = "ui:7"
-    const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: [cell], intent: "typing4" })
+    const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: ["ui:5"], intent: "typing4" })
 
     const bobSse = await openSse(s.url, 0, bob.token, `cell:${cell}`)
     const aliceSse = await openSse(s.url, 0, alice.token)
@@ -115,7 +177,7 @@ test("going invisible while typing emits one final typing→quiet transition, th
     await bobSse.waitFor((e) => e.kind === "user.focused" && e.payload.sessionId === aliceSessionId)
 
     // Alice starts typing — Bob sees quiet→typing.
-    await callTool(s.url, "changeset.claim", { token: alice.token, csId, delta: { kind: "claim.add", payload: { id: "cz", subject: "s", domain: "ui", level: 7, refs: [] } } })
+    await callTool(s.url, "changeset.claim", { token: alice.token, csId, delta: { kind: "claim.add", payload: { id: "cz", subject: "s", domain: "ui", level: 5, refs: [] } } })
     s.tickTypingNow()
     const typing = await bobSse.waitFor((e) => e.kind === "user.typing_state" && e.payload.state === "typing")
     expect(typing.payload.userId).toBe(alice.userId)
@@ -129,7 +191,7 @@ test("going invisible while typing emits one final typing→quiet transition, th
     expect(quiet.payload.cell).toBe(cell)
 
     // Nothing further: more claims + ticks while invisible emit no typing_state at all.
-    await callTool(s.url, "changeset.claim", { token: alice.token, csId, delta: { kind: "claim.add", payload: { id: "cz2", subject: "s", domain: "ui", level: 7, refs: [] } } })
+    await callTool(s.url, "changeset.claim", { token: alice.token, csId, delta: { kind: "claim.add", payload: { id: "cz2", subject: "s", domain: "ui", level: 5, refs: [] } } })
     s.tickTypingNow()
     s.tickTypingNow()
     await new Promise((r) => setTimeout(r, 30))

@@ -9,10 +9,12 @@ import path from "node:path"
 import type { Graph } from "@open-graph-mcp/graph-core/build"
 import { readAllClaims } from "@open-graph-mcp/graph-core/claim-store"
 import { createHash } from "node:crypto"
-import { write } from "../db"
-import { appendEvent, tenantGraph, type ServerState } from "../state"
+import { durableTransaction, write } from "../db"
+import { appendEvent, pushEnvelope, tenantGraph, type EventEnvelope, type ServerState } from "../state"
 import { requireToken } from "./session"
 import { cellOfClaim } from "../gates"
+import { normalizeClaimLevel } from "../claim-level"
+import { invalidateClaimsCache } from "../store"
 
 const BOOTSTRAP_ID = "cs_bootstrap"
 
@@ -33,17 +35,28 @@ export function graphImport(state: ServerState, args: { token: string; repoPath?
   const graphId = createHash("sha256").update(`${root}:${tenant}:${graph.stats.nodes}:${graph.stats.claims}`).digest("hex").slice(0, 16)
 
   const tg = tenantGraph(state, tenant)
+  if (existing) {
+    tg.graph = graph
+    tg.graphId = graphId
+    tg.pipeline = "existing"
+    tg.bootstrappedAt = new Date().toISOString()
+    return { ok: true, imported: false, ...counts(), graphId }
+  }
+
+  const claims = readAllClaims(root).map((claim) => {
+    const normalized = normalizeClaimLevel(claim.level)
+    if (!normalized.ok) throw new Error(normalized.reason)
+    return { ...claim, level: normalized.numeric }
+  })
+  const cells = new Set<string>()
+  const previousGraph = { graph: tg.graph, graphId: tg.graphId, pipeline: tg.pipeline, bootstrappedAt: tg.bootstrappedAt }
   tg.graph = graph
   tg.graphId = graphId
   tg.pipeline = "existing"
   tg.bootstrappedAt = new Date().toISOString()
-
-  if (existing) return { ok: true, imported: false, ...counts(), graphId } // idempotente: no-op
-
-  const claims = readAllClaims(root)
-  const cells = new Set<string>()
-
-  const tx = state.db.transaction(() => {
+  let importedEvent: EventEnvelope
+  try {
+    durableTransaction(state.db, () => {
     for (const n of graph.nodes) {
       write(state.db, state.stateDir, tenant, "nodes", {
         tenant_id: tenant, id: n.id, domain: n.domain, level: String(n.level), file: n.file, kind: n.kind, sig: n.sig ?? null, anchor: n.anchor,
@@ -58,7 +71,7 @@ export function graphImport(state: ServerState, args: { token: string; repoPath?
     let seq = 0
     for (const c of claims) {
       write(state.db, state.stateDir, tenant, "claims", {
-        tenant_id: tenant, id: c.id, seq: c.seq ?? ++seq, subject: c.subject, domain: c.domain ?? null, level: c.level != null ? String(c.level) : null,
+        tenant_id: tenant, id: c.id, seq: c.seq ?? ++seq, subject: c.subject, domain: c.domain ?? null, level: `P${c.level}`,
         refs: JSON.stringify(c.refs ?? []), anchor: c.anchor ?? null, file: c.file ?? null, verdict_confidence: c.verdict?.confidence ?? null, verdict_overclaim: c.verdict?.overclaim ? 1 : 0, supersedes: null,
       })
       cells.add(cellOfClaim(c))
@@ -69,9 +82,13 @@ export function graphImport(state: ServerState, args: { token: string; repoPath?
     write(state.db, state.stateDir, tenant, "changesets", {
       tenant_id: tenant, id: BOOTSTRAP_ID, intent: "phase-1 import", parent: null, status: "admitted", opened_by: userId, opened_at: new Date().toISOString(), closed_at: new Date().toISOString(), base_seq: 0, admit_seq: 0, blast_cells: JSON.stringify([...cells].sort()),
     })
-  })
-  tx()
-
-  appendEvent(state, tenant, { kind: "graph.imported", targetKind: "changeset", targetId: BOOTSTRAP_ID, byUser: userId, payload: { graphId, ...counts() } })
+    importedEvent = appendEvent(state, tenant, { kind: "graph.imported", targetKind: "changeset", targetId: BOOTSTRAP_ID, byUser: userId, payload: { graphId, ...counts() } }, { defer: true })
+    })
+  } catch (error) {
+    Object.assign(tg, previousGraph)
+    throw error
+  }
+  invalidateClaimsCache(state, tenant)
+  pushEnvelope(state, tenant, importedEvent!)
   return { ok: true, imported: true, ...counts(), graphId }
 }

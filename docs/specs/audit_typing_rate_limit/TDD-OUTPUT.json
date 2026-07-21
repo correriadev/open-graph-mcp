@@ -1,0 +1,25 @@
+{
+  "featureId": "F006",
+  "status": "SUCCESS",
+  "metrics": {
+    "totalTests": 141,
+    "passed": 141,
+    "failed": 0,
+    "coverage": 0.0
+  },
+  "modifiedFiles": [
+    "packages/mcp-server/src/state.ts",
+    "packages/mcp-server/src/tools/presence.ts",
+    "packages/mcp-server/src/tools/typing.ts",
+    "packages/mcp-server/test/typing-network-aggregation.test.ts",
+    "packages/mcp-server/test/heartbeat-expire.test.ts",
+    "packages/mcp-server/test/presence-ownership.test.ts",
+    "packages/mcp-web/src/og.ts",
+    "packages/mcp-web/src/connection-owner.ts",
+    "packages/mcp-web/src/typing-rate-limit.ts",
+    "packages/mcp-web/test/typing-rate-limit.test.ts",
+    "packages/mcp-web/test/connection-owner.test.ts",
+    "packages/mcp-web/e2e/typing-indicator.e2e.ts"
+  ],
+  "reworksCount": 1
+}

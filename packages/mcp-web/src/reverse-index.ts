@@ -16,16 +16,23 @@ import type { ClaimRecord } from "./store"
 
 export type ReverseIndexMap = Map<string, string[]>
 
-/** Build Map<targetClaimId, sourceClaimId[]> from a list of claims. Single pass O(claims*refs). */
-export function buildReverseIndex(claims: ClaimRecord[] | Record<string, ClaimRecord[]>): ReverseIndexMap {
-  const out: ReverseIndexMap = new Map()
-  const list = Array.isArray(claims) ? claims : Object.values(claims).flat()
-  for (const c of list) {
-    if (!c || !c.id) continue
-    for (const ref of c.refs ?? []) {
-      if (!out.has(ref)) out.set(ref, [])
-      if (!out.get(ref)!.includes(c.id)) out.get(ref)!.push(c.id)
+/** Add one page of claims without scanning claims already projected. */
+export function mergeReverseIndex(current: ReverseIndexMap, page: ClaimRecord[]): ReverseIndexMap {
+  const next = new Map([...current].map(([target, sources]) => [target, [...sources]]))
+  for (const claim of page) {
+    if (!claim?.id) continue
+    for (const ref of claim.refs ?? []) {
+      const sources = next.get(ref) ?? []
+      if (!sources.includes(claim.id)) next.set(ref, [...sources, claim.id])
     }
   }
+  return next
+}
+
+/** Build Map<targetClaimId, sourceClaimId[]> from a list of claims. Single pass O(claims*refs). */
+export function buildReverseIndex(claims: ClaimRecord[] | Record<string, ClaimRecord[]>): ReverseIndexMap {
+  let out: ReverseIndexMap = new Map()
+  const list = Array.isArray(claims) ? claims : Object.values(claims).flat()
+  out = mergeReverseIndex(out, list)
   return out
 }

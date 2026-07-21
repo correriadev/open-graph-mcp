@@ -20,7 +20,21 @@ type TypingState = Presence["typingState"]
 
 export function touchDelta(state: ServerState, tenant: string, userId: string): void {
   const t = now()
-  for (const p of state.presence.values()) if (p.tenant === tenant && p.userId === userId) p.lastDeltaAt = t
+  const sessions = state.actorSessions.get(tenant)?.get(userId)
+  if (!sessions) return
+  for (const sessionId of [...sessions]) {
+    const p = state.presence.get(sessionId)
+    if (!p || p.tenant !== tenant || p.userId !== userId) {
+      sessions.delete(sessionId)
+      continue
+    }
+    p.lastDeltaAt = t
+  }
+  if (sessions.size === 0) {
+    const actors = state.actorSessions.get(tenant)!
+    actors.delete(userId)
+    if (actors.size === 0) state.actorSessions.delete(tenant)
+  }
 }
 
 export function presenceTyping(state: ServerState, args: { token: string }): { ok: true } {
