@@ -30,6 +30,7 @@
 | untrusted absolute, drive, UNC, scheme, or traversal path | Sanitized basename only. |
 | control, bidirectional-control, root-only, or unsafe basename | Omit the file field. |
 
+- CURRENT LIMITATION: **A URL-scheme repository root can still be treated as lexically contained and expose path ancestry instead of falling back to a basename**.
 - REQUIRED: **Normalize both slash dialects before classification**.
 - REQUIRED: **Compare Windows containment case-insensitively**.
 - REQUIRED: **Reject raw and repeatedly encoded traversal markers from relative projection**.
