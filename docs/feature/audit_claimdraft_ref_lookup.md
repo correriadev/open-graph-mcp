@@ -37,10 +37,12 @@
 - **Navigate** immediately when the claim already exists in loaded cell pages.
 - **Collapse** duplicate point reads by projection generation and reference ID.
 - **Validate** returned claim identity, owner domain, level, and sequence before merging.
+- CURRENT LIMITATION: **Numeric level and sequence validation does not consistently reject unsafe integers**.
 - **Merge** a point result into its owner cell without replacing existing pages.
 - **Discard** hits, misses, and failures owned by a stale projection generation.
 - **Cache** negative and failed results for five seconds with at most 128 entries.
 - **Limit** concurrent point lookups to 16 per generation and time each out after ten seconds.
+- CURRENT LIMITATION: **The ten-second timeout releases the logical slot but does not abort the underlying transport read**; stalled reads can accumulate.
 - **Throttle** lookup-failure notifications per generation.
 - **Expose** identifier-free client and server lookup counters and latency metrics.
 

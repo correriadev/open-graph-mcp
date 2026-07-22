@@ -36,6 +36,7 @@
 ## DURABILITY CONSTRAINT
 
 - REQUIRED: **Persist claim levels canonically as `P<n>` in SQLite and JSONL**.
+- CURRENT LIMITATION: **Legacy numeric JSONL replay is not normalized before equality-based indexed cell reads resume**; a recovered claim can therefore be absent from `graph://claims?cell=domain:P<n>`.
 - REQUIRED: **Normalize legacy numeric levels during JSONL replay before indexed cell reads resume**.
 - PROHIBITED: **Rely only on the SQLite-open normalization**, because recovery can restore numeric JSONL values and hide claims from equality-based cell pagination.
 
