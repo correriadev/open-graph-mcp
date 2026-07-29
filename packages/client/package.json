@@ -10,11 +10,13 @@
   "exports": {
     ".": {
       "bun": "./src/index.ts",
+      "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./node-store": {
       "bun": "./src/node-store.ts",
+      "development": "./src/node-store.ts",
       "types": "./dist/node-store.d.ts",
       "import": "./dist/node-store.js"
     }
