@@ -40,8 +40,12 @@ test("--name bootstraps credentials on first token-needing call: registers, inje
     expect(fs.existsSync(credPath)).toBe(true)
     // Regardless of whether the file was freshly created here (as it is in this test), mode must be
     // exactly 0600 — no group/other bits, since the token inside is a bearer credential.
-    const mode = fs.statSync(credPath).mode & 0o777
-    expect(mode).toBe(0o600)
+    // chmod has no permission semantics on Windows (fs.statSync(...).mode is a fabricated
+    // read/write-only-ish value there, not a real POSIX bitmask), so this assertion is POSIX-only.
+    if (process.platform !== "win32") {
+      const mode = fs.statSync(credPath).mode & 0o777
+      expect(mode).toBe(0o600)
+    }
 
     const creds = readCredentials(home)
     expect(creds.server).toBe(server.url)
@@ -98,30 +102,32 @@ test("a second tools/call needing a token (different tool) reuses the same in-pr
 test("--name present but the called tool doesn't declare token: no injection, no credentials file, call passes through", async () => {
   const server = startServer()
   const home = tmpHome()
-  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), "ogmcp-proxy-test-repo-"))
-  fs.writeFileSync(path.join(repoDir, "index.ts"), "export const x = 1\n")
   const proxy = spawnProxy(server.url, { extraArgs: ["--name", "Alice"], home })
   try {
     await proxy.readStderrLine() // startup log
 
-    proxy.send({ jsonrpc: "2.0", id: 13, method: "tools/call", params: { name: "graph.bootstrap", arguments: { repoPath: repoDir } } })
+    // `graph.subscribe` é a tool aberta usada aqui. Era `graph.bootstrap` até ele passar a exigir
+    // token (publica um grafo no tenant do chamador — não podia seguir anônimo); o que este teste
+    // cobre é o COMPORTAMENTO do proxy diante de uma tool sem `token` no inputSchema, então basta
+    // apontar para outra tool que ainda seja assim.
+    proxy.send({ jsonrpc: "2.0", id: 13, method: "tools/call", params: { name: "graph.subscribe", arguments: { sessionId: "s-inexistente", filters: [] } } })
 
-    // graph.bootstrap has no `token` in its inputSchema — no injection line should ever appear.
+    // graph.subscribe has no `token` in its inputSchema — no injection line should ever appear.
     const maybeInject = await proxy.readStderrLine(500)
     expect(maybeInject).toBeNull()
 
     const line = await proxy.readLine()
     const parsed = JSON.parse(line!)
     expect(parsed.id).toBe(13)
-    expect(parsed.result.isError).toBeUndefined()
 
-    // Bootstrap was never needed, so the proxy never even called resolveCredentials.
+    // O proxy nunca chamou resolveCredentials — é isto que o teste prova. O veredito da tool em si
+    // (sessão inexistente) é irrelevante aqui: o que importa é que a chamada passou direto, sem
+    // injeção de token e sem materializar credentials.json.
     expect(fs.existsSync(credentialsPathFor(home))).toBe(false)
   } finally {
     proxy.kill()
     server.stop()
     fs.rmSync(home, { recursive: true, force: true })
-    fs.rmSync(repoDir, { recursive: true, force: true })
   }
 })
 
@@ -244,8 +250,12 @@ test("a credentials.json with a mismatched server field is ignored — proxy reg
 
     // Overwriting an existing (previously 0644) file must still land on exactly 0600 — the explicit
     // chmodSync after writeFileSync is what guarantees this, not the writeFileSync mode option alone.
-    const mode = fs.statSync(credPath).mode & 0o777
-    expect(mode).toBe(0o600)
+    // chmod has no permission semantics on Windows, so this assertion is POSIX-only (see the other
+    // 0600 assertion above for why).
+    if (process.platform !== "win32") {
+      const mode = fs.statSync(credPath).mode & 0o777
+      expect(mode).toBe(0o600)
+    }
   } finally {
     proxy.kill()
     server.stop()

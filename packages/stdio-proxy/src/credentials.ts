@@ -49,8 +49,19 @@ export function postMcp(server: string, body: unknown): Promise<Response> {
   })
 }
 
+/** `os.homedir()` on Windows resolves from `USERPROFILE` and ignores `HOME` — so overriding `HOME`
+ * (the POSIX-native isolation knob, and what `test/helpers.ts` sets) has no effect there, and the
+ * proxy silently falls through to the REAL user's home dir instead of a test's tmp one. Honoring
+ * `process.env.HOME` explicitly, before falling back to `os.homedir()`, fixes that on win32 while
+ * being a no-op change on POSIX: Node's `os.homedir()` already reads `$HOME` there itself, so this
+ * branch and the fallback agree in production. Do not delete this as "redundant" — it isn't, on
+ * Windows. */
+function homeDir(): string {
+  return process.env.HOME || os.homedir()
+}
+
 export function credentialsPath(): string {
-  return path.join(os.homedir(), ".open-graph-mcp", "credentials.json")
+  return path.join(homeDir(), ".open-graph-mcp", "credentials.json")
 }
 
 // Single store instance for this process — `fileTokenStore()` itself does no eager I/O (only
