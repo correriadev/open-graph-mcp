@@ -8,7 +8,7 @@ import { classifyEnvelope, parseEnvelope, parseFrame, type Envelope } from "../s
 const env = (over: Partial<Envelope> = {}): Envelope => ({
   schemaVersion: 1,
   seq: 1,
-  ts: 0,
+  ts: "2026-01-01T00:00:00.000Z",
   kind: "drift.node",
   target: "ui:P4",
   payload: {},

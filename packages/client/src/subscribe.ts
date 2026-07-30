@@ -1,7 +1,10 @@
 export type Envelope = {
   schemaVersion: 1
   seq: number
-  ts: number
+  /** ISO 8601, como o servidor emite (`EventEnvelope.ts` em mcp-server/src/state.ts) — NÃO epoch ms.
+   * Era declarado `number` aqui: o tipo mentia sobre o que chega no fio, e quem fizesse aritmética
+   * com `ts` (ordenar, diferença de tempo) obtinha NaN em silêncio. */
+  ts: string
   kind: string
   target: string
   payload: any
@@ -168,7 +171,20 @@ export class EventStream {
     if (!frame) return
     if (frame.event === "session.created") {
       try {
-        const { sessionId } = JSON.parse(frame.data)
+        const { sessionId, graphId } = JSON.parse(frame.data)
+        // QA-7 achado real: o servidor manda o graphId ATUAL já no primeiro frame (sse.ts's
+        // `session.created { sessionId, graphId, tenant }`) — antes desta checagem, esse graphId era
+        // descartado aqui e o reset só era detectado quando um envelope REGULAR chegava com um
+        // graphId divergente. Num restart cujo processo novo tem um `since` (SQLite seq) menor que o
+        // `lastSeq` que este cliente já conhecia, o tail de `/events` nunca reenvia nada (seq > since
+        // nunca casa) e nenhum envelope regular chega para disparar o reset — o cliente ficava preso
+        // ao graphId velho indefinidamente, "refaz snapshot" nunca acontecia. Comparar aqui, no
+        // primeiro frame de toda (re)conexão, fecha esse buraco.
+        if (typeof graphId === "string" && this.graphId !== null && graphId !== this.graphId) {
+          this.h.onReset()
+          this.reset()
+          return
+        }
         if (typeof sessionId === "string") this.h.onSessionId?.(sessionId)
       } catch {
         /* malformed session.created frame — ignore */

@@ -467,7 +467,9 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
    * events are exempt from seq dedup per the `Envelope` contract, so this is just for shape-consistency
    * with real SSE presence envelopes, not for any dedup logic of its own). */
   function synthUserEnvelope(kind: string, userId: string, payload: Record<string, unknown>): Envelope {
-    return { schemaVersion: 1, seq: historyLastSeq, ts: Date.now(), kind, target: userId, payload, graphId: historyGraphId ?? "", ephemeral: true }
+    // ISO 8601 p/ casar o formato do fio (Envelope.ts) — `Date.now()` daria epoch ms aqui e um
+    // consumidor não teria como distinguir um envelope sintetizado de um real pelo tipo de `ts`.
+    return { schemaVersion: 1, seq: historyLastSeq, ts: new Date().toISOString(), kind, target: userId, payload, graphId: historyGraphId ?? "", ephemeral: true }
   }
 
   /** Polls `presence.who` (a tool call — goes through `call()`, so QA-1 re-register applies) and diffs

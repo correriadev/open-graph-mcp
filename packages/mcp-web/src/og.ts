@@ -227,15 +227,27 @@ export async function loadSnapshot(): Promise<void> {
 }
 
 // ---- projeção de eventos ---------------------------------------------------
+/**
+ * `Envelope.ts` chega do servidor como ISO 8601, mas `FeedItem.ts` e o mapa `demotions` são epoch ms
+ * (comparados contra um cutoff numérico em refreshDemotions). O tipo do cliente declarava `number`
+ * e escondia isto: a string era guardada como se fosse número e `ts >= cutoff` comparava string com
+ * número — sempre falso, então demotion NENHUMA era contada. Converte explicitamente.
+ */
+function epochOf(ts: string | number | undefined): number {
+  if (typeof ts === "number") return ts
+  const parsed = ts ? Date.parse(ts) : NaN
+  return Number.isNaN(parsed) ? Date.now() : parsed
+}
+
 function applyEvent(env: Envelope): void {
   useUi.setState((s) => ({
     seq: env.seq ?? s.seq,
-    events: [{ seq: env.seq ?? 0, ts: env.ts || Date.now(), kind: env.kind, target: env.target }, ...s.events].slice(0, 20),
+    events: [{ seq: env.seq ?? 0, ts: epochOf(env.ts), kind: env.kind, target: env.target }, ...s.events].slice(0, 20),
   }))
 
   if (DRIFT_KINDS.has(env.kind) && env.target) projectDrift({ [env.target]: env.payload?.grade ?? "drift" })
   if (env.kind === "authority.demoted" && env.target) {
-    demotions.set(env.target, env.ts || Date.now())
+    demotions.set(env.target, epochOf(env.ts))
     refreshDemotions()
   }
   if (env.kind === "authority.reconciled" && env.target) {
