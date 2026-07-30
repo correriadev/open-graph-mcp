@@ -26,6 +26,7 @@
     "test:node": "node --test test/*.test.ts"
   },
   "devDependencies": {
+    "@open-graph-mcp/mcp-server": "workspace:*",
     "@types/bun": "1.3.13",
     "@types/node": "22.10.2",
     "typescript": "5.8.2"
