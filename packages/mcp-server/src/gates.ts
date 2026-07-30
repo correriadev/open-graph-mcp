@@ -20,6 +20,39 @@ export type NodeSnapshot = { id: string; domain: string | null; level: number; f
 export type Delta = { kind: "claim.add" | "authority.flip"; payload: any }
 
 export const cellOfClaim = (c: { domain?: string | null; level?: number }): string => `${c.domain ?? "?"}:${c.level ?? 5}`
+
+/**
+ * Raio de impacto REAL de um changeset: as células que os deltas de fato tocam (domínio:nível de
+ * cada claim + cada célula de authority.flip), unidas às células declaradas no lock.
+ *
+ * Reimplementa `blastRadius` do `changeset-store.ts` vendorado (deletado: era file-based, sem
+ * tenant/token/lock/transação — ver docs/roadmap-mcp/06-audit-e-reestruturacao.md). A diferença é
+ * que aquele operava sobre um Changeset em memória e este sobre os deltas persistidos.
+ *
+ * Por que importa: `blast_cells` é gravado UMA vez, na CRIAÇÃO do changeset, e nunca recalculado.
+ * Um turno aberto pode ser EXPANDIDO — `changeset.open` com uma célula já trancada por mim mais
+ * uma nova reusa o mesmo csId e tranca a nova (ver changesetOpen, caminho `mineCs`), mas não
+ * reescreve `blast_cells`. O gate de escopo passa a aceitar claims na célula nova (ele lê a tabela
+ * `locks`, não `blast_cells`), e o registro de auditoria fica subdeclarado: quem lê o histórico vê
+ * menos células do que o changeset realmente tocou. Recalcular no commit fecha isso.
+ *
+ * NÃO é o caso de uma claim "fora do lock": essa o gate incremental bloqueia, para claim.add E para
+ * authority.flip. A união com `declaredCells` existe porque uma célula pode ter sido trancada sem
+ * receber delta nenhum — ela foi reservada, e isso é parte do raio revisável.
+ */
+export function blastRadius(deltas: readonly Delta[], declaredCells: readonly string[] = []): { cells: string[]; claimCount: number } {
+  const cells = new Set<string>(declaredCells.map(canonicalCell))
+  let claimCount = 0
+  for (const d of deltas) {
+    if (d.kind === "claim.add") {
+      claimCount++
+      cells.add(canonicalCell(cellOfClaim(d.payload)))
+    } else if (d.kind === "authority.flip" && d.payload?.cell) {
+      cells.add(canonicalCell(d.payload.cell))
+    }
+  }
+  return { cells: [...cells].sort(), claimCount }
+}
 const canonicalCell = (cell: string): string => {
   const cut = cell.lastIndexOf(":")
   return cut < 0 ? cell : `${cell.slice(0, cut)}:${cell.slice(cut + 1).replace(/^P/, "")}`
