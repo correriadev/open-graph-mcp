@@ -14,7 +14,7 @@ import { abortedPayload, appendEvent, pushEnvelope, tenantGraph, type EventEnvel
 import { requireToken } from "./session"
 import { touchDelta } from "./typing"
 import { readClaims, readNodes, authorityOf, makeReadFile, writeClaim, writeAuthority, maxClaimSeq } from "../store"
-import { incrementalGate, finalGate, cellOfClaim, type Delta } from "../gates"
+import { incrementalGate, finalGate, cellOfClaim, blastRadius, type Delta } from "../gates"
 import { normalizeClaimLevel } from "../claim-level"
 
 const now = () => new Date().toISOString()
@@ -164,7 +164,11 @@ export function changesetCommit(state: ServerState, args: { token: string; csId:
     const deltas = (state.db.query("SELECT kind, payload FROM cs_deltas WHERE tenant_id = ? AND cs_id = ? ORDER BY seq").all(tenant, args.csId) as { kind: string; payload: string }[]).map(
       (d) => ({ kind: d.kind as Delta["kind"], payload: JSON.parse(d.payload) }),
     )
+    // `cells` = as células TRANCADAS (o que o open pediu): é sobre elas que os locks são liberados.
+    // `blast` = o que os deltas realmente tocaram, união com as trancadas — o registro de auditoria.
+    // Os dois coincidem no caso comum; divergem quando uma claim cai fora do lock declarado.
     const cells: string[] = JSON.parse(cs.blast_cells ?? "[]")
+    const blast = blastRadius(deltas, cells)
     const final = finalGate(deltas, { existingClaims: readClaims(state, tenant), nodes: readNodes(state, tenant), authorityOf: (c) => authorityOf(state, tenant, c), readFile: makeReadFile(state) })
 
     if (!final.ok) {
@@ -185,7 +189,14 @@ export function changesetCommit(state: ServerState, args: { token: string; csId:
         if (tg.graph) for (const n of tg.graph.nodes) if (d.payload.refs?.includes(n.id) && !n.claims.includes(d.payload.id)) n.claims.push(d.payload.id)
       }
     }
-    const committed = appendEvent(state, tenant, { kind: "changeset.committed", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: { csId: cs.id, cells, blastRadius: cells.length } }, { defer: true })
+    // `blastRadius` no payload passa a ser o raio REAL (antes era `cells.length`, só o declarado);
+    // `blastCells` nomeia quais são — um número sozinho não é revisável.
+    const committed = appendEvent(
+      state,
+      tenant,
+      { kind: "changeset.committed", targetKind: "changeset", targetId: cs.id, byUser: userId, payload: { csId: cs.id, cells, blastCells: blast.cells, blastRadius: blast.cells.length, claimCount: blast.claimCount } },
+      { defer: true },
+    )
     const admitSeq = committed.seq
     ;(committed.payload as any).admitSeq = admitSeq
     envs.push(committed)
@@ -198,7 +209,8 @@ export function changesetCommit(state: ServerState, args: { token: string; csId:
       }
     }
 
-    write(state.db, state.stateDir, tenant, "changesets", { tenant_id: tenant, id: cs.id, intent: cs.intent, parent: null, status: "admitted", opened_by: cs.opened_by, opened_at: cs.opened_at, closed_at: now(), base_seq: null, admit_seq: admitSeq, blast_cells: cs.blast_cells })
+    // persiste o raio REAL no registro admitido (era `cs.blast_cells`, o declarado no open)
+    write(state.db, state.stateDir, tenant, "changesets", { tenant_id: tenant, id: cs.id, intent: cs.intent, parent: null, status: "admitted", opened_by: cs.opened_by, opened_at: cs.opened_at, closed_at: now(), base_seq: null, admit_seq: admitSeq, blast_cells: JSON.stringify(blast.cells) })
     const released = releaseLocks(state, tenant, args.csId)
     for (const cell of released) envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, csId: cs.id, reason: "committed" } }, { defer: true }))
     state.deltaCounts.delete(args.csId)
