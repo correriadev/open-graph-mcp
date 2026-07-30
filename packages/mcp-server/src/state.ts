@@ -86,7 +86,9 @@ export type Presence = {
 export type Pipeline = "skeleton" | "existing"
 
 /** Grafo de conhecimento por tenant (índice quente p/ query/watch). O default carrega o fluxo Fase 1. */
-export type TenantGraph = { graph: Graph | null; graphId: string; pipeline: Pipeline | null; bootstrappedAt: string | null }
+/** `repoPath`: cada tenant indexa o SEU repo. `state.repoPath` continua existindo como default de
+ *  servidor (env GRAPH_REPO_PATH / autoBootstrap), mas não é mais o que o rebuild de um tenant lê. */
+export type TenantGraph = { graph: Graph | null; graphId: string; pipeline: Pipeline | null; bootstrappedAt: string | null; repoPath: string | null }
 
 export type ServerState = {
   repoPath: string
@@ -159,7 +161,7 @@ export function createState(opts: {
 export function tenantGraph(state: ServerState, tenant: string): TenantGraph {
   let g = state.graphs.get(tenant)
   if (!g) {
-    g = { graph: null, graphId: "", pipeline: null, bootstrappedAt: null }
+    g = { graph: null, graphId: "", pipeline: null, bootstrappedAt: null, repoPath: null }
     state.graphs.set(tenant, g)
   }
   return g
@@ -317,8 +319,9 @@ export function broadcastEphemeral(state: ServerState, tenant: string, input: Ev
 export function publish(
   state: ServerState,
   partial: { kind: string; target: string | null; payload: Record<string, unknown> },
+  tenant: string = DEFAULT_TENANT,
 ): EventEnvelope {
-  return appendEvent(state, DEFAULT_TENANT, { kind: partial.kind, targetId: partial.target, payload: partial.payload })
+  return appendEvent(state, tenant, { kind: partial.kind, targetId: partial.target, payload: partial.payload })
 }
 
 /** Célula de um nó no grafo default (usado pelo watch-bridge Fase 1). */

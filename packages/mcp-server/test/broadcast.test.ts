@@ -2,13 +2,13 @@ import { expect, test } from "bun:test"
 import { writeFileSync } from "node:fs"
 import path from "node:path"
 import { startServer } from "../src/index"
-import { callTool, openSse, tempRepo } from "./helpers"
+import { callTool, openSse, tempRepo, bootstrapAs } from "./helpers"
 
 test("two connected clients receive the same drift event in the same tick", async () => {
   const { root, cleanup } = tempRepo("fresh")
   const s = startServer({ repoPath: root, watch: false })
   try {
-    await callTool(s.url, "graph.bootstrap", { repoPath: root })
+    await bootstrapAs(s.url, root)
     const a = await openSse(s.url)
     const b = await openSse(s.url)
 

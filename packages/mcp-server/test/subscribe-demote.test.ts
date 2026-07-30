@@ -4,7 +4,7 @@ import path from "node:path"
 import { buildGraph, writeGraph } from "@open-graph-mcp/graph-core/build"
 import { setAuthority } from "@open-graph-mcp/graph-core/authority"
 import { startServer } from "../src/index"
-import { callTool, openSse, tempRepo } from "./helpers"
+import { callTool, openSse, tempRepo, bootstrapAs } from "./helpers"
 
 test("breaking the anchor of a β cell emits authority.demoted with grade", async () => {
   const { root, cleanup } = tempRepo("demote")
@@ -19,7 +19,7 @@ test("breaking the anchor of a β cell emits authority.demoted with grade", asyn
 
   const s = startServer({ repoPath: root, watch: false })
   try {
-    await callTool(s.url, "graph.bootstrap", { repoPath: root })
+    await bootstrapAs(s.url, root)
     const sse = await openSse(s.url)
 
     writeFileSync(path.join(root, "src", "app.ts"), "export function charge() {}\n")

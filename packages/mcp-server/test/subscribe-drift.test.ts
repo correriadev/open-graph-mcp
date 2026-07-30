@@ -2,13 +2,13 @@ import { expect, test } from "bun:test"
 import { writeFileSync } from "node:fs"
 import path from "node:path"
 import { startServer } from "../src/index"
-import { callTool, openSse, tempRepo } from "./helpers"
+import { callTool, openSse, tempRepo, bootstrapAs } from "./helpers"
 
 test("editing an anchored source file emits drift.node to a subscribed client", async () => {
   const { root, cleanup } = tempRepo("fresh")
   const s = startServer({ repoPath: root, watch: false })
   try {
-    await callTool(s.url, "graph.bootstrap", { repoPath: root })
+    await bootstrapAs(s.url, root)
     const sse = await openSse(s.url)
 
     writeFileSync(
