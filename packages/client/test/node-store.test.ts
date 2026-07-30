@@ -38,11 +38,17 @@ test("set() then get() round-trips credentials, and creates parent directories a
   assert.deepEqual(store.get(), creds)
 })
 
+// O bit de permissão POSIX não tem semântica no Windows: chmodSync existe mas não altera a ACL,
+// e statSync devolve sempre 0o666. O código de produção segue chamando chmod incondicionalmente —
+// só a ASSERÇÃO é guardada, p/ que no Linux (onde o CI roda) ela continue sendo o teste de
+// segurança que sempre foi. Mesma guarda usada em packages/stdio-proxy/test/credentials.test.ts.
+const posix = process.platform !== "win32"
+
 test("set() persists the file at mode 0600", () => {
   const store = fileTokenStore({ path: file })
   store.set({ server: "http://x", token: "tok", userId: "u1", tenantId: "t1" })
-  const mode = fs.statSync(file).mode & 0o777
-  assert.equal(mode, 0o600)
+  assert.deepEqual(store.get(), { server: "http://x", token: "tok", userId: "u1", tenantId: "t1" })
+  if (posix) assert.equal(fs.statSync(file).mode & 0o777, 0o600)
 })
 
 test("set() re-asserts 0600 even when overwriting a file that previously had looser permissions", () => {
@@ -50,8 +56,8 @@ test("set() re-asserts 0600 even when overwriting a file that previously had loo
   store.set({ server: "http://x", token: "a", userId: "u1", tenantId: "t1" })
   fs.chmodSync(file, 0o644)
   store.set({ server: "http://x", token: "b", userId: "u1", tenantId: "t1" })
-  const mode = fs.statSync(file).mode & 0o777
-  assert.equal(mode, 0o600)
+  assert.equal(store.get()?.token, "b") // o overwrite em si vale em qualquer SO
+  if (posix) assert.equal(fs.statSync(file).mode & 0o777, 0o600)
 })
 
 test("get() returns null for corrupt JSON instead of throwing", () => {

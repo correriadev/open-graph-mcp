@@ -25,7 +25,11 @@ export type DomainMap = readonly DomainRule[]
 export const UNASSIGNED = "(unassigned)"
 
 /** Glob simples: exato, `prefix*`, `*suffix`, ou `*substr*`. Sem dependência de glob. */
-function matchesPattern(file: string, pattern: string): boolean {
+function matchesPattern(rawFile: string, pattern: string): boolean {
+  // defensivo: um graph.json legado gerado no Windows pode ter ids com `\` (bug já corrigido na
+  // fonte, graph-bootstrap.ts); normaliza aqui p/ separador POSIX antes de comparar, sem mudar a
+  // semântica do glob (exato, prefix*, *suffix, *substr*).
+  const file = rawFile.split(/[\\/]/).join("/")
   if (!pattern.includes("*")) return file === pattern
   const isPrefixWildcard = pattern.startsWith("*")
   const isSuffixWildcard = pattern.endsWith("*")
