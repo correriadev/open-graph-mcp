@@ -30,8 +30,24 @@ export const readResource = (base: string, uri: string, token?: string) =>
 export const register = (base: string, name: string, tenant?: string) =>
   callTool(base, "session.register", { name, tenant }) as Promise<{ token: string; userId: string; tenantId: string }>
 
+/**
+ * graph.bootstrap/graph.rebuild ESCREVEM (publicam um grafo no tenant do chamador e emitem evento
+ * no log dele), então exigem token — antes rodavam sem autenticação nenhuma e sempre no tenant
+ * "default". Estes helpers registram uma sessão descartável para os testes que só precisam de "um
+ * grafo publicado"; quem testa isolamento entre tenants passa o token explicitamente.
+ */
+export async function bootstrapAs(base: string, repoPath: string, name = "bootstrapper", tenant?: string): Promise<any> {
+  const { token } = await register(base, name, tenant)
+  return callTool(base, "graph.bootstrap", { token, repoPath })
+}
+
+export async function rebuildAs(base: string, name = "bootstrapper", tenant?: string): Promise<any> {
+  const { token } = await register(base, name, tenant)
+  return callTool(base, "graph.rebuild", { token })
+}
+
 /** Bootstrap the fixture to produce a Phase-1 .graph/, so graph.import has something to migrate. */
-export const buildPhase1Graph = (base: string, repoPath: string) => callTool(base, "graph.bootstrap", { repoPath })
+export const buildPhase1Graph = (base: string, repoPath: string) => bootstrapAs(base, repoPath, "phase1-builder")
 
 export type SseClient = {
   events: any[]

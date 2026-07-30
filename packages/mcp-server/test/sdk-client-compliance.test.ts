@@ -43,8 +43,10 @@ test("SDK Client + StreamableHTTPClientTransport: initialize, tools/list, tools/
     expect(badQuery.isError).toBe(true)
     expect((badQuery.content as any)?.[0]?.text).toContain("not bootstrapped")
 
-    // bootstrap so resources/read has something real to return
-    const boot = await client.callTool({ name: "graph.bootstrap", arguments: { repoPath: root } })
+    // bootstrap so resources/read has something real to return — needs the token from the
+    // session.register above: graph.bootstrap publishes into the CALLER's tenant.
+    const sdkToken = (reg.structuredContent as any).token as string
+    const boot = await client.callTool({ name: "graph.bootstrap", arguments: { token: sdkToken, repoPath: root } })
     expect(boot.isError).toBeUndefined()
     const graphId = (boot.structuredContent as any)?.graphId
     expect(graphId).toBeString()

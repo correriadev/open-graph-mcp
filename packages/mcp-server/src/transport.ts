@@ -11,7 +11,7 @@ import { DEFAULT_TENANT, type Filter, type ServerState } from "./state"
 import { bootstrap, rebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
 import { subscribe } from "./tools/graph-subscribe"
-import { sessionRegister } from "./tools/session"
+import { sessionRegister, requireToken } from "./tools/session"
 import { graphImport } from "./tools/graph-import"
 import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine } from "./tools/changeset"
 import { authorityFlip } from "./tools/authority"
@@ -31,8 +31,9 @@ type RpcResponse = { jsonrpc: "2.0"; id: string | number | null; result?: unknow
 const TOOLS = [
   {
     name: "graph.bootstrap",
-    description: "Publish a graph from a repo path. Loads .graph/graph.json if present, else builds a deterministic structural skeleton. Idempotent.",
-    inputSchema: { type: "object", properties: { repoPath: { type: "string" } } },
+    description:
+      "Publish a graph from a repo path into the caller's tenant. Loads .graph/graph.json if present, else builds a deterministic structural skeleton (nodes + import edges). Idempotent per tenant.",
+    inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" }, repoPath: { type: "string" } } },
   },
   {
     name: "graph.query",
@@ -57,7 +58,11 @@ const TOOLS = [
       properties: { sessionId: { type: "string" }, filters: { type: "array" } },
     },
   },
-  { name: "graph.rebuild", description: "Re-read .graph/ and re-emit snapshot to all subscribers.", inputSchema: { type: "object", properties: {} } },
+  {
+    name: "graph.rebuild",
+    description: "Re-read the caller tenant's .graph/ and re-emit its snapshot to that tenant's subscribers.",
+    inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" } } },
+  },
   {
     name: "session.register",
     description: "Register a session under a tenant. Returns { token, userId, tenantId }. Token is in-memory (lost on restart).",
@@ -130,13 +135,16 @@ const TOOLS = [
 function callTool(state: ServerState, name: string, args: any): unknown {
   switch (name) {
     case "graph.bootstrap":
-      return bootstrap(state, args?.repoPath ?? state.repoPath)
+      // requireToken (não tenantOf): bootstrap ESCREVE — publica um grafo e emite evento no log do
+      // tenant. Um token inválido não pode cair em DEFAULT_TENANT em silêncio, que é o que tenantOf
+      // faz por design p/ as leituras. Publicar grafo sem autenticação nenhuma era o buraco.
+      return bootstrap(state, args?.repoPath ?? state.repoPath, requireToken(state, args?.token).tenantId)
     case "graph.query":
       return query(state, { terms: args.terms, domain: args.domain, layer: args.layer, limit: args.limit }, tenantOf(state, args.token))
     case "graph.subscribe":
       return subscribe(state, args.sessionId, (args.filters ?? []) as Filter[])
     case "graph.rebuild":
-      return rebuild(state)
+      return rebuild(state, requireToken(state, args?.token).tenantId)
     case "session.register":
       return sessionRegister(state, args)
     case "graph.import":

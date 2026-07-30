@@ -1,14 +1,144 @@
 {
   "schemaVersion": 1,
-  "repo": "/home/correadev/Repos/open-graph-mcp",
-  "generatedAt": "2026-07-17T18:31:06.087Z",
+  "repo": "C:\\Users\\User\\Documents\\open-graph-mcp",
+  "generatedAt": "2026-07-30T20:12:18.989Z",
   "stats": {
-    "nodes": 177,
-    "edges": 0,
+    "nodes": 354,
+    "edges": 389,
     "claims": 0,
     "domains": 0
   },
   "nodes": [
+    {
+      "id": ".agents/skills/adversarial-qa/SKILL.md",
+      "file": ".agents/skills/adversarial-qa/SKILL.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/adversarial-qa/SKILL.md",
+      "exposed": false,
+      "anchor": "---",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".agents/skills/autonomous-orchestrator/SKILL.md",
+      "file": ".agents/skills/autonomous-orchestrator/SKILL.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/autonomous-orchestrator/SKILL.md",
+      "exposed": false,
+      "anchor": "---",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".agents/skills/autonomous-orchestrator/models/BACKLOG.md",
+      "file": ".agents/skills/autonomous-orchestrator/models/BACKLOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/autonomous-orchestrator/models/BACKLOG.md",
+      "exposed": false,
+      "anchor": "| ID | Title | Domain | Priority | Dependencies | Reworks | Score (TL) | Score (Adv) | Status |",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".agents/skills/autonomous-orchestrator/models/DECISIONS.md",
+      "file": ".agents/skills/autonomous-orchestrator/models/DECISIONS.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/autonomous-orchestrator/models/DECISIONS.md",
+      "exposed": false,
+      "anchor": "# Autonomous Decision Audit Trail",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".agents/skills/autonomous-orchestrator/models/DEVELOPMENT-STATE.md",
+      "file": ".agents/skills/autonomous-orchestrator/models/DEVELOPMENT-STATE.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/autonomous-orchestrator/models/DEVELOPMENT-STATE.md",
+      "exposed": false,
+      "anchor": "| Feature ID | Task ID | Project | Description | Domain | Current Phase | Status |",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".agents/skills/project-memory/SKILL.md",
+      "file": ".agents/skills/project-memory/SKILL.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/project-memory/SKILL.md",
+      "exposed": false,
+      "anchor": "---",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".agents/skills/scope-refinement/SKILL.md",
+      "file": ".agents/skills/scope-refinement/SKILL.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/scope-refinement/SKILL.md",
+      "exposed": false,
+      "anchor": "---",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".agents/skills/tdd-orchestrator/SKILL.md",
+      "file": ".agents/skills/tdd-orchestrator/SKILL.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/tdd-orchestrator/SKILL.md",
+      "exposed": false,
+      "anchor": "---",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".agents/skills/the-grumpy-tech-lead/SKILL.md",
+      "file": ".agents/skills/the-grumpy-tech-lead/SKILL.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".agents/skills/the-grumpy-tech-lead/SKILL.md",
+      "exposed": false,
+      "anchor": "---",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": ".github/release-assets/INSTALL.md",
+      "file": ".github/release-assets/INSTALL.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": ".github/release-assets/INSTALL.md",
+      "exposed": false,
+      "anchor": "# open-graph beta — install guide",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
     {
       "id": "README.md",
       "file": "README.md",
@@ -18,6 +148,305 @@
       "responsibility": "README.md",
       "exposed": false,
       "anchor": "# open-graph-mcp",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/README.md",
+      "file": "docs/README.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P1",
+      "responsibility": "docs/README.md",
+      "exposed": false,
+      "anchor": "# DOCUMENTATION",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/audit_claimdraft_ref_lookup.md",
+      "file": "docs/feature/audit_claimdraft_ref_lookup.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/audit_claimdraft_ref_lookup.md",
+      "exposed": false,
+      "anchor": "# SAFE CLAIM DRAFTS AND POINT REFERENCE LOOKUP",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/audit_dev_only_e2e_bridge.md",
+      "file": "docs/feature/audit_dev_only_e2e_bridge.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/audit_dev_only_e2e_bridge.md",
+      "exposed": false,
+      "anchor": "# DEV-ONLY E2E INSTRUMENTATION BRIDGE",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/audit_pagination_claims_history.md",
+      "file": "docs/feature/audit_pagination_claims_history.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/audit_pagination_claims_history.md",
+      "exposed": false,
+      "anchor": "# CLAIMS AND HISTORY PAGINATION",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/audit_redactfile_canonical_level.md",
+      "file": "docs/feature/audit_redactfile_canonical_level.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/audit_redactfile_canonical_level.md",
+      "exposed": false,
+      "anchor": "# DENY-BY-DEFAULT CLAIM PATHS AND CANONICAL LEVELS",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/audit_typing_rate_limit.md",
+      "file": "docs/feature/audit_typing_rate_limit.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/audit_typing_rate_limit.md",
+      "exposed": false,
+      "anchor": "# TYPING RATE LIMIT AND ACTOR SESSION INDEX",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/ui2_turnos_e2e.md",
+      "file": "docs/feature/ui2_turnos_e2e.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/ui2_turnos_e2e.md",
+      "exposed": false,
+      "anchor": "# UI-2 Turnos E2E",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/ui3_leitura_query.md",
+      "file": "docs/feature/ui3_leitura_query.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/ui3_leitura_query.md",
+      "exposed": false,
+      "anchor": "# UI-3 Leitura e Query",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/ui4_nos_ricos.md",
+      "file": "docs/feature/ui4_nos_ricos.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/ui4_nos_ricos.md",
+      "exposed": false,
+      "anchor": "# UI-4 Nós Ricos e Zoom Semântico",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/feature/ui5_paridade_gate.md",
+      "file": "docs/feature/ui5_paridade_gate.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/feature/ui5_paridade_gate.md",
+      "exposed": false,
+      "anchor": "# UI-5 Paridade e Gate de Retomada",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/product/BACKLOG.md",
+      "file": "docs/product/BACKLOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/product/BACKLOG.md",
+      "exposed": false,
+      "anchor": "| ID | Title | Domain | Priority | Dependencies | Reworks | Score (TL) | Score (Adv) | Status |",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/product/DECISIONS.md",
+      "file": "docs/product/DECISIONS.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/product/DECISIONS.md",
+      "exposed": false,
+      "anchor": "# Autonomous Decision Audit Trail",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/product/DEVELOPMENT-STATE.md",
+      "file": "docs/product/DEVELOPMENT-STATE.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/product/DEVELOPMENT-STATE.md",
+      "exposed": false,
+      "anchor": "| Feature ID | Task ID | Project | Description | Domain | Current Phase | Status |",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/prompts/code-remaining-ui-scopes.md",
+      "file": "docs/prompts/code-remaining-ui-scopes.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/prompts/code-remaining-ui-scopes.md",
+      "exposed": false,
+      "anchor": "# Implementar UI-3, UI-4, UI-5 do roadmap-web-ui",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/prompts/ui-concept-generator.md",
+      "file": "docs/prompts/ui-concept-generator.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/prompts/ui-concept-generator.md",
+      "exposed": false,
+      "anchor": "# UI Concept Generator — prompts visuais (norte pro designer)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/quality/AUDIT-2026-07-20.md",
+      "file": "docs/quality/AUDIT-2026-07-20.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/quality/AUDIT-2026-07-20.md",
+      "exposed": false,
+      "anchor": "# Quality Audit — last 2 days of code (commits `cfb24f5` → `393f7fe`)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-beta-test/00-scope-bt-0-exposicao-ngrok.md",
+      "file": "docs/roadmap-beta-test/00-scope-bt-0-exposicao-ngrok.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-beta-test/00-scope-bt-0-exposicao-ngrok.md",
+      "exposed": false,
+      "anchor": "# BT-0 — Escopo fechado (exposição MCP + ngrok)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-beta-test/01-scope-bt-1-pipeline-artefato.md",
+      "file": "docs/roadmap-beta-test/01-scope-bt-1-pipeline-artefato.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-beta-test/01-scope-bt-1-pipeline-artefato.md",
+      "exposed": false,
+      "anchor": "# BT-1 — Escopo fechado (pipeline do artefato)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-beta-test/02-scope-bt-2-telemetria.md",
+      "file": "docs/roadmap-beta-test/02-scope-bt-2-telemetria.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-beta-test/02-scope-bt-2-telemetria.md",
+      "exposed": false,
+      "anchor": "# BT-2 — Escopo fechado (telemetria da sessão)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-beta-test/03-scope-bt-3-carga-concorrencia.md",
+      "file": "docs/roadmap-beta-test/03-scope-bt-3-carga-concorrencia.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-beta-test/03-scope-bt-3-carga-concorrencia.md",
+      "exposed": false,
+      "anchor": "# BT-3 — Escopo fechado (carga com o shape da sessão)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-beta-test/04-scope-bt-4-conteudo-dinamica.md",
+      "file": "docs/roadmap-beta-test/04-scope-bt-4-conteudo-dinamica.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-beta-test/04-scope-bt-4-conteudo-dinamica.md",
+      "exposed": false,
+      "anchor": "# BT-4 — Escopo fechado (conteúdo e dinâmica da sessão)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-beta-test/05-scope-bt-5-dry-run-go-no-go.md",
+      "file": "docs/roadmap-beta-test/05-scope-bt-5-dry-run-go-no-go.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-beta-test/05-scope-bt-5-dry-run-go-no-go.md",
+      "exposed": false,
+      "anchor": "# BT-5 — Escopo fechado (dry-run + go/no-go)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-beta-test/README.md",
+      "file": "docs/roadmap-beta-test/README.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P1",
+      "responsibility": "docs/roadmap-beta-test/README.md",
+      "exposed": false,
+      "anchor": "# Roadmap-beta-test — índice",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -257,6 +686,19 @@
       "overclaim": false
     },
     {
+      "id": "docs/roadmap-mcp/06-audit-e-reestruturacao.md",
+      "file": "docs/roadmap-mcp/06-audit-e-reestruturacao.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-mcp/06-audit-e-reestruturacao.md",
+      "exposed": false,
+      "anchor": "# Auditoria de arquitetura + proposta de reestruturação",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "docs/roadmap-mcp/ADR.md",
       "file": "docs/roadmap-mcp/ADR.md",
       "kind": "File",
@@ -387,6 +829,19 @@
       "overclaim": false
     },
     {
+      "id": "docs/roadmap-qa/07-scope-qa-7-backend-harness-kit.md",
+      "file": "docs/roadmap-qa/07-scope-qa-7-backend-harness-kit.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-qa/07-scope-qa-7-backend-harness-kit.md",
+      "exposed": false,
+      "anchor": "# QA-7 — Plano de teste backend (exceto web/UI) contra repo-alvo real",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "docs/roadmap-qa/README.md",
       "file": "docs/roadmap-qa/README.md",
       "kind": "File",
@@ -400,6 +855,32 @@
       "overclaim": false
     },
     {
+      "id": "docs/roadmap-qa/perf-log.md",
+      "file": "docs/roadmap-qa/perf-log.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-qa/perf-log.md",
+      "exposed": false,
+      "anchor": "# perf-log — QA-5",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-qa/security-tests.md",
+      "file": "docs/roadmap-qa/security-tests.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-qa/security-tests.md",
+      "exposed": false,
+      "anchor": "# security-tests — inventário (QA-6)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "docs/roadmap-qa/smoke-checklist.md",
       "file": "docs/roadmap-qa/smoke-checklist.md",
       "kind": "File",
@@ -408,6 +889,773 @@
       "responsibility": "docs/roadmap-qa/smoke-checklist.md",
       "exposed": false,
       "anchor": "# Smoke checklist — QA-1 (browser manual-assistido)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/00-scope-ui-0-spike-fundacao.md",
+      "file": "docs/roadmap-web-ui/00-scope-ui-0-spike-fundacao.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-web-ui/00-scope-ui-0-spike-fundacao.md",
+      "exposed": false,
+      "anchor": "# UI-0 — Escopo fechado (spike de escala + fundação)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/01-scope-ui-1-vivacidade.md",
+      "file": "docs/roadmap-web-ui/01-scope-ui-1-vivacidade.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-web-ui/01-scope-ui-1-vivacidade.md",
+      "exposed": false,
+      "anchor": "# UI-1 — Escopo fechado (vivacidade: SSE, presença, notificações)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/02-scope-ui-2-turnos.md",
+      "file": "docs/roadmap-web-ui/02-scope-ui-2-turnos.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-web-ui/02-scope-ui-2-turnos.md",
+      "exposed": false,
+      "anchor": "# UI-2 — Escopo fechado (turnos: criar, editar, commitar)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/03-scope-ui-3-leitura-query.md",
+      "file": "docs/roadmap-web-ui/03-scope-ui-3-leitura-query.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-web-ui/03-scope-ui-3-leitura-query.md",
+      "exposed": false,
+      "anchor": "# UI-3 — Escopo fechado (leitura e busca)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/04-scope-ui-4-nos-ricos.md",
+      "file": "docs/roadmap-web-ui/04-scope-ui-4-nos-ricos.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-web-ui/04-scope-ui-4-nos-ricos.md",
+      "exposed": false,
+      "anchor": "# UI-4 — Escopo fechado (nós ricos + zoom semântico)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/05-scope-ui-5-paridade-gate.md",
+      "file": "docs/roadmap-web-ui/05-scope-ui-5-paridade-gate.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-web-ui/05-scope-ui-5-paridade-gate.md",
+      "exposed": false,
+      "anchor": "# UI-5 — Escopo fechado (paridade + gate de retomada do beta)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/README.md",
+      "file": "docs/roadmap-web-ui/README.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P1",
+      "responsibility": "docs/roadmap-web-ui/README.md",
+      "exposed": false,
+      "anchor": "# Roadmap-web-ui — índice",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/referencias-dify.md",
+      "file": "docs/roadmap-web-ui/referencias-dify.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-web-ui/referencias-dify.md",
+      "exposed": false,
+      "anchor": "# Referências — Dify workflow editor (React Flow em produção)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/roadmap-web-ui/relatorios/UI-5-MINI-SESSION-TEMPLATE.md",
+      "file": "docs/roadmap-web-ui/relatorios/UI-5-MINI-SESSION-TEMPLATE.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/roadmap-web-ui/relatorios/UI-5-MINI-SESSION-TEMPLATE.md",
+      "exposed": false,
+      "anchor": "# UI-5 Mini-Session — YYYY-MM-DD",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_claimdraft_ref_lookup/001-problem-space.md",
+      "file": "docs/specs/audit_claimdraft_ref_lookup/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_claimdraft_ref_lookup/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# F008 — SAFE CLAIM DRAFTS AND POINT REFERENCE LOOKUP",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_claimdraft_ref_lookup/002-context-map.md",
+      "file": "docs/specs/audit_claimdraft_ref_lookup/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_claimdraft_ref_lookup/002-context-map.md",
+      "exposed": false,
+      "anchor": "# F008 — CONTEXT MAP",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_claimdraft_ref_lookup/003-mcp-server-tactical-design.md",
+      "file": "docs/specs/audit_claimdraft_ref_lookup/003-mcp-server-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_claimdraft_ref_lookup/003-mcp-server-tactical-design.md",
+      "exposed": false,
+      "anchor": "# F008 — MCP-SERVER TACTICAL DESIGN",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_claimdraft_ref_lookup/003-mcp-web-tactical-design.md",
+      "file": "docs/specs/audit_claimdraft_ref_lookup/003-mcp-web-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_claimdraft_ref_lookup/003-mcp-web-tactical-design.md",
+      "exposed": false,
+      "anchor": "# F008 — MCP-WEB TACTICAL DESIGN",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_claimdraft_ref_lookup/004-mcp-server-test-scenarios.md",
+      "file": "docs/specs/audit_claimdraft_ref_lookup/004-mcp-server-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_claimdraft_ref_lookup/004-mcp-server-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# F008 — MCP-SERVER TEST SCENARIOS",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_claimdraft_ref_lookup/004-mcp-web-test-scenarios.md",
+      "file": "docs/specs/audit_claimdraft_ref_lookup/004-mcp-web-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_claimdraft_ref_lookup/004-mcp-web-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# F008 — MCP-WEB TEST SCENARIOS",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_claimdraft_ref_lookup/REWORK-LOG.md",
+      "file": "docs/specs/audit_claimdraft_ref_lookup/REWORK-LOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_claimdraft_ref_lookup/REWORK-LOG.md",
+      "exposed": false,
+      "anchor": "# F008 Rework Log",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_dev_only_e2e_bridge/001-problem-space.md",
+      "file": "docs/specs/audit_dev_only_e2e_bridge/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_dev_only_e2e_bridge/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# F007 — DEV-ONLY E2E INSTRUMENTATION BRIDGE",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_dev_only_e2e_bridge/002-context-map.md",
+      "file": "docs/specs/audit_dev_only_e2e_bridge/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_dev_only_e2e_bridge/002-context-map.md",
+      "exposed": false,
+      "anchor": "# F007 — CONTEXT MAP",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_dev_only_e2e_bridge/003-mcp-web-tactical-design.md",
+      "file": "docs/specs/audit_dev_only_e2e_bridge/003-mcp-web-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_dev_only_e2e_bridge/003-mcp-web-tactical-design.md",
+      "exposed": false,
+      "anchor": "# F007 — MCP-WEB TACTICAL DESIGN",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_dev_only_e2e_bridge/004-mcp-web-test-scenarios.md",
+      "file": "docs/specs/audit_dev_only_e2e_bridge/004-mcp-web-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_dev_only_e2e_bridge/004-mcp-web-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# F007 — MCP-WEB TEST SCENARIOS",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_pagination_claims_history/001-problem-space.md",
+      "file": "docs/specs/audit_pagination_claims_history/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_pagination_claims_history/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# F005 — Claims and History Cursor Pagination: Problem Space",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_pagination_claims_history/002-context-map.md",
+      "file": "docs/specs/audit_pagination_claims_history/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_pagination_claims_history/002-context-map.md",
+      "exposed": false,
+      "anchor": "# F005 — Context Map",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_pagination_claims_history/003-mcp-server-tactical-design.md",
+      "file": "docs/specs/audit_pagination_claims_history/003-mcp-server-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_pagination_claims_history/003-mcp-server-tactical-design.md",
+      "exposed": false,
+      "anchor": "# F005 — mcp-server Tactical Design",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_pagination_claims_history/003-mcp-web-tactical-design.md",
+      "file": "docs/specs/audit_pagination_claims_history/003-mcp-web-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_pagination_claims_history/003-mcp-web-tactical-design.md",
+      "exposed": false,
+      "anchor": "# F005 — mcp-web Tactical Design",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_pagination_claims_history/004-mcp-server-test-scenarios.md",
+      "file": "docs/specs/audit_pagination_claims_history/004-mcp-server-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_pagination_claims_history/004-mcp-server-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# F005 — mcp-server Test Scenarios",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_pagination_claims_history/004-mcp-web-test-scenarios.md",
+      "file": "docs/specs/audit_pagination_claims_history/004-mcp-web-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_pagination_claims_history/004-mcp-web-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# F005 — mcp-web Test Scenarios",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_pagination_claims_history/REWORK-LOG.md",
+      "file": "docs/specs/audit_pagination_claims_history/REWORK-LOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_pagination_claims_history/REWORK-LOG.md",
+      "exposed": false,
+      "anchor": "# F005 Rework Log",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_redactfile_canonical_level/001-problem-space.md",
+      "file": "docs/specs/audit_redactfile_canonical_level/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_redactfile_canonical_level/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# F009 — DENY-BY-DEFAULT PATHS AND CANONICAL CLAIM LEVELS",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_redactfile_canonical_level/002-context-map.md",
+      "file": "docs/specs/audit_redactfile_canonical_level/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_redactfile_canonical_level/002-context-map.md",
+      "exposed": false,
+      "anchor": "# F009 — CONTEXT MAP",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_redactfile_canonical_level/003-mcp-server-tactical-design.md",
+      "file": "docs/specs/audit_redactfile_canonical_level/003-mcp-server-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_redactfile_canonical_level/003-mcp-server-tactical-design.md",
+      "exposed": false,
+      "anchor": "# F009 — MCP-SERVER TACTICAL DESIGN",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_redactfile_canonical_level/004-mcp-server-test-scenarios.md",
+      "file": "docs/specs/audit_redactfile_canonical_level/004-mcp-server-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_redactfile_canonical_level/004-mcp-server-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# F009 — MCP-SERVER TEST SCENARIOS",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_redactfile_canonical_level/REWORK-LOG.md",
+      "file": "docs/specs/audit_redactfile_canonical_level/REWORK-LOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_redactfile_canonical_level/REWORK-LOG.md",
+      "exposed": false,
+      "anchor": "# F009 Rework Log",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_typing_rate_limit/001-problem-space.md",
+      "file": "docs/specs/audit_typing_rate_limit/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_typing_rate_limit/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# F006 — Presence Typing Rate Limit: Problem Space",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_typing_rate_limit/002-context-map.md",
+      "file": "docs/specs/audit_typing_rate_limit/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_typing_rate_limit/002-context-map.md",
+      "exposed": false,
+      "anchor": "# F006 — Context Map",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_typing_rate_limit/003-mcp-server-tactical-design.md",
+      "file": "docs/specs/audit_typing_rate_limit/003-mcp-server-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_typing_rate_limit/003-mcp-server-tactical-design.md",
+      "exposed": false,
+      "anchor": "# F006 — mcp-server Tactical Design",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_typing_rate_limit/003-mcp-web-tactical-design.md",
+      "file": "docs/specs/audit_typing_rate_limit/003-mcp-web-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_typing_rate_limit/003-mcp-web-tactical-design.md",
+      "exposed": false,
+      "anchor": "# F006 — mcp-web Tactical Design",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_typing_rate_limit/004-mcp-server-test-scenarios.md",
+      "file": "docs/specs/audit_typing_rate_limit/004-mcp-server-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_typing_rate_limit/004-mcp-server-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# F006 — mcp-server Test Scenarios",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_typing_rate_limit/004-mcp-web-test-scenarios.md",
+      "file": "docs/specs/audit_typing_rate_limit/004-mcp-web-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_typing_rate_limit/004-mcp-web-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# F006 — mcp-web Test Scenarios",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/audit_typing_rate_limit/REWORK-LOG.md",
+      "file": "docs/specs/audit_typing_rate_limit/REWORK-LOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/audit_typing_rate_limit/REWORK-LOG.md",
+      "exposed": false,
+      "anchor": "# F006 Rework Log",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui2_turnos_e2e/001-problem-space.md",
+      "file": "docs/specs/ui2_turnos_e2e/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui2_turnos_e2e/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# Strategic Design — Problem Space",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui2_turnos_e2e/002-context-map.md",
+      "file": "docs/specs/ui2_turnos_e2e/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui2_turnos_e2e/002-context-map.md",
+      "exposed": false,
+      "anchor": "# Bounded Contexts and Context Map",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui2_turnos_e2e/003-mcp-web-tactical-design.md",
+      "file": "docs/specs/ui2_turnos_e2e/003-mcp-web-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui2_turnos_e2e/003-mcp-web-tactical-design.md",
+      "exposed": false,
+      "anchor": "# Tactical Design — mcp-web",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui2_turnos_e2e/004-mcp-web-test-scenarios.md",
+      "file": "docs/specs/ui2_turnos_e2e/004-mcp-web-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui2_turnos_e2e/004-mcp-web-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# Test Scenarios — mcp-web",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui2_turnos_e2e/REWORK-LOG.md",
+      "file": "docs/specs/ui2_turnos_e2e/REWORK-LOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui2_turnos_e2e/REWORK-LOG.md",
+      "exposed": false,
+      "anchor": "# REWORK-LOG — F001 (ui2_turnos_e2e)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui3_leitura_query/001-problem-space.md",
+      "file": "docs/specs/ui3_leitura_query/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui3_leitura_query/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# Strategic Design — Problem Space",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui3_leitura_query/002-context-map.md",
+      "file": "docs/specs/ui3_leitura_query/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui3_leitura_query/002-context-map.md",
+      "exposed": false,
+      "anchor": "# Bounded Contexts and Context Map",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui3_leitura_query/003-mcp-web-tactical-design.md",
+      "file": "docs/specs/ui3_leitura_query/003-mcp-web-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui3_leitura_query/003-mcp-web-tactical-design.md",
+      "exposed": false,
+      "anchor": "# Tactical Design — mcp-web",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui3_leitura_query/004-mcp-web-test-scenarios.md",
+      "file": "docs/specs/ui3_leitura_query/004-mcp-web-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui3_leitura_query/004-mcp-web-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# Test Scenarios — mcp-web",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui3_leitura_query/005-component-specs.md",
+      "file": "docs/specs/ui3_leitura_query/005-component-specs.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui3_leitura_query/005-component-specs.md",
+      "exposed": false,
+      "anchor": "# Component Specs — UI-3 (F002 tasks 03–07)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui3_leitura_query/REWORK-LOG.md",
+      "file": "docs/specs/ui3_leitura_query/REWORK-LOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui3_leitura_query/REWORK-LOG.md",
+      "exposed": false,
+      "anchor": "# F002 REWORK-LOG — RETRY #1 (2026-07-20)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui4_nos_ricos/001-problem-space.md",
+      "file": "docs/specs/ui4_nos_ricos/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui4_nos_ricos/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# UI-4 — Nós Ricos e Zoom Semântico: Problem Space",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui4_nos_ricos/002-context-map.md",
+      "file": "docs/specs/ui4_nos_ricos/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui4_nos_ricos/002-context-map.md",
+      "exposed": false,
+      "anchor": "# UI-4 — Nós Ricos e Zoom Semântico: Context Map",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui4_nos_ricos/003-mcp-web-tactical-design.md",
+      "file": "docs/specs/ui4_nos_ricos/003-mcp-web-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui4_nos_ricos/003-mcp-web-tactical-design.md",
+      "exposed": false,
+      "anchor": "# UI-4 — Nós Ricos e Zoom Semântico: Tactical Design — mcp-web",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui4_nos_ricos/004-mcp-web-test-scenarios.md",
+      "file": "docs/specs/ui4_nos_ricos/004-mcp-web-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui4_nos_ricos/004-mcp-web-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# UI-4 — Nós Ricos e Zoom Semântico: Test Scenarios — mcp-web",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui4_nos_ricos/REWORK-LOG.md",
+      "file": "docs/specs/ui4_nos_ricos/REWORK-LOG.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui4_nos_ricos/REWORK-LOG.md",
+      "exposed": false,
+      "anchor": "# F003 REWORK-LOG — RETRY #1 (2026-07-20)",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui5_paridade_gate/001-problem-space.md",
+      "file": "docs/specs/ui5_paridade_gate/001-problem-space.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui5_paridade_gate/001-problem-space.md",
+      "exposed": false,
+      "anchor": "# UI-5 — Paridade e Gate de Retomada: Problem Space",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui5_paridade_gate/002-context-map.md",
+      "file": "docs/specs/ui5_paridade_gate/002-context-map.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui5_paridade_gate/002-context-map.md",
+      "exposed": false,
+      "anchor": "# UI-5 — Paridade e Gate de Retomada: Context Map",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui5_paridade_gate/003-mcp-web-tactical-design.md",
+      "file": "docs/specs/ui5_paridade_gate/003-mcp-web-tactical-design.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui5_paridade_gate/003-mcp-web-tactical-design.md",
+      "exposed": false,
+      "anchor": "# UI-5 — Paridade e Gate de Retomada: Tactical Design — mcp-web",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "docs/specs/ui5_paridade_gate/004-mcp-web-test-scenarios.md",
+      "file": "docs/specs/ui5_paridade_gate/004-mcp-web-test-scenarios.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "docs/specs/ui5_paridade_gate/004-mcp-web-test-scenarios.md",
+      "exposed": false,
+      "anchor": "# UI-5 — Paridade e Gate de Retomada: Test Scenarios — mcp-web",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -699,6 +1947,32 @@
       "overclaim": false
     },
     {
+      "id": "packages/client/test/target-repo.test.ts",
+      "file": "packages/client/test/target-repo.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/client/test/target-repo.test.ts",
+      "exposed": false,
+      "anchor": "// target-repo.test.ts — QA-7 Fase 3: packages/client (Node LTS real, node:test) contra um",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/client/test/target-server-runner.ts",
+      "file": "packages/client/test/target-server-runner.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/client/test/target-server-runner.ts",
+      "exposed": false,
+      "anchor": "// target-server-runner.ts — subprocesso Bun-only para o mcp-server real, disparado por",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "packages/graph-core/PROVENANCE.md",
       "file": "packages/graph-core/PROVENANCE.md",
       "kind": "File",
@@ -707,6 +1981,19 @@
       "responsibility": "packages/graph-core/PROVENANCE.md",
       "exposed": false,
       "anchor": "# Proveniência",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/graph-core/README.md",
+      "file": "packages/graph-core/README.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P1",
+      "responsibility": "packages/graph-core/README.md",
+      "exposed": false,
+      "anchor": "# @open-graph-mcp/graph-core",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -1336,6 +2623,97 @@
       "overclaim": false
     },
     {
+      "id": "packages/graph-core/test/authority.test.ts",
+      "file": "packages/graph-core/test/authority.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/graph-core/test/authority.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/graph-core/test/claim-store.test.ts",
+      "file": "packages/graph-core/test/claim-store.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/graph-core/test/claim-store.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/graph-core/test/domains.test.ts",
+      "file": "packages/graph-core/test/domains.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/graph-core/test/domains.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/graph-core/test/extract.test.ts",
+      "file": "packages/graph-core/test/extract.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/graph-core/test/extract.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/graph-core/test/roundtrip.test.ts",
+      "file": "packages/graph-core/test/roundtrip.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/graph-core/test/roundtrip.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/graph-core/test/target-repo.test.ts",
+      "file": "packages/graph-core/test/target-repo.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/graph-core/test/target-repo.test.ts",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/graph-core/test/verify.test.ts",
+      "file": "packages/graph-core/test/verify.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/graph-core/test/verify.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "packages/mcp-server/README.md",
       "file": "packages/mcp-server/README.md",
       "kind": "File",
@@ -1357,6 +2735,19 @@
       "responsibility": "packages/mcp-server/src/affinity.ts",
       "exposed": false,
       "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-server/src/claim-level.ts",
+      "file": "packages/mcp-server/src/claim-level.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-server/src/claim-level.ts",
+      "exposed": false,
+      "anchor": "export type CanonicalClaimLevel = 0 | 1 | 2 | 3 | 4 | 5",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -1700,6 +3091,19 @@
       "overclaim": false
     },
     {
+      "id": "packages/mcp-server/test/claim-level.test.ts",
+      "file": "packages/mcp-server/test/claim-level.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-server/test/claim-level.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "packages/mcp-server/test/commit-atomic.test.ts",
       "file": "packages/mcp-server/test/commit-atomic.test.ts",
       "kind": "File",
@@ -1719,6 +3123,45 @@
       "domain": null,
       "level": "P3",
       "responsibility": "packages/mcp-server/test/commit-stress.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-server/test/cross-client.test.ts",
+      "file": "packages/mcp-server/test/cross-client.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-server/test/cross-client.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-server/test/drift-target-repo.test.ts",
+      "file": "packages/mcp-server/test/drift-target-repo.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-server/test/drift-target-repo.test.ts",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-server/test/f009-retry2.test.ts",
+      "file": "packages/mcp-server/test/f009-retry2.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-server/test/f009-retry2.test.ts",
       "exposed": false,
       "anchor": "import { expect, test } from \"bun:test\"",
       "claims": [],
@@ -1760,6 +3203,19 @@
       "responsibility": "packages/mcp-server/test/fixtures/fresh/src/refine.ts",
       "exposed": false,
       "anchor": "export const refinement = (x) => x + 1",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "file": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "exposed": false,
+      "anchor": "/**",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -1895,6 +3351,19 @@
       "overclaim": false
     },
     {
+      "id": "packages/mcp-server/test/mcp-client-contract.ts",
+      "file": "packages/mcp-server/test/mcp-client-contract.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-server/test/mcp-client-contract.ts",
+      "exposed": false,
+      "anchor": "#!/usr/bin/env bun",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "packages/mcp-server/test/migrate-from-phase-1.test.ts",
       "file": "packages/mcp-server/test/migrate-from-phase-1.test.ts",
       "kind": "File",
@@ -1999,6 +3468,19 @@
       "overclaim": false
     },
     {
+      "id": "packages/mcp-server/test/resources.test.ts",
+      "file": "packages/mcp-server/test/resources.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-server/test/resources.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "packages/mcp-server/test/sdk-client-compliance.test.ts",
       "file": "packages/mcp-server/test/sdk-client-compliance.test.ts",
       "kind": "File",
@@ -2007,6 +3489,19 @@
       "responsibility": "packages/mcp-server/test/sdk-client-compliance.test.ts",
       "exposed": false,
       "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-server/test/skeleton-edges.test.ts",
+      "file": "packages/mcp-server/test/skeleton-edges.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-server/test/skeleton-edges.test.ts",
+      "exposed": false,
+      "anchor": "/**",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -2051,6 +3546,19 @@
       "overclaim": false
     },
     {
+      "id": "packages/mcp-server/test/target-repo-scale.test.ts",
+      "file": "packages/mcp-server/test/target-repo-scale.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-server/test/target-repo-scale.test.ts",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "packages/mcp-server/test/tenant-isolation.test.ts",
       "file": "packages/mcp-server/test/tenant-isolation.test.ts",
       "kind": "File",
@@ -2090,14 +3598,417 @@
       "overclaim": false
     },
     {
-      "id": "packages/mcp-web/src/api.ts",
-      "file": "packages/mcp-web/src/api.ts",
+      "id": "packages/mcp-web/e2e/activity-feed.e2e.ts",
+      "file": "packages/mcp-web/e2e/activity-feed.e2e.ts",
       "kind": "File",
       "domain": null,
       "level": "P4",
-      "responsibility": "packages/mcp-web/src/api.ts",
+      "responsibility": "packages/mcp-web/e2e/activity-feed.e2e.ts",
       "exposed": false,
-      "anchor": "import type { Graph } from \"@open-graph-mcp/graph-core/build\"",
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/avatar-overlay.e2e.ts",
+      "file": "packages/mcp-web/e2e/avatar-overlay.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/avatar-overlay.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/driver.ts",
+      "file": "packages/mcp-web/e2e/driver.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/driver.ts",
+      "exposed": false,
+      "anchor": "// Helpers de spec UI-1: turnos dirigidos pela API autenticada (token nos args,",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/fixture.ts",
+      "file": "packages/mcp-web/e2e/fixture.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/fixture.ts",
+      "exposed": false,
+      "anchor": "// ---------------------------------------------------------------------------",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/history.e2e.ts",
+      "file": "packages/mcp-web/e2e/history.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/history.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/lock-contention.e2e.ts",
+      "file": "packages/mcp-web/e2e/lock-contention.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/lock-contention.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/presence-bar.e2e.ts",
+      "file": "packages/mcp-web/e2e/presence-bar.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/presence-bar.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test, type Page } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/query-and-read.e2e.ts",
+      "file": "packages/mcp-web/e2e/query-and-read.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/query-and-read.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/reconnect.e2e.ts",
+      "file": "packages/mcp-web/e2e/reconnect.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/reconnect.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/rich-canvas-performance.e2e.ts",
+      "file": "packages/mcp-web/e2e/rich-canvas-performance.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/rich-canvas-performance.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/semantic-zoom.e2e.ts",
+      "file": "packages/mcp-web/e2e/semantic-zoom.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/semantic-zoom.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/server-runner.ts",
+      "file": "packages/mcp-web/e2e/server-runner.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/server-runner.ts",
+      "exposed": false,
+      "anchor": "// ---------------------------------------------------------------------------",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/settings-invisible.e2e.ts",
+      "file": "packages/mcp-web/e2e/settings-invisible.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/settings-invisible.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/snapshot-render.e2e.ts",
+      "file": "packages/mcp-web/e2e/snapshot-render.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/snapshot-render.e2e.ts",
+      "exposed": false,
+      "anchor": "// UI-0 DoD (WD1): fundação React renderiza o snapshot real — N nós visíveis,",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/toast-notifications.e2e.ts",
+      "file": "packages/mcp-web/e2e/toast-notifications.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/toast-notifications.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/turn-lifecycle.e2e.ts",
+      "file": "packages/mcp-web/e2e/turn-lifecycle.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/turn-lifecycle.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/turn-recovery.e2e.ts",
+      "file": "packages/mcp-web/e2e/turn-recovery.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/turn-recovery.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/e2e/typing-indicator.e2e.ts",
+      "file": "packages/mcp-web/e2e/typing-indicator.e2e.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/e2e/typing-indicator.e2e.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/playwright.config.ts",
+      "file": "packages/mcp-web/playwright.config.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/playwright.config.ts",
+      "exposed": false,
+      "anchor": "import { defineConfig } from \"@playwright/test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/spike-rf/main.tsx",
+      "file": "packages/mcp-web/spike-rf/main.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/spike-rf/main.tsx",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/spike-rf/measure.ts",
+      "file": "packages/mcp-web/spike-rf/measure.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/spike-rf/measure.ts",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/app.tsx",
+      "file": "packages/mcp-web/src/app.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P2",
+      "responsibility": "packages/mcp-web/src/app.tsx",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/cell-container.tsx",
+      "file": "packages/mcp-web/src/cell-container.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/cell-container.tsx",
+      "exposed": false,
+      "anchor": "import { ViewportPortal } from \"@xyflow/react\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/cells.ts",
+      "file": "packages/mcp-web/src/cells.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/cells.ts",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/claim-draft.ts",
+      "file": "packages/mcp-web/src/claim-draft.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/claim-draft.ts",
+      "exposed": false,
+      "anchor": "export type ClaimDraftOutcome = { ok: boolean; reasons: string[]; warnings: string[] }",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/claims-browser.tsx",
+      "file": "packages/mcp-web/src/claims-browser.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/claims-browser.tsx",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/connection-owner.ts",
+      "file": "packages/mcp-web/src/connection-owner.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/connection-owner.ts",
+      "exposed": false,
+      "anchor": "export class ConnectionOwner {",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/e2e-bridge.ts",
+      "file": "packages/mcp-web/src/e2e-bridge.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/e2e-bridge.ts",
+      "exposed": false,
+      "anchor": "export type BridgeViewport = { x: number; y: number; zoom: number }",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/flow/base-card.tsx",
+      "file": "packages/mcp-web/src/flow/base-card.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/flow/base-card.tsx",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/flow/rich-node.ts",
+      "file": "packages/mcp-web/src/flow/rich-node.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/flow/rich-node.ts",
+      "exposed": false,
+      "anchor": "export type SemanticLod = \"node\" | \"floor\" | \"tower\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/flow/safe-markdown.tsx",
+      "file": "packages/mcp-web/src/flow/safe-markdown.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/flow/safe-markdown.tsx",
+      "exposed": false,
+      "anchor": "import ReactMarkdown from \"react-markdown\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/flow/to-flow.ts",
+      "file": "packages/mcp-web/src/flow/to-flow.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/flow/to-flow.ts",
+      "exposed": false,
+      "anchor": "/**",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -2116,14 +4027,40 @@
       "overclaim": false
     },
     {
-      "id": "packages/mcp-web/src/main.ts",
-      "file": "packages/mcp-web/src/main.ts",
+      "id": "packages/mcp-web/src/history-view.tsx",
+      "file": "packages/mcp-web/src/history-view.tsx",
       "kind": "File",
       "domain": null,
-      "level": "P2",
-      "responsibility": "packages/mcp-web/src/main.ts",
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/history-view.tsx",
       "exposed": false,
-      "anchor": "import type { Graph, GraphNode } from \"@open-graph-mcp/graph-core/build\"",
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/latest-request.ts",
+      "file": "packages/mcp-web/src/latest-request.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/latest-request.ts",
+      "exposed": false,
+      "anchor": "export function createLatestRequest() {",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/main.tsx",
+      "file": "packages/mcp-web/src/main.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/main.tsx",
+      "exposed": false,
+      "anchor": "import { createRoot } from \"react-dom/client\"",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -2142,14 +4079,105 @@
       "overclaim": false
     },
     {
-      "id": "packages/mcp-web/src/render.ts",
-      "file": "packages/mcp-web/src/render.ts",
+      "id": "packages/mcp-web/src/og.ts",
+      "file": "packages/mcp-web/src/og.ts",
       "kind": "File",
       "domain": null,
       "level": "P4",
-      "responsibility": "packages/mcp-web/src/render.ts",
+      "responsibility": "packages/mcp-web/src/og.ts",
       "exposed": false,
-      "anchor": "import type { Graph, GraphNode } from \"@open-graph-mcp/graph-core/build\"",
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/query-bar.tsx",
+      "file": "packages/mcp-web/src/query-bar.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/query-bar.tsx",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/ref-lookup.ts",
+      "file": "packages/mcp-web/src/ref-lookup.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/ref-lookup.ts",
+      "exposed": false,
+      "anchor": "import { SingleFlight } from \"./single-flight\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/reverse-index.ts",
+      "file": "packages/mcp-web/src/reverse-index.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/reverse-index.ts",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/sidebar-tree.tsx",
+      "file": "packages/mcp-web/src/sidebar-tree.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/sidebar-tree.tsx",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/single-flight.ts",
+      "file": "packages/mcp-web/src/single-flight.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/single-flight.ts",
+      "exposed": false,
+      "anchor": "export class SingleFlight<T> {",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/state-legend.tsx",
+      "file": "packages/mcp-web/src/state-legend.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/state-legend.tsx",
+      "exposed": false,
+      "anchor": "const STATES = [",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/store.ts",
+      "file": "packages/mcp-web/src/store.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/store.ts",
+      "exposed": false,
+      "anchor": "/**",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -2181,14 +4209,118 @@
       "overclaim": false
     },
     {
-      "id": "packages/mcp-web/test/api.test.ts",
-      "file": "packages/mcp-web/test/api.test.ts",
+      "id": "packages/mcp-web/src/turn.tsx",
+      "file": "packages/mcp-web/src/turn.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/turn.tsx",
+      "exposed": false,
+      "anchor": "/**",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/typing-rate-limit.ts",
+      "file": "packages/mcp-web/src/typing-rate-limit.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/typing-rate-limit.ts",
+      "exposed": false,
+      "anchor": "export type TypingClock = {",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/src/vite-env.d.ts",
+      "file": "packages/mcp-web/src/vite-env.d.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/src/vite-env.d.ts",
+      "exposed": false,
+      "anchor": "/// <reference types=\"vite/client\" />",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test-results/semantic-zoom.e2e.ts-seman-9d371--mounted-and-pins-selection-chromium/error-context.md",
+      "file": "packages/mcp-web/test-results/semantic-zoom.e2e.ts-seman-9d371--mounted-and-pins-selection-chromium/error-context.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/test-results/semantic-zoom.e2e.ts-seman-9d371--mounted-and-pins-selection-chromium/error-context.md",
+      "exposed": false,
+      "anchor": "# Instructions",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test-results/typing-indicator.e2e.ts-ty-6caa5-t-disappears-when-invisible-chromium/error-context.md",
+      "file": "packages/mcp-web/test-results/typing-indicator.e2e.ts-ty-6caa5-t-disappears-when-invisible-chromium/error-context.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "packages/mcp-web/test-results/typing-indicator.e2e.ts-ty-6caa5-t-disappears-when-invisible-chromium/error-context.md",
+      "exposed": false,
+      "anchor": "# Instructions",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/cell-container.test.tsx",
+      "file": "packages/mcp-web/test/cell-container.test.tsx",
       "kind": "File",
       "domain": null,
       "level": "P3",
-      "responsibility": "packages/mcp-web/test/api.test.ts",
+      "responsibility": "packages/mcp-web/test/cell-container.test.tsx",
       "exposed": false,
-      "anchor": "import { afterEach, beforeEach, expect, test } from \"bun:test\"",
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/claim-draft.test.ts",
+      "file": "packages/mcp-web/test/claim-draft.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/claim-draft.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/connection-owner.test.ts",
+      "file": "packages/mcp-web/test/connection-owner.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/connection-owner.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/e2e-bridge.test.ts",
+      "file": "packages/mcp-web/test/e2e-bridge.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/e2e-bridge.test.ts",
+      "exposed": false,
+      "anchor": "import { afterAll, expect, test } from \"bun:test\"",
       "claims": [],
       "confidence": null,
       "overclaim": false
@@ -2207,12 +4339,155 @@
       "overclaim": false
     },
     {
+      "id": "packages/mcp-web/test/latest-request.test.ts",
+      "file": "packages/mcp-web/test/latest-request.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/latest-request.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/pagination.test.ts",
+      "file": "packages/mcp-web/test/pagination.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/pagination.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/parity-manifest.test.ts",
+      "file": "packages/mcp-web/test/parity-manifest.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/parity-manifest.test.ts",
+      "exposed": false,
+      "anchor": "import { describe, expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/ref-lookup.test.ts",
+      "file": "packages/mcp-web/test/ref-lookup.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/ref-lookup.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/reverse-index.test.ts",
+      "file": "packages/mcp-web/test/reverse-index.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/reverse-index.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/rich-card.test.tsx",
+      "file": "packages/mcp-web/test/rich-card.test.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/rich-card.test.tsx",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/rich-node.test.ts",
+      "file": "packages/mcp-web/test/rich-node.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/rich-node.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/single-flight.test.ts",
+      "file": "packages/mcp-web/test/single-flight.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/single-flight.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/state-legend.test.tsx",
+      "file": "packages/mcp-web/test/state-legend.test.tsx",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/state-legend.test.tsx",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/to-flow.test.ts",
+      "file": "packages/mcp-web/test/to-flow.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/to-flow.test.ts",
+      "exposed": false,
+      "anchor": "import { describe, expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
       "id": "packages/mcp-web/test/toasts.test.ts",
       "file": "packages/mcp-web/test/toasts.test.ts",
       "kind": "File",
       "domain": null,
       "level": "P3",
       "responsibility": "packages/mcp-web/test/toasts.test.ts",
+      "exposed": false,
+      "anchor": "import { expect, test } from \"bun:test\"",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "packages/mcp-web/test/typing-rate-limit.test.ts",
+      "file": "packages/mcp-web/test/typing-rate-limit.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/mcp-web/test/typing-rate-limit.test.ts",
       "exposed": false,
       "anchor": "import { expect, test } from \"bun:test\"",
       "claims": [],
@@ -2309,7 +4584,2368 @@
       "claims": [],
       "confidence": null,
       "overclaim": false
+    },
+    {
+      "id": "packages/stdio-proxy/test/target-repo.test.ts",
+      "file": "packages/stdio-proxy/test/target-repo.test.ts",
+      "kind": "File",
+      "domain": null,
+      "level": "P3",
+      "responsibility": "packages/stdio-proxy/test/target-repo.test.ts",
+      "exposed": false,
+      "anchor": "// target-repo.test.ts — QA-7 Fase 4: tools/list e tools/call via JSON-RPC por stdin/stdout, contra",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
+    },
+    {
+      "id": "test/campanha-tibia.md",
+      "file": "test/campanha-tibia.md",
+      "kind": "File",
+      "domain": null,
+      "level": "P4",
+      "responsibility": "test/campanha-tibia.md",
+      "exposed": false,
+      "anchor": "# Sombras de Alkhor — ideia solta",
+      "claims": [],
+      "confidence": null,
+      "overclaim": false
     }
   ],
-  "edges": []
+  "edges": [
+    {
+      "from": "packages/client/src/connect.ts",
+      "to": "packages/client/src/rpc.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/src/connect.ts",
+      "to": "packages/client/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/src/connect.ts",
+      "to": "packages/client/src/subscribe.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/src/node-store.ts",
+      "to": "packages/client/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/connect.test.ts",
+      "to": "packages/client/src/connect.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/connect.test.ts",
+      "to": "packages/client/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/eventstream.test.ts",
+      "to": "packages/client/src/subscribe.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/index.test.ts",
+      "to": "packages/client/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/node-store.test.ts",
+      "to": "packages/client/src/node-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/node-store.test.ts",
+      "to": "packages/client/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/polling.test.ts",
+      "to": "packages/client/src/connect.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/polling.test.ts",
+      "to": "packages/client/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/polling.test.ts",
+      "to": "packages/client/src/subscribe.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/presence-state.test.ts",
+      "to": "packages/client/src/presence-state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/subscribe.test.ts",
+      "to": "packages/client/src/subscribe.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/target-repo.test.ts",
+      "to": "packages/client/src/connect.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/target-repo.test.ts",
+      "to": "packages/client/src/rpc.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/target-repo.test.ts",
+      "to": "packages/client/src/subscribe.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/client/test/target-repo.test.ts",
+      "to": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/ascent.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/authority.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/boot-router.ts",
+      "to": "packages/graph-core/src/boot-gate.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/build.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/build.ts",
+      "to": "packages/graph-core/src/classify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/build.ts",
+      "to": "packages/graph-core/src/domains.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/build.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/build.ts",
+      "to": "packages/graph-core/src/prune.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/cell-dag.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/cell-dag.ts",
+      "to": "packages/graph-core/src/classify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/changeset-store.ts",
+      "to": "packages/graph-core/src/authority.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/changeset-store.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/changeset-store.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/claim-store.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/claim-store.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/claims.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/classify.ts",
+      "to": "packages/graph-core/src/descent.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/context-compiler.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/context-compiler.ts",
+      "to": "packages/graph-core/src/cell-dag.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/descent.ts",
+      "to": "packages/graph-core/src/scan.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/docs.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/events-snapshot.ts",
+      "to": "packages/graph-core/src/watch.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/expand.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/extract-go.ts",
+      "to": "packages/graph-core/src/symbols.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/extract-go.ts",
+      "to": "packages/graph-core/src/treesitter.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/extract-python.ts",
+      "to": "packages/graph-core/src/symbols.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/extract-python.ts",
+      "to": "packages/graph-core/src/treesitter.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/extract-rust.ts",
+      "to": "packages/graph-core/src/symbols.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/extract-rust.ts",
+      "to": "packages/graph-core/src/treesitter.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/extract.ts",
+      "to": "packages/graph-core/src/treesitter.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/federation.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/graphci.ts",
+      "to": "packages/graph-core/src/authority.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/graphci.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/graphci.ts",
+      "to": "packages/graph-core/src/classify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/greenfield.ts",
+      "to": "packages/graph-core/src/ascent.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/greenfield.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/imports-manifest.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/imports-manifest.ts",
+      "to": "packages/graph-core/src/cell-dag.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/imports-manifest.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/indexer.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/indexer.ts",
+      "to": "packages/graph-core/src/classify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/indexer.ts",
+      "to": "packages/graph-core/src/state-index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/intent-changeset.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/intent-changeset.ts",
+      "to": "packages/graph-core/src/changeset-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/intent-changeset.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/intent-changeset.ts",
+      "to": "packages/graph-core/src/roundtrip.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/layout.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/layout.ts",
+      "to": "packages/graph-core/src/classify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/meta.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/meta.ts",
+      "to": "packages/graph-core/src/outline.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/meta.ts",
+      "to": "packages/graph-core/src/prune.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/meta.ts",
+      "to": "packages/graph-core/src/resolve.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/meta.ts",
+      "to": "packages/graph-core/src/symbols.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/migrate.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/migrate.ts",
+      "to": "packages/graph-core/src/treesitter.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/module-map.ts",
+      "to": "packages/graph-core/src/classify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/module-map.ts",
+      "to": "packages/graph-core/src/descent.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/module-map.ts",
+      "to": "packages/graph-core/src/resolve.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/outline.ts",
+      "to": "packages/graph-core/src/symbols.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/project.ts",
+      "to": "packages/graph-core/src/ascent.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/project.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/project.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/project.ts",
+      "to": "packages/graph-core/src/roundtrip.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/prune.ts",
+      "to": "packages/graph-core/src/classify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/prune.ts",
+      "to": "packages/graph-core/src/descent.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/prune.ts",
+      "to": "packages/graph-core/src/module-map.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/prune.ts",
+      "to": "packages/graph-core/src/resolve.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/resolve.ts",
+      "to": "packages/graph-core/src/descent.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/resolve.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/roundtrip.ts",
+      "to": "packages/graph-core/src/ascent.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/state-index.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/state-index.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/state-index.ts",
+      "to": "packages/graph-core/src/indexer.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/state-index.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/treesitter.ts",
+      "to": "packages/graph-core/src/util/lazy.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/verify.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/verify.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/verify.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/view.ts",
+      "to": "packages/graph-core/src/prune.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/watch.ts",
+      "to": "packages/graph-core/src/authority.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/watch.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/watch.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/watch.ts",
+      "to": "packages/graph-core/src/events-snapshot.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/watch.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/watch.ts",
+      "to": "packages/graph-core/src/imports-manifest.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/watch.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/src/watch.ts",
+      "to": "packages/graph-core/src/state-index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/authority.test.ts",
+      "to": "packages/graph-core/src/authority.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/authority.test.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/claim-store.test.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/claim-store.test.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/domains.test.ts",
+      "to": "packages/graph-core/src/domains.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/extract.test.ts",
+      "to": "packages/graph-core/src/extract.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/roundtrip.test.ts",
+      "to": "packages/graph-core/src/roundtrip.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/target-repo.test.ts",
+      "to": "packages/graph-core/src/boot-gate.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/target-repo.test.ts",
+      "to": "packages/graph-core/src/build.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/target-repo.test.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/target-repo.test.ts",
+      "to": "packages/graph-core/src/classify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/target-repo.test.ts",
+      "to": "packages/graph-core/src/domains.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/target-repo.test.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/target-repo.test.ts",
+      "to": "packages/graph-core/src/scan.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/target-repo.test.ts",
+      "to": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/verify.test.ts",
+      "to": "packages/graph-core/src/claim-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/verify.test.ts",
+      "to": "packages/graph-core/src/meta.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/graph-core/test/verify.test.ts",
+      "to": "packages/graph-core/src/verify.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/affinity.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/db.ts",
+      "to": "packages/mcp-server/src/claim-level.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/gates.ts",
+      "to": "packages/mcp-server/src/claim-level.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/index.ts",
+      "to": "packages/mcp-server/src/sse.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/index.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/index.ts",
+      "to": "packages/mcp-server/src/sweeper.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/index.ts",
+      "to": "packages/mcp-server/src/tools/graph-bootstrap.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/index.ts",
+      "to": "packages/mcp-server/src/tools/presence.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/index.ts",
+      "to": "packages/mcp-server/src/tools/typing.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/index.ts",
+      "to": "packages/mcp-server/src/transport.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/index.ts",
+      "to": "packages/mcp-server/src/watch-bridge.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/resources.ts",
+      "to": "packages/mcp-server/src/claim-level.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/resources.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/sse.ts",
+      "to": "packages/mcp-server/src/affinity.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/sse.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/sse.ts",
+      "to": "packages/mcp-server/src/tools/presence.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/state.ts",
+      "to": "packages/mcp-server/src/affinity.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/state.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/state.ts",
+      "to": "packages/mcp-server/src/gates.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/state.ts",
+      "to": "packages/mcp-server/src/system-message.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/store.ts",
+      "to": "packages/mcp-server/src/claim-level.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/store.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/store.ts",
+      "to": "packages/mcp-server/src/gates.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/store.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/sweeper.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/sweeper.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/sweeper.ts",
+      "to": "packages/mcp-server/src/tools/presence.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/sweeper.ts",
+      "to": "packages/mcp-server/src/tools/typing.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/system-message.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/system-message.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/system-message.ts",
+      "to": "packages/mcp-server/src/tools/session.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/authority.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/authority.ts",
+      "to": "packages/mcp-server/src/tools/changeset.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/authority.ts",
+      "to": "packages/mcp-server/src/tools/session.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/changeset.ts",
+      "to": "packages/mcp-server/src/claim-level.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/changeset.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/changeset.ts",
+      "to": "packages/mcp-server/src/gates.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/changeset.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/changeset.ts",
+      "to": "packages/mcp-server/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/changeset.ts",
+      "to": "packages/mcp-server/src/tools/session.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/changeset.ts",
+      "to": "packages/mcp-server/src/tools/typing.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-bootstrap.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-import.ts",
+      "to": "packages/mcp-server/src/claim-level.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-import.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-import.ts",
+      "to": "packages/mcp-server/src/gates.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-import.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-import.ts",
+      "to": "packages/mcp-server/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-import.ts",
+      "to": "packages/mcp-server/src/tools/session.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-query.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/graph-subscribe.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/presence.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/presence.ts",
+      "to": "packages/mcp-server/src/system-message.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/presence.ts",
+      "to": "packages/mcp-server/src/tools/session.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/presence.ts",
+      "to": "packages/mcp-server/src/tools/typing.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/session.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/session.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/typing.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/tools/typing.ts",
+      "to": "packages/mcp-server/src/tools/session.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/resources.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/system-message.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/authority.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/changeset.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/graph-bootstrap.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/graph-import.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/graph-query.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/graph-subscribe.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/presence.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/session.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/transport.ts",
+      "to": "packages/mcp-server/src/tools/typing.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/src/watch-bridge.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/affinity-router.test.ts",
+      "to": "packages/mcp-server/src/affinity.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/affinity-router.test.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/authority-flip.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/authority-flip.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/bootstrap-existing.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/bootstrap-existing.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/bootstrap-fresh.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/bootstrap-fresh.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/broadcast-fairness.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/broadcast-fairness.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/broadcast.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/broadcast.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/claim-level.test.ts",
+      "to": "packages/mcp-server/src/claim-level.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/claim-level.test.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/claim-level.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/claim-level.test.ts",
+      "to": "packages/mcp-server/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/claim-level.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/commit-atomic.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/commit-atomic.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/commit-stress.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/commit-stress.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/cross-client.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/cross-client.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/drift-target-repo.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/drift-target-repo.test.ts",
+      "to": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/drift-target-repo.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/f009-retry2.test.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/f009-retry2.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/f009-retry2.test.ts",
+      "to": "packages/mcp-server/src/resources.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/f009-retry2.test.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/f009-retry2.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/ghost-render.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/ghost-render.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/heartbeat-expire.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/heartbeat-expire.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/history-query.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/history-query.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/history-replay.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/history-replay.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/incremental-gate-early.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/incremental-gate-early.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/invisible-mode.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/invisible-mode.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/join-and-leave.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/join-and-leave.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/load/presence-load.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/load/presence-load.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/lock-denied-private.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/lock-denied-private.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/mcp-client-contract.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/migrate-from-phase-1.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/migrate-from-phase-1.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/open-pessimistic.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/open-pessimistic.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/presence-ownership.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/presence-ownership.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/protocol-compliance.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/protocol-compliance.test.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/protocol-compliance.test.ts",
+      "to": "packages/mcp-server/src/transport.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/query.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/query.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/rebuild-from-jsonl.test.ts",
+      "to": "packages/mcp-server/src/db.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/rebuild-from-jsonl.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/rebuild-from-jsonl.test.ts",
+      "to": "packages/mcp-server/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/rebuild-from-jsonl.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/reconnect-after-restart.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/reconnect-after-restart.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/reconnect-reattach.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/reconnect-reattach.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/resources.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/resources.test.ts",
+      "to": "packages/mcp-server/src/resources.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/resources.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/sdk-client-compliance.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/sdk-client-compliance.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/skeleton-edges.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/skeleton-edges.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/subscribe-demote.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/subscribe-demote.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/subscribe-drift.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/subscribe-drift.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/system-message.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/system-message.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/target-repo-scale.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/target-repo-scale.test.ts",
+      "to": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/target-repo-scale.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/tenant-isolation.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/tenant-isolation.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/ttl-expire.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/ttl-expire.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/typing-network-aggregation.test.ts",
+      "to": "packages/mcp-server/src/index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/typing-network-aggregation.test.ts",
+      "to": "packages/mcp-server/src/state.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/typing-network-aggregation.test.ts",
+      "to": "packages/mcp-server/src/tools/typing.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-server/test/typing-network-aggregation.test.ts",
+      "to": "packages/mcp-server/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/activity-feed.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/activity-feed.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/avatar-overlay.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/avatar-overlay.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/driver.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/history.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/history.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/lock-contention.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/lock-contention.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/presence-bar.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/query-and-read.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/query-and-read.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/reconnect.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/reconnect.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/rich-canvas-performance.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/semantic-zoom.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/semantic-zoom.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/settings-invisible.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/settings-invisible.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/snapshot-render.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/toast-notifications.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/toast-notifications.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/turn-lifecycle.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/turn-recovery.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/typing-indicator.e2e.ts",
+      "to": "packages/mcp-web/e2e/driver.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/e2e/typing-indicator.e2e.ts",
+      "to": "packages/mcp-web/e2e/fixture.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/cell-container.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/claims-browser.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/e2e-bridge.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/flow/base-card.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/flow/rich-node.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/flow/to-flow.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/history-view.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/og.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/query-bar.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/sidebar-tree.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/state-legend.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/app.tsx",
+      "to": "packages/mcp-web/src/turn.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/cell-container.tsx",
+      "to": "packages/mcp-web/src/flow/rich-node.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/cell-container.tsx",
+      "to": "packages/mcp-web/src/flow/to-flow.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/cell-container.tsx",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/claims-browser.tsx",
+      "to": "packages/mcp-web/src/og.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/claims-browser.tsx",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/flow/base-card.tsx",
+      "to": "packages/mcp-web/src/flow/rich-node.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/flow/base-card.tsx",
+      "to": "packages/mcp-web/src/flow/safe-markdown.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/flow/base-card.tsx",
+      "to": "packages/mcp-web/src/flow/to-flow.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/flow/base-card.tsx",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/history-view.tsx",
+      "to": "packages/mcp-web/src/og.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/history-view.tsx",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/main.tsx",
+      "to": "packages/mcp-web/src/app.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/main.tsx",
+      "to": "packages/mcp-web/src/og.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/cells.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/claim-draft.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/connection-owner.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/ghosts.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/ref-lookup.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/reverse-index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/single-flight.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/toasts.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/token-store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/og.ts",
+      "to": "packages/mcp-web/src/typing-rate-limit.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/query-bar.tsx",
+      "to": "packages/mcp-web/src/latest-request.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/query-bar.tsx",
+      "to": "packages/mcp-web/src/og.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/query-bar.tsx",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/ref-lookup.ts",
+      "to": "packages/mcp-web/src/single-flight.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/ref-lookup.ts",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/reverse-index.ts",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/sidebar-tree.tsx",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/store.ts",
+      "to": "packages/mcp-web/src/ghosts.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/store.ts",
+      "to": "packages/mcp-web/src/toasts.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/turn.tsx",
+      "to": "packages/mcp-web/src/flow/to-flow.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/turn.tsx",
+      "to": "packages/mcp-web/src/og.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/src/turn.tsx",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/cell-container.test.tsx",
+      "to": "packages/mcp-web/src/cell-container.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/claim-draft.test.ts",
+      "to": "packages/mcp-web/src/claim-draft.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/connection-owner.test.ts",
+      "to": "packages/mcp-web/src/connection-owner.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/e2e-bridge.test.ts",
+      "to": "packages/mcp-web/src/e2e-bridge.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/ghosts.test.ts",
+      "to": "packages/mcp-web/src/ghosts.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/latest-request.test.ts",
+      "to": "packages/mcp-web/src/latest-request.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/pagination.test.ts",
+      "to": "packages/mcp-web/src/reverse-index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/pagination.test.ts",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/ref-lookup.test.ts",
+      "to": "packages/mcp-web/src/ref-lookup.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/ref-lookup.test.ts",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/reverse-index.test.ts",
+      "to": "packages/mcp-web/src/reverse-index.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/reverse-index.test.ts",
+      "to": "packages/mcp-web/src/store.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/rich-card.test.tsx",
+      "to": "packages/mcp-web/src/flow/safe-markdown.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/rich-node.test.ts",
+      "to": "packages/mcp-web/src/flow/rich-node.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/single-flight.test.ts",
+      "to": "packages/mcp-web/src/single-flight.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/state-legend.test.tsx",
+      "to": "packages/mcp-web/src/state-legend.tsx",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/to-flow.test.ts",
+      "to": "packages/mcp-web/src/flow/to-flow.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/toasts.test.ts",
+      "to": "packages/mcp-web/src/toasts.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/mcp-web/test/typing-rate-limit.test.ts",
+      "to": "packages/mcp-web/src/typing-rate-limit.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/stdio-proxy/src/cli.ts",
+      "to": "packages/stdio-proxy/src/credentials.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/stdio-proxy/test/cli.test.ts",
+      "to": "packages/stdio-proxy/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/stdio-proxy/test/credentials.test.ts",
+      "to": "packages/stdio-proxy/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/stdio-proxy/test/live.test.ts",
+      "to": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/stdio-proxy/test/live.test.ts",
+      "to": "packages/stdio-proxy/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/stdio-proxy/test/target-repo.test.ts",
+      "to": "packages/mcp-server/test/fixtures/target-repo.ts",
+      "type": "depends-on",
+      "resolved": true
+    },
+    {
+      "from": "packages/stdio-proxy/test/target-repo.test.ts",
+      "to": "packages/stdio-proxy/test/helpers.ts",
+      "type": "depends-on",
+      "resolved": true
+    }
+  ]
 }

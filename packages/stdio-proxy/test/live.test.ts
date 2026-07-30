@@ -7,6 +7,7 @@ import { expect, test } from "bun:test"
 import fs from "node:fs"
 import { startServer } from "@open-graph-mcp/mcp-server/index"
 import { spawnProxy, tmpHome } from "./helpers"
+import { prepareTargetRepo, targetRepoAvailable, targetRepoPath } from "../../mcp-server/test/fixtures/target-repo"
 
 test("--live without --name fails fast with a clear stderr error and a non-zero exit", async () => {
   const server = startServer()
@@ -102,3 +103,41 @@ test("--live --name X: presence.beat genuinely reaches the real server (sessionI
     fs.rmSync(home, { recursive: true, force: true })
   }
 })
+
+// ── QA-7 Fase 4: enquadramento de mensagem JSON-RPC sob payload GRANDE ──────────────────────────
+// Todos os testes acima trocam mensagens de poucas linhas — não provam nada sobre o ReadBuffer do
+// proxy (helpers.ts's makeLineReader / o parser real do MCP SDK usado por cli.ts) quando UMA única
+// linha JSON-RPC carrega dezenas de KB. `graph://snapshot` sobre o repo-alvo real (~186 nós) é o
+// payload mais realista disponível neste monorepo para isso.
+test.skipIf(!targetRepoAvailable())(
+  `QA-7 Fase 4: resources/read graph://snapshot com payload grande (~186 nós de ${targetRepoPath()}) atravessa o enquadramento stdio sem corromper a linha JSON-RPC`,
+  async () => {
+    const { root, cleanup } = prepareTargetRepo()
+    const server = startServer({ repoPath: root, watch: false, autoBootstrap: true })
+    const proxy = spawnProxy(server.url)
+    try {
+      await proxy.readStderrLine() // startup log
+
+      proxy.send({ jsonrpc: "2.0", id: 60, method: "resources/read", params: { uri: "graph://snapshot" } })
+      const line = await proxy.readLine(10_000)
+      expect(line).not.toBeNull()
+      // Se o proxy tivesse partido a mensagem em múltiplos frames (ou concatenado com outra),
+      // JSON.parse já teria lançado aqui — a asserção mais forte é essa exceção nunca acontecer.
+      const parsed = JSON.parse(line!)
+      expect(parsed.id).toBe(60)
+      expect(parsed.error).toBeUndefined()
+
+      const contents = JSON.parse(parsed.result.contents[0].text)
+      expect(contents.graph.nodes.length).toBeGreaterThan(100) // ~186 no harness-kit, derivado em runtime pelo próprio servidor
+
+      // Exatamente UMA linha chegou para esta resposta — sem uma segunda linha residual de um
+      // frame partido ao meio.
+      const followUp = await proxy.readLine(500)
+      expect(followUp).toBeNull()
+    } finally {
+      proxy.kill()
+      server.stop()
+      cleanup()
+    }
+  },
+)
