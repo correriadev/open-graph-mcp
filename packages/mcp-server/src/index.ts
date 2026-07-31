@@ -185,7 +185,9 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     },
   })
 
-  const stopWatch = opts.watch === true && opts.repoPath ? startWatchLoop(state, opts.watchIntervalMs ?? 5000, watchTenant) : () => {}
+  // watch não depende mais de `opts.repoPath`: o tick lê o repo do TENANT (banco) e não faz nada
+  // se aquele tenant ainda não indexou nenhum.
+  const stopWatch = opts.watch === true ? startWatchLoop(state, opts.watchIntervalMs ?? 5000, watchTenant) : () => {}
   const stopSweeper = startSweeper(state, {
     sweepIntervalMs: opts.sweepIntervalMs,
     aggIntervalMs: opts.aggIntervalMs,
@@ -214,20 +216,25 @@ export function startServer(opts: StartOptions = {}): RunningServer {
 }
 
 if (import.meta.main) {
-  const repoPath = process.env.GRAPH_REPO_PATH ?? process.env.WATCH_REPO_PATH
+  // SEM GRAPH_REPO_PATH. O servidor não é de um repo — o repo é ARGUMENTO de `graph.bootstrap`, e
+  // qual repo cada tenant indexou fica no banco (tabela `tenants`). Amarrar o processo a um repo
+  // por env var era o resquício do modelo em que o grafo morava dentro dele: contradizia
+  // multi-tenant (um servidor, N tenants, N repos) e era load-bearing depois de todo restart.
+  // Estado vazio na primeira subida é o correto: um cliente chama graph.bootstrap e pronto.
+  //
   // Leave ALLOWED_ORIGINS unset for the open default (*). Setting it to "" is NOT the same as
   // unsetting it — it filters down to [], which fails closed (every Origin rejected), not open.
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",")
     .map((s) => s.trim())
     .filter(Boolean)
+  const stateDir = process.env.STATE_DIR ?? ".graph-server"
   const running = startServer({
-    repoPath,
-    stateDir: process.env.STATE_DIR ?? ".graph-server",
+    stateDir,
     port: Number(process.env.PORT ?? 8787),
-    autoBootstrap: !!repoPath,
-    watch: !!process.env.WATCH_REPO_PATH,
+    watch: process.env.WATCH !== "false",
     watchTenant: process.env.WATCH_TENANT ?? DEFAULT_TENANT,
     allowedOrigins,
   })
-  console.log(`open-graph MCP server on ${running.url} (repo: ${repoPath ?? "— pure-knowledge"}, state: ${process.env.STATE_DIR ?? ".graph-server"})`)
+  const tenants = running.state.graphs.size
+  console.log(`open-graph MCP server on ${running.url} (state: ${stateDir}, ${tenants} tenant(s) hidratado(s) do banco)`)
 }

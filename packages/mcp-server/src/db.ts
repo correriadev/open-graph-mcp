@@ -15,11 +15,20 @@ import path from "node:path"
 import { normalizeRecoveredClaimLevel } from "./claim-level"
 
 /** Tabelas duráveis espelhadas em JSONL, na ordem de replay do rebuild. */
-export const DURABLE_TABLES = ["users", "nodes", "edges", "claims", "authority", "changesets", "cs_deltas", "events"] as const
+export const DURABLE_TABLES = ["tenants", "users", "nodes", "edges", "claims", "authority", "changesets", "cs_deltas", "events"] as const
 /** Todas as tabelas com tenant_id (durables + índice live). */
 const ALL_TABLES = [...DURABLE_TABLES, "locks", "system_messages"] as const
 
 const SCHEMA = `
+/* Qual repo cada tenant indexou. DURAVEL de proposito: sem isto, depois de um restart o servidor
+   nao sabe onde reindexar nem onde checar drift, e a unica memoria disso era uma env var global do
+   processo (GRAPH_REPO_PATH) -- que amarrava o servidor inteiro a UM repo, justamente o contrario
+   de multi-tenant. O repo e argumento da tool graph.bootstrap, nao configuracao do servidor.
+   (Sem crase neste comentario: o SCHEMA e um template literal.) */
+CREATE TABLE IF NOT EXISTS tenants (
+  tenant_id TEXT NOT NULL, repo_path TEXT, domains TEXT, indexed_at TEXT,
+  PRIMARY KEY (tenant_id)
+);
 CREATE TABLE IF NOT EXISTS users (
   tenant_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL,
   PRIMARY KEY (tenant_id, id)
