@@ -31,7 +31,12 @@ test("semantic zoom keeps roots mounted and pins selection", async ({ browser })
   expect(await page.evaluate((nodeId) => (window as any).__ui4Root === document.querySelector(`.og-card[data-id="${nodeId}"]`), id)).toBe(true)
   await page.locator("#panel .close").click()
   await expect(page.locator(`.og-card[data-id="${id}"]`)).toHaveAttribute("data-pinned", "false")
-  await expect(page.locator(`.og-card[data-id="${id}"]`)).toHaveCSS("width", "14px")
+  // O dot do overview tem tamanho de TELA constante (14px), não largura CSS constante: ele é
+  // contra-escalado por `--zoom` (app.css), senão encolhia junto com o zoom e sumia — em
+  // zoom 0.1 virava 1.4 pixel e o canvas parecia vazio com o grafo inteiro montado.
+  // Aqui (zoom 0.2) a largura CSS é 14/0.2 = 70px, e o retângulo renderizado é 14px.
+  const dotBox = await page.locator(`.og-card[data-id="${id}"]`).boundingBox()
+  expect(Math.round(dotBox!.width)).toBe(14)
   await expect(page.locator(".react-flow__minimap")).toBeVisible()
   await expect(page.locator("#state-legend")).toBeVisible()
 

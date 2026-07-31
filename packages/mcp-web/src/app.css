@@ -41,6 +41,9 @@
 }
 
 .canvas-wrap {
+  /* semeado por app.tsx (onInit/onViewportChange). O default importa: sem ele os calc()
+     de contra-escala ficam inválidos e o elemento some no primeiro paint. */
+  --zoom: 1;
   position: fixed; inset: var(--topbar-h) 0 0 0;
   background-color: var(--canvas);
   background-image: radial-gradient(circle, #43464a 1.15px, transparent 1.2px);
@@ -52,10 +55,32 @@
   background: radial-gradient(circle at 60% 40%, transparent 0, rgba(0, 0, 0, .07) 45%, rgba(0, 0, 0, .35) 100%);
 }
 
-.og-cell-container { position: absolute; border: 1px solid var(--border); border-radius: 12px; pointer-events: none; }
+.og-cell-container {
+  position: absolute; border: 1px solid rgba(255, 255, 255, .055); border-radius: 24px;
+  background: rgba(255, 255, 255, .008); pointer-events: none;
+}
 .og-cell-container.review { border: 2px solid var(--warn); }
 .og-cell-container.ghosted:not(.review) { border: 1px dashed var(--accent); }
 .og-cell-header { position: absolute; top: 4px; left: 8px; right: 8px; height: 28px; display: flex; gap: 10px; align-items: center; pointer-events: auto; background: color-mix(in srgb, var(--panel) 90%, transparent); color: var(--text); border: 0; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+/* No overview os cards viram pontos e o rótulo da célula passa a ser a ÚNICA orientação —
+   mas ele encolhe junto com o zoom. Contra-escala pela origem superior-esquerda, mantendo o
+   rótulo legível e clicável (é o botão que abre turno na célula). Mesma ideia do
+   `.cluster-zone::after` do protótipo, que cresce a fonte no LOD overview. */
+[data-lod="tower"] .og-cell-header,
+[data-lod="floor"] .og-cell-header {
+  transform: scale(calc(1 / var(--zoom))); transform-origin: left top;
+  width: max-content; right: auto; max-width: none; background: transparent;
+  /* SÓ rótulo aqui. `transform: scale` não muda a caixa de layout mas MUDA a área de acerto:
+     contra-escalado em zoom 0.1 o header vira ~1000x280px de mundo e engolia os cliques dos
+     cards embaixo dele (quebrou snapshot-render/semantic-zoom/toast). Fora ser armadilha de
+     UX — área clicável invisível. Abrir turno pelo cabeçalho continua no LOD "node". */
+  pointer-events: none;
+}
+[data-lod="tower"] .og-cell-header strong { font-size: 13px; letter-spacing: .02em; }
+/* no overview as células ficam lado a lado e os rótulos contra-escalados se atropelavam;
+   sobra só o nome da célula, que é o que orienta. Contagem e avatares voltam no floor. */
+[data-lod="tower"] .og-cell-header > span:not(.og-lock-badge) { display: none; }
+[data-lod="tower"] .og-cell-container { border-color: rgba(255, 255, 255, .085); }
 .og-cell-header > span { color: var(--muted); font-size: 10px; }
 .og-cell-header .og-lock-badge { position: static; margin-left: auto; }
 .og-cell-avatars { display: flex; gap: 2px; }
@@ -140,14 +165,28 @@
 [data-lod="floor"] .og-card { min-height: 0; }
 [data-lod="floor"] .og-markdown { display: none; }
 
-/* tower: dot por domínio — card some, resta o marcador */
+/* tower: dot por domínio — card some, resta o marcador.
+   CONTRA-ESCALA (`/ var(--zoom)`): o dot vive dentro do transform do React Flow, então um
+   tamanho fixo em px encolhe junto com o zoom. Medido contra o harness-kit: 186 nós espalhados
+   por 7712x6632px de mundo fazem o fitView bater no piso minZoom=0.1, e nesse zoom um dot de
+   14px virava 1.4 pixel — o overview ficava visualmente VAZIO apesar de 182 nós montados.
+   Dividindo pelo zoom, o tamanho de TELA fica constante e o overview vira uma constelação
+   legível, que é o ponto do LOD agregado. */
 [data-lod="tower"] .og-card {
-  width: 14px; height: 14px; background: none; border: none; padding: 0; min-height: 0;
+  width: calc(14px / var(--zoom)); height: calc(14px / var(--zoom));
+  background: none; border: none; padding: 0; min-height: 0; box-shadow: none;
 }
+[data-lod="tower"] .og-card:hover { box-shadow: none; }
 [data-lod="tower"] .og-card > :not(.og-dot) { display: none; }
 [data-lod="tower"] .og-dot {
-  display: block; width: 14px; height: 14px; border-radius: 50%;
-  background: var(--domain-color); opacity: 0.8;
+  display: block; width: calc(14px / var(--zoom)); height: calc(14px / var(--zoom));
+  border-radius: 50%; background: var(--domain-color); opacity: .85;
+  /* halo do protótipo (.text-node no LOD overview) — também em unidade de tela */
+  box-shadow: 0 0 0 calc(3px / var(--zoom)) color-mix(in srgb, var(--domain-color) 16%, transparent);
+}
+[data-lod="tower"] .og-card.sel .og-dot {
+  opacity: 1;
+  box-shadow: 0 0 0 calc(5px / var(--zoom)) rgba(139, 92, 246, .4), 0 0 calc(26px / var(--zoom)) var(--domain-color);
 }
 
 /* Selection pins the same mounted root in full-card regime. */

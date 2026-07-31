@@ -68,6 +68,12 @@ export function toFlow(graph: Graph): { nodes: Node<CardData>[]; edges: Edge[]; 
         id: n.id,
         type: "card",
         position: { x: x0 + (i % COLS) * (CARD_W + GAP), y: y0 + Math.floor(i / COLS) * (CARD_H + GAP) },
+        // Dimensões DECLARADAS (não só no CSS): o MiniMap do React Flow v12 lê `measured` e
+        // ignora nó sem dimensão — sem isto ele renderizava ZERO nós e aparecia como uma caixa
+        // vazia (verificado: `.react-flow__minimap-node` count === 0). Declarar também evita que
+        // `onlyRenderVisibleElements` dependa de medir o DOM para decidir o que está no viewport.
+        width: CARD_W,
+        height: CARD_H,
         data: { node: n, cell: key },
       })
     })

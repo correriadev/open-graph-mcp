@@ -347,7 +347,22 @@ function Shell() {
           nodesDraggable={false}
           nodesConnectable={false}
           onViewportChange={(vp: Viewport) => {
-            if (wrapRef.current) wrapRef.current.dataset.lod = lodForZoom(vp.zoom)
+            if (!wrapRef.current) return
+            wrapRef.current.dataset.lod = lodForZoom(vp.zoom)
+            // `--zoom` deixa o CSS CONTRA-ESCALAR o que precisa ter tamanho de TELA constante
+            // (dot do overview, rótulo da célula). Sem isto eles vivem dentro do transform do
+            // React Flow e encolhem junto: medido no harness-kit, o fitView sobre 186 nós cai
+            // em zoom 0.1 e um dot de 14px virava 1.4 pixel — o canvas parecia vazio.
+            wrapRef.current.style.setProperty("--zoom", String(vp.zoom))
+          }}
+          onInit={(rf) => {
+            // fitView roda antes do primeiro onViewportChange: sem semear aqui, o primeiro
+            // paint usa --zoom: 1 e pisca com os dots minúsculos.
+            if (wrapRef.current) {
+              const zoom = rf.getZoom()
+              wrapRef.current.dataset.lod = lodForZoom(zoom)
+              wrapRef.current.style.setProperty("--zoom", String(zoom))
+            }
           }}
           onNodeClick={(_, n) => {
             const st = useUi.getState()
