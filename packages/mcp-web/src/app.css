@@ -1,23 +1,56 @@
-/* Estilo do app (norte visual): tokens em index.html (:root). */
+/* Estilo do app (norte visual): tokens em index.html (:root).
+   Chrome portado de assets/prototype/prototype_canvas_v1.html — topbar de vidro,
+   workspace com grid de pontos + vinheta, painéis flutuantes arredondados. */
+
+@keyframes panelIn { from { opacity: 0; transform: translateY(5px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes breathe { 50% { box-shadow: 0 0 0 8px rgba(65, 199, 160, 0); } }
 
 #topbar {
-  position: fixed; top: 0; left: 0; right: 0; height: 40px; z-index: 20;
-  display: flex; align-items: center; gap: 14px; padding: 0 14px;
-  background: var(--panel); border-bottom: 1px solid var(--border);
+  position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h); z-index: 20;
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: rgba(8, 9, 10, .96); border-bottom: 1px solid var(--line-soft);
+  backdrop-filter: blur(8px);
 }
-#topbar .title { font-weight: 600; letter-spacing: 0.2px; }
-#conn { font-size: 12px; }
-#conn.on { color: var(--ok); }
+#topbar .title { font-size: 16px; font-weight: 600; letter-spacing: -.02em; margin-right: 4px; }
+/* estado de sincronia: ponto que "respira" quando online (prototipo .sync-state) */
+#conn { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #9fa2a4; }
+#conn::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+}
+#conn.on::before {
+  background: var(--ok); box-shadow: 0 0 0 5px rgba(65, 199, 160, .09);
+  animation: breathe 2.4s ease-in-out infinite;
+}
 #conn.off { color: var(--muted); }
-#seq { color: var(--muted); font-size: 12px; }
+#seq { color: #777b7e; font-size: 10px; padding-left: 12px; border-left: 1px solid #292b2e; }
 #name {
-  margin-left: auto; background: var(--bg); color: var(--text);
-  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font: inherit;
+  margin-left: auto; height: 34px; background: rgba(12, 13, 14, .7); color: var(--text);
+  border: 1px solid var(--line-soft); border-radius: 18px; padding: 0 14px; min-width: 120px;
 }
-#name:focus { outline: 1px solid var(--accent); }
-#who { color: var(--accent); font-weight: 600; }
+#name:focus { outline: 0; border-color: var(--violet); }
+/* pill de identidade. NÃO virar avatar-só-inicial: snapshot-render.e2e.ts assere
+   toHaveText("alice") — o nome tem que continuar sendo o texto do elemento. */
+#who {
+  display: inline-flex; align-items: center; height: 34px; padding: 0 14px 0 32px;
+  border-radius: 18px; background: rgba(12, 13, 14, .7); border: 1px solid var(--line-soft);
+  color: var(--text); font-weight: 500; position: relative;
+}
+#who::before {
+  content: ""; position: absolute; left: 5px; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--orange);
+}
 
-.canvas-wrap { position: fixed; inset: 40px 0 0 0; }
+.canvas-wrap {
+  position: fixed; inset: var(--topbar-h) 0 0 0;
+  background-color: var(--canvas);
+  background-image: radial-gradient(circle, #43464a 1.15px, transparent 1.2px);
+  background-size: 20px 20px;
+}
+/* vinheta: escurece as bordas e dá profundidade ao canvas (prototipo .workspace::before) */
+.canvas-wrap::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(circle at 60% 40%, transparent 0, rgba(0, 0, 0, .07) 45%, rgba(0, 0, 0, .35) 100%);
+}
 
 .og-cell-container { position: absolute; border: 1px solid var(--border); border-radius: 12px; pointer-events: none; }
 .og-cell-container.review { border: 2px solid var(--warn); }
@@ -27,31 +60,61 @@
 .og-cell-header .og-lock-badge { position: static; margin-left: auto; }
 .og-cell-avatars { display: flex; gap: 2px; }
 .og-cell-avatars > span { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; align-items: center; justify-content: center; background: var(--accent); color: white; }
-#state-legend { position: fixed; left: 252px; bottom: 12px; z-index: 15; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
-#state-legend summary { cursor: pointer; }
-#state-legend ul { list-style: none; margin: 6px 0 0; padding: 0; }
-#state-legend li { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+#state-legend {
+  position: fixed; left: 214px; bottom: 22px; z-index: 15;
+  background: rgba(16, 17, 18, .94); border: 1px solid #343639; border-radius: 12px;
+  padding: 9px 14px; box-shadow: 0 12px 35px rgba(0, 0, 0, .3);
+}
+#state-legend summary { cursor: pointer; color: #b7b9ba; font-size: 11px; }
+#state-legend summary:hover { color: var(--text); }
+#state-legend ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 5px; }
+#state-legend li { display: flex; gap: 8px; align-items: center; font-size: 11px; color: #b7b9ba; }
 .legend-swatch { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
 [data-state="review"] .legend-swatch { background: var(--warn); }
 [data-state="draft"] .legend-swatch { background: var(--accent); }
 [data-state="drift"] .legend-swatch { background: var(--err); }
-.react-flow__minimap { z-index: 11; }
-#empty-cell-locks { position: fixed; left: 252px; top: 52px; z-index: 15; background: var(--panel); border: 1px solid var(--warn); padding: 6px 8px; font-size: 11px; }
+/* React Flow traz tema claro por padrão: o minimapa aparecia como um retângulo cinza
+   claro sobre o canvas escuro. Alinha ao painel flutuante do resto da UI. */
+.react-flow__minimap {
+  z-index: 11; right: 320px !important; bottom: 22px !important;
+  width: 176px !important; height: 118px !important;
+  border: 1px solid #343639; border-radius: 12px; overflow: hidden;
+  background: rgba(16, 17, 18, .94) !important;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, .3);
+}
+.react-flow__minimap-mask { fill: rgba(9, 10, 11, .72); }
+.react-flow__attribution { background: transparent !important; }
+.react-flow__attribution a { color: #4a4d50 !important; }
+.react-flow__edge-path { stroke: #505258; stroke-width: 1.2; opacity: .55; }
+.react-flow__node.selected .og-card { border-color: var(--violet); }
+#empty-cell-locks { position: fixed; left: 214px; top: calc(var(--topbar-h) + 14px); z-index: 15; background: var(--panel); border: 1px solid var(--warn); padding: 6px 8px; font-size: 11px; }
 
 /* ---- BaseCard + LOD (data-lod no wrapper; CSS decide card/chip/dot) ---- */
+/* Card do canvas — prototipo .card: gradiente diagonal, sombra profunda, entrada
+   animada. Dimensões preservadas (CARD_W/CARD_H em flow/to-flow.ts dependem delas). */
 .og-card {
   width: 280px; height: 220px; position: relative; overflow: hidden;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-  padding: 8px 10px; font-size: 11px; color: var(--text);
+  background: linear-gradient(145deg, rgba(27, 28, 29, .97), rgba(18, 19, 20, .98));
+  border: 1px solid #383a3c; border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .22);
+  padding: 10px 12px; font-size: 11px; color: var(--text);
+  transition: border-color .18s ease, box-shadow .18s ease;
+  /* SEM animação de entrada aqui, ao contrário do protótipo: são centenas de cards no
+     canvas (não 5), e um nó animando não é "stable" — trava clique e custa frame.
+     A entrada animada fica nos painéis (panelIn), que são poucos e efêmeros. */
 }
-.og-card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.og-card.state-published { border-color: var(--ok); }
+.og-card:hover { border-color: #56595d; box-shadow: 0 23px 55px rgba(0, 0, 0, .32); }
+.og-card.sel {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, .18), 0 26px 70px rgba(0, 0, 0, .45), 0 0 42px rgba(139, 92, 246, .09);
+}
+.og-card.state-published { border-color: color-mix(in srgb, var(--ok) 60%, #383a3c); }
 .og-card.state-review { border-color: var(--warn); }
 .og-card.state-drift, .og-card.state-suspended { border-color: var(--err); }
 .og-card.over { border-color: var(--warn); }
 .og-card-top { display: flex; align-items: center; justify-content: space-between; }
 .og-chip {
-  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
+  background: color-mix(in srgb, var(--violet) 14%, transparent); color: #b9a2ff;
   border-radius: 4px; padding: 1px 6px; font-size: 9px;
 }
 .og-level { color: var(--muted); font-size: 9px; }
@@ -102,30 +165,44 @@
 .og-card.locked { border-color: var(--warn); }
 .og-lock { color: var(--warn); }
 .og-drift { color: var(--err); }
-#drift-badge { color: var(--err); font-weight: 600; font-size: 12px; }
-#settingsBtn {
-  background: none; border: 1px solid var(--border); border-radius: 6px;
-  color: var(--muted); padding: 3px 8px; cursor: pointer;
+#drift-badge {
+  color: var(--err); font-weight: 600; font-size: 11px;
+  border: 1px solid color-mix(in srgb, var(--err) 45%, transparent); border-radius: 12px; padding: 3px 10px;
 }
-#settingsBtn:hover { color: var(--text); }
+/* botões-pílula da topbar (prototipo .top-action / .round-button) */
+#settingsBtn, #queryBtn, #openturn {
+  height: 34px; padding: 0 16px; border-radius: 18px; cursor: pointer;
+  background: rgba(12, 13, 14, .7); border: 1px solid var(--line-soft); color: var(--text);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+#settingsBtn { padding: 0; width: 34px; justify-content: center; color: var(--muted); }
+#settingsBtn:hover, #queryBtn:hover, #openturn:hover { background: #1c1d1f; border-color: #44464a; color: var(--text); }
+#openturn { border-color: color-mix(in srgb, var(--violet) 55%, transparent); color: #cbb6ff; }
+#openturn:hover { background: color-mix(in srgb, var(--violet) 16%, transparent); border-color: var(--violet); }
 
-/* ---- roster de presença ---- */
+/* ---- roster de presença ----
+   No protótipo, GRAFOS (árvore) e PAPÉIS (quem está onde) são seções do MESMO painel
+   lateral. Aqui são dois componentes independentes, então empilho os dois na coluna
+   esquerda: árvore em cima, presença embaixo. Antes ambos estavam em left:0 e a
+   presença simplesmente cobria a árvore. */
 #presence {
-  position: fixed; top: 40px; left: 0; width: 240px; max-height: 60%;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
-  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  overflow-y: auto; z-index: 12;
+  position: fixed; left: 12px; bottom: 20px; width: 188px; max-height: 42%;
+  background: linear-gradient(135deg, rgba(22, 23, 24, .97), rgba(17, 18, 19, .94));
+  border: 1px solid #393a3d; border-left: 2px solid var(--orange); border-radius: 14px;
+  box-shadow: -7px 0 24px rgba(255, 152, 0, .16), 0 14px 35px rgba(0, 0, 0, .28);
+  overflow-y: auto; z-index: 12; scrollbar-width: none;
+  animation: panelIn .18s ease-out;
 }
 #presence .phead {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 10px; font-size: 10px; text-transform: uppercase; color: var(--muted);
-  position: sticky; top: 0; background: var(--panel);
+  padding: 13px 18px 10px; font-size: 11px; letter-spacing: .04em; color: #a4a6a8;
+  position: sticky; top: 0; background: rgba(20, 21, 22, .97);
 }
-#presence .phead button { background: none; border: none; color: var(--muted); cursor: pointer; }
-#plist { list-style: none; padding: 0 10px 8px; margin: 0; }
-#plist li { padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
-#plist .kind { color: var(--muted); }
-#plist .sub { color: var(--muted); font-size: 10px; padding-left: 14px; }
+#presence .phead button { background: none; border: none; color: #b9bbbd; cursor: pointer; }
+#plist { list-style: none; padding: 0 18px 14px; margin: 0; display: grid; gap: 11px; }
+#plist li { font-size: 12px; color: #cbccca; }
+#plist .kind { color: #85888b; }
+#plist .sub { color: #85888b; font-size: 11px; padding-left: 14px; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .dot.green { background: var(--ok); }
 .dot.yellow { background: var(--warn); }
@@ -150,10 +227,12 @@
 .og-avatar:hover .avatar-tip { display: block; }
 
 /* ---- typing ---- */
+/* pílula centrada no rodapé (protótipo .agent-progress). Saiu de left:12/bottom:12
+   porque a presença agora ocupa o pé da coluna esquerda. */
 #typing {
-  position: fixed; left: 12px; bottom: 12px; z-index: 14;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
-  border: 1px solid var(--border); border-radius: 4px; padding: 5px 10px;
+  position: fixed; left: calc(50% + 100px); transform: translateX(-50%); bottom: 22px; z-index: 14;
+  background: rgba(20, 21, 23, .96); border: 1px solid #3c3e42; border-radius: 18px;
+  padding: 8px 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, .4); white-space: nowrap;
 }
 #typing .dots span { animation: tdot 1.2s infinite; display: inline-block; }
 #typing .dots span:nth-child(2) { animation-delay: 0.2s; }
@@ -175,17 +254,18 @@
 
 /* ---- feed de atividade ---- */
 #events {
-  position: fixed; top: 40px; right: 0; bottom: 0; width: 300px; z-index: 12;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
-  border-left: 1px solid var(--border); overflow-y: auto; padding: 8px;
+  position: fixed; top: calc(var(--topbar-h) + 14px); right: 14px; bottom: 22px; width: 292px; z-index: 12;
+  background: rgba(16, 17, 18, .94); border: 1px solid #383a3c; border-radius: 12px;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, .3);
+  overflow-y: auto; padding: 14px 16px; scrollbar-width: none;
 }
-#events h3 { font-size: 10px; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+#events h3 { font-size: 11px; letter-spacing: .04em; color: #a4a6a8; margin: 0 0 10px; font-weight: 500; }
 #evlist { list-style: none; margin: 0; padding: 0; font-size: 11px; }
 #evlist li {
-  padding: 3px 4px; border-bottom: 1px solid var(--border); cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #b7b9ba;
 }
-#evlist li:hover { background: color-mix(in srgb, var(--panel) 70%, var(--accent) 10%); }
+#evlist li:hover { background: #26282a; color: var(--text); }
 #evlist li[data-kind="changeset"] { color: var(--accent); }
 #evlist li[data-kind="lock"] { color: var(--warn); }
 #evlist li[data-kind="graph"] { color: var(--ok); }
@@ -233,7 +313,7 @@
 #denied .denied-free { color: var(--ok); margin-top: 6px; font-weight: 600; }
 
 #draft {
-  position: fixed; top: 52px; right: 312px; width: 320px; max-height: calc(100% - 70px);
+  position: fixed; top: calc(var(--topbar-h) + 14px); right: 320px; width: 320px; max-height: calc(100% - 70px);
   overflow-y: auto; z-index: 14;
   background: color-mix(in srgb, var(--panel) 97%, transparent);
   border: 1px solid var(--accent); border-radius: 8px; padding: 12px;
@@ -306,7 +386,7 @@
 
 /* ---- painel lateral de nó ---- */
 #panel {
-  position: fixed; top: 52px; right: 12px; width: 320px; max-height: calc(100% - 64px);
+  position: fixed; top: calc(var(--topbar-h) + 14px); right: 14px; width: 320px; max-height: calc(100% - 64px);
   overflow-y: auto; z-index: 15;
   background: color-mix(in srgb, var(--panel) 96%, transparent);
   border: 1px solid var(--border); border-radius: 8px; padding: 14px;
@@ -322,94 +402,146 @@
 #panel .auth-suspended { color: var(--warn); }
 
 /* ─── UI-3 (F002): QueryBar (⌘K), ClaimsBrowser, SidebarTree, HistoryView ─── */
-/* canvas yields left/right strips to UI-3 panels when route is canvas mode */
+/* O canvas cede a faixa esquerda (200px) aos painéis. Tentei deixá-lo full-bleed com os
+   painéis flutuando por cima, como no protótipo — mas ali o conteúdo é posicionado à mão,
+   e aqui o fitView espalha os nós pela viewport inteira: os cards debaixo do sidebar
+   ficavam inclicáveis ("#sidebar-tree intercepts pointer events"). */
 .canvas-wrap { left: 200px !important; right: 0 !important; }
 /* reuses right panel area same as #panel — rendered only when selectedCell set */
 #query-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 50;
-  display: flex; justify-content: center; align-items: center;
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .55); z-index: 50;
+  display: flex; justify-content: center; align-items: center; backdrop-filter: blur(2px);
 }
 #query-backdrop .query-modal {
-  background: var(--panel, #fff); color: var(--text); min-width: 480px; max-width: 720px;
-  padding: 12px; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); max-height: 70vh;
-  display: flex; flex-direction: column;
+  background: #18191b; color: var(--text); min-width: 480px; max-width: 720px;
+  border: 1px solid #3b3d40; padding: 14px; border-radius: 12px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .45); max-height: 70vh;
+  display: flex; flex-direction: column; animation: panelIn .15s ease-out;
 }
-#query-input { width: 100%; padding: 8px; font-size: 14px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; }
+#query-input {
+  width: 100%; padding: 10px 14px; font-size: 14px; margin-bottom: 10px;
+  border: 1px solid #393b3e; border-radius: 22px; background: rgba(10, 11, 12, .35); color: var(--text);
+}
+#query-input:focus { outline: 0; border-color: var(--violet); }
 .query-gap {
-  margin: 8px 0; padding: 8px; background: rgba(255,180,0,0.12); border-left: 3px solid #ffb400;
+  margin: 8px 0; padding: 8px 10px; border-radius: 6px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent); border-left: 3px solid var(--warn);
 }
 .query-gap .gap-text { font-weight: 600; }
 .query-gap .refinements { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
-.refinement-suggestion { background: #f1f3ff; padding: 2px 6px; border-radius: 3px; font-size: 12px; cursor: pointer; }
+.refinement-suggestion {
+  background: color-mix(in srgb, var(--violet) 18%, transparent); color: #cbb6ff;
+  padding: 2px 8px; border-radius: 10px; font-size: 12px; cursor: pointer;
+}
 .query-results { overflow-y: auto; }
 .query-group { margin: 4px 0; }
-.query-group .group-header { font-weight: 600; padding: 4px 0 4px 4px; background: #f7f7f7; }
-.query-result {
-  display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 4px 8px;
-  background: transparent; border: none; border-bottom: 1px solid #eee; cursor: pointer;
+.query-group .group-header {
+  font-weight: 500; font-size: 11px; letter-spacing: .04em; color: #a4a6a8;
+  padding: 6px 4px; background: transparent;
 }
-.query-result:hover { background: #f5f7ff; }
-.query-result .id { font-size: 11px; color: #666; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
+.query-result {
+  display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 8px;
+  background: transparent; border: none; border-radius: 6px; cursor: pointer; color: var(--text);
+}
+.query-result:hover, .query-result.active { background: #2a2c2e; }
+.query-result .id { font-size: 11px; color: #7f8386; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
 .query-result .resp { flex: 1; padding: 0 8px; }
-.query-result .score { font-size: 11px; color: #888; }
+.query-result .score { font-size: 11px; color: #7f8386; }
 
-/* ClaimsBrowser panel */
+/* ClaimsBrowser panel — também era tema claro; vira painel flutuante escuro. */
 #claims-panel {
-  position: fixed; right: 12px; top: 52px; bottom: 12px; width: 320px; z-index: 40;
-  background: var(--panel, #fff); border: 1px solid #ddd; border-radius: 4px;
-  padding: 8px; overflow-y: auto;
+  position: fixed; right: 14px; top: calc(var(--topbar-h) + 14px); bottom: 22px; width: 320px; z-index: 40;
+  background: rgba(16, 17, 18, .96); border: 1px solid #383a3c; border-radius: 12px;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, .35);
+  padding: 14px 16px; overflow-y: auto; scrollbar-width: none; animation: panelIn .15s ease-out;
 }
 #claims-panel .claim-row {
-  display: flex; gap: 6px; padding: 4px 6px; border-bottom: 1px solid #eee; cursor: pointer;
+  display: flex; gap: 8px; padding: 7px 8px; border-radius: 6px; cursor: pointer; color: #cbccca;
 }
-#claims-panel .claim-row:hover { background: #f7f7ff; }
-#claims-panel .claim-row .id { font-size: 11px; color: #666; max-width: 30%; overflow: hidden; text-overflow: ellipsis; }
+#claims-panel .claim-row:hover { background: #2a2c2e; color: var(--text); }
+#claims-panel .claim-row .id { font-size: 11px; color: #7f8386; max-width: 30%; overflow: hidden; text-overflow: ellipsis; }
 #claims-panel .claim-row .subject { flex: 1; }
-#claims-panel .claim-row .seq { font-size: 11px; color: #999; }
-#claims-panel .open-claim { margin-top: 8px; padding: 8px; border-top: 2px solid #ddd; }
-#claims-panel .open-claim h4 { margin: 0 0 4px; }
-#claims-panel .open-claim .anchor { background: #f7f7f7; padding: 4px; font-size: 12px; white-space: pre-wrap; }
+#claims-panel .claim-row .seq { font-size: 11px; color: #7f8386; }
+#claims-panel .open-claim { margin-top: 10px; padding-top: 12px; border-top: 1px solid #343639; }
+#claims-panel .open-claim h4 { margin: 0 0 6px; font-weight: 500; }
+#claims-panel .open-claim .anchor {
+  background: rgba(10, 11, 12, .5); border: 1px solid #2c2e31; border-radius: 6px;
+  padding: 8px; font-size: 12px; white-space: pre-wrap; font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
 #claims-panel .open-claim .ref-chip {
-  display: inline-block; padding: 2px 6px; margin: 2px 2px 0 0; background: #eef1ff;
-  border: 1px solid #ccc; border-radius: 3px; font-size: 11px; cursor: pointer;
+  display: inline-block; padding: 3px 9px; margin: 3px 3px 0 0;
+  background: color-mix(in srgb, var(--violet) 16%, transparent); color: #cbb6ff;
+  border: 1px solid color-mix(in srgb, var(--violet) 40%, transparent); border-radius: 10px;
+  font-size: 11px; cursor: pointer;
 }
-#claims-panel .open-claim .referenced-by { margin-top: 6px; }
-#claims-panel .open-claim .none { font-size: 11px; color: #888; }
-#claims-panel .open-claim .provenance { margin-top: 6px; font-size: 11px; color: #888; }
+#claims-panel .open-claim .ref-chip:hover { background: color-mix(in srgb, var(--violet) 28%, transparent); }
+#claims-panel .open-claim .referenced-by { margin-top: 8px; }
+#claims-panel .open-claim .none { font-size: 11px; color: #7f8386; }
+#claims-panel .open-claim .provenance { margin-top: 8px; font-size: 11px; color: #7f8386; }
 #claims-panel .open-claim-footer button {
-  margin-top: 6px; padding: 4px 8px; background: #4a73d8; color: white; border: none; border-radius: 3px; cursor: pointer;
+  margin-top: 8px; padding: 7px 14px; border-radius: 16px; border: 1px solid var(--violet);
+  background: var(--violet); color: #fff; cursor: pointer;
 }
+#claims-panel .open-claim-footer button:hover { filter: brightness(1.12); }
 #close-claims { position: absolute; right: 6px; top: 6px; }
 
-/* SidebarTree (left) */
+/* SidebarTree (left) — era tema CLARO (#ddd/#d7e2ff/#666), resquício da UI-3 que
+   nunca recebeu o tratamento escuro. Vira o painel-âncora do prototipo: borda
+   esquerda laranja, cantos arredondados, marcador violeta na linha corrente. */
 #sidebar-tree {
-  position: fixed; left: 0; top: 40px; bottom: 0; width: 200px; z-index: 12;
-  background: var(--panel, #fff); border-right: 1px solid #ddd; padding: 6px; overflow-y: auto;
+  position: fixed; left: 12px; top: calc(var(--topbar-h) + 12px); bottom: 46%; width: 188px; z-index: 12;
+  background: linear-gradient(135deg, rgba(22, 23, 24, .97), rgba(17, 18, 19, .94));
+  border: 1px solid #393a3d; border-left: 2px solid var(--orange); border-radius: 14px;
+  box-shadow: -7px 0 24px rgba(255, 152, 0, .16), 0 14px 35px rgba(0, 0, 0, .28);
+  padding: 14px 12px; overflow-y: auto; scrollbar-width: none;
 }
-#sidebar-tree .quick-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-#sidebar-tree .quick-filter { padding: 2px 6px; font-size: 11px; border: 1px solid #ddd; background: transparent; cursor: pointer; border-radius: 3px; }
-#sidebar-tree .quick-filter[data-active="true"] { background: #d7e2ff; }
-#sidebar-tree .domain { margin: 4px 0; }
-#sidebar-tree .domain-head { font-weight: 600; font-size: 12px; }
-#sidebar-tree .level-list { list-style: none; padding-left: 12px; }
-#sidebar-tree .sidebar-cell { display: flex; gap: 4px; padding: 2px 6px; border: none; background: transparent; cursor: pointer; width: 100%; }
-#sidebar-tree .sidebar-cell.selected { background: #d7e2ff; }
-#sidebar-tree .sidebar-cell .lvl { font-size: 11px; min-width: 24px; }
-#sidebar-tree .sidebar-cell .count { font-size: 11px; color: #666; flex: 1; }
+#sidebar-tree .quick-filters { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+#sidebar-tree .quick-filter {
+  padding: 3px 9px; font-size: 11px; border: 1px solid #393b3e; border-radius: 12px;
+  background: rgba(10, 11, 12, .35); color: #b7b9ba; cursor: pointer;
+}
+#sidebar-tree .quick-filter:hover { background: #272829; color: var(--text); }
+#sidebar-tree .quick-filter[data-active="true"] { background: color-mix(in srgb, var(--violet) 22%, transparent); border-color: var(--violet); color: #cbb6ff; }
+#sidebar-tree .domain { margin: 10px 0 4px; }
+#sidebar-tree .domain-head { font-weight: 500; font-size: 11px; letter-spacing: .04em; color: #a4a6a8; }
+#sidebar-tree .level-list { list-style: none; margin: 4px 0 0 4px; padding-left: 12px; border-left: 1px solid #343639; }
+#sidebar-tree .sidebar-cell {
+  display: flex; gap: 6px; align-items: center; min-height: 26px; padding: 2px 8px; width: 100%;
+  border: none; border-radius: 6px; background: transparent; color: #cbccca; cursor: pointer; text-align: left;
+}
+#sidebar-tree .sidebar-cell:hover { background: #272829; color: #fff; }
+#sidebar-tree .sidebar-cell.selected { background: #303132; color: #fff; position: relative; }
+#sidebar-tree .sidebar-cell.selected::before {
+  content: ""; position: absolute; left: -13px; width: 3px; height: 16px; border-radius: 2px;
+  background: var(--violet); box-shadow: 0 0 12px rgba(139, 92, 246, .45);
+}
+#sidebar-tree .sidebar-cell .lvl { font-size: 11px; min-width: 24px; color: #85888b; }
+#sidebar-tree .sidebar-cell .count { font-size: 11px; color: #85888b; flex: 1; text-align: right; }
 #sidebar-tree .lock-badge { font-size: 12px; }
 
-#queryBtn { margin-left: 4px; }
-#nav-history, #nav-canvas { margin: 0 4px; color: #4a73d8; cursor: pointer; font-size: 12px; }
-
-/* HistoryView */
-#history-view {
-  position: fixed; top: 40px; left: 200px; right: 0; bottom: 0; padding: 12px; overflow-y: auto;
-  background: var(--panel, #fff);
+#nav-history, #nav-canvas {
+  padding: 0 12px; height: 34px; display: inline-flex; align-items: center; border-radius: 18px;
+  color: var(--muted); cursor: pointer; font-size: 12px; text-decoration: none;
 }
-#history-view .filters { display: flex; gap: 8px; margin-bottom: 8px; }
-#history-view .history-row { padding: 4px 6px; border-bottom: 1px solid #eee; cursor: pointer; }
-#history-view .row-head { display: flex; gap: 6px; }
-#history-view .row-head .kind { font-size: 11px; }
+#nav-history:hover, #nav-canvas:hover { background: #1c1d1f; color: var(--text); }
+#nav-history[data-active="true"], #nav-canvas[data-active="true"] { background: #303132; color: var(--text); }
+
+/* HistoryView — idem: era claro. */
+#history-view {
+  position: fixed; top: var(--topbar-h); left: 0; right: 0; bottom: 0; padding: 22px 28px; overflow-y: auto;
+  background: var(--canvas);
+}
+#history-view .filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+#history-view .filters input, #history-view .filters select {
+  height: 32px; padding: 0 12px; border-radius: 16px; color: var(--text);
+  background: rgba(10, 11, 12, .35); border: 1px solid #393b3e;
+}
+#history-view .history-row { padding: 8px 10px; border-radius: 6px; cursor: pointer; color: #cbccca; }
+#history-view .history-row:hover { background: #26282a; color: var(--text); }
+#history-view .row-head { display: flex; gap: 8px; }
+#history-view .row-head .kind { font-size: 11px; color: #7f8386; }
 #history-view .history-payload {
-  margin-top: 4px; background: #f7f7f7; padding: 6px; font-size: 11px; white-space: pre-wrap;
+  margin-top: 6px; background: rgba(10, 11, 12, .5); border: 1px solid #2c2e31; border-radius: 6px;
+  padding: 8px; font-size: 11px; white-space: pre-wrap;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
 }
