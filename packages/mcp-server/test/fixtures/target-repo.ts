@@ -10,12 +10,12 @@
  * `test.skipIf` com um motivo explícito — nunca falha por ambiente ausente,
  * nunca passa em silêncio (rodar contra a fixture errada sem avisar).
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { DEFAULT_IGNORE } from "@open-graph-mcp/graph-core/scan"
 
-/** Domínios explícitos p/ o repo-alvo (QA-7 P4): padrões-prefixo, sem `"*"` catch-all —
+/** Domínios explícitos p/ o repo-alvo: passe em `startServer({ domains })`. Padrões-prefixo, sem `"*"` catch-all —
  *  `matchesPattern` trata `"*"` sozinho como `file === "*"` (length 1), não como wildcard-total
  *  (domains.ts:33-41). O que não casar cai em "(unassigned)", por design não-flipável. */
 export const TARGET_DOMAINS = [
@@ -38,8 +38,11 @@ export type TargetRepo = { root: string; cleanup: () => void }
 
 /**
  * Copia o repo-alvo p/ um tmpdir (respeitando DEFAULT_IGNORE de scan.ts — sem `.git`,
- * `node_modules`, `dist` etc.) e injeta `.graph/domains.json`. Devolve `{ root, cleanup }`;
- * o chamador é responsável por chamar `cleanup()` (idealmente em `finally`).
+ * `node_modules`, `dist` etc.). Devolve `{ root, cleanup }`; o chamador é responsável por chamar
+ * `cleanup()` (idealmente em `finally`).
+ *
+ * NÃO injeta mais `.graph/domains.json`: o repo não hospeda nada de grafo (ADR D1). As regras de
+ * domínio são CONFIG DO SERVIDOR — passe `TARGET_DOMAINS` em `startServer({ domains })`.
  *
  * Lança se o repo-alvo não existir — o chamador deve checar `targetRepoAvailable()` e fazer
  * `test.skipIf(!targetRepoAvailable())` ANTES de chamar isto, não depender do throw p/ pular.
@@ -58,8 +61,5 @@ export function prepareTargetRepo(src: string = targetRepoPath()): TargetRepo {
       return !DEFAULT_IGNORE.includes(name)
     },
   })
-  const graphDir = path.join(root, ".graph")
-  mkdirSync(graphDir, { recursive: true })
-  writeFileSync(path.join(graphDir, "domains.json"), JSON.stringify(TARGET_DOMAINS, null, 2))
   return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) }
 }

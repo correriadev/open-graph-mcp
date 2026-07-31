@@ -46,9 +46,6 @@ export async function rebuildAs(base: string, name = "bootstrapper", tenant?: st
   return callTool(base, "graph.rebuild", { token })
 }
 
-/** Bootstrap the fixture to produce a Phase-1 .graph/, so graph.import has something to migrate. */
-export const buildPhase1Graph = (base: string, repoPath: string) => bootstrapAs(base, repoPath, "phase1-builder")
-
 export type SseClient = {
   events: any[]
   waitFor: (pred: (e: any) => boolean, timeoutMs?: number) => Promise<any>

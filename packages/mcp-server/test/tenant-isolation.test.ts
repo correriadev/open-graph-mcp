@@ -1,17 +1,16 @@
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
-import { buildPhase1Graph, callTool, readResource, register, tempRepo } from "./helpers"
+import { callTool, readResource, register, tempRepo } from "./helpers"
 
 test("two tenants are fully isolated: events, locks, graph and history do not cross", async () => {
   const { root, cleanup } = tempRepo("fresh")
   const s = startServer({ repoPath: root })
   try {
-    await buildPhase1Graph(s.url, root) // writes .graph/ to disk for import
     const alice = await register(s.url, "alice", "acme")
     const bob = await register(s.url, "bob", "globex")
 
-    // Graph isolation: alice imports into acme; globex has no graph.
-    await callTool(s.url, "graph.import", { token: alice.token, repoPath: root })
+    // Isolamento de grafo: alice indexa no acme; globex fica sem grafo.
+    await callTool(s.url, "graph.bootstrap", { token: alice.token, repoPath: root })
     const acmeQuery = await callTool(s.url, "graph.query", { token: alice.token, terms: ["audit"] })
     expect(acmeQuery.candidates.length).toBeGreaterThan(0)
     let globexThrew = false

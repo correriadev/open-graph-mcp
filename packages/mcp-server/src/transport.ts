@@ -8,11 +8,10 @@
  */
 import { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from "@modelcontextprotocol/sdk/types.js"
 import { DEFAULT_TENANT, type Filter, type ServerState } from "./state"
-import { bootstrap, rebuild } from "./tools/graph-bootstrap"
+import { graphBootstrap, graphRebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
 import { subscribe } from "./tools/graph-subscribe"
 import { sessionRegister, requireToken } from "./tools/session"
-import { graphImport } from "./tools/graph-import"
 import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine } from "./tools/changeset"
 import { authorityFlip } from "./tools/authority"
 import { presenceWho, presenceFocus, presenceBeat } from "./tools/presence"
@@ -32,7 +31,7 @@ const TOOLS = [
   {
     name: "graph.bootstrap",
     description:
-      "Publish a graph from a repo path into the caller's tenant. Loads .graph/graph.json if present, else builds a deterministic structural skeleton (nodes + import edges). Idempotent per tenant.",
+      "Index a repo path and persist the graph into the caller's tenant (nodes + import edges, deterministic, no LLM). The repo is only READ — the graph lives in the server. Idempotent per tenant.",
     inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" }, repoPath: { type: "string" } } },
   },
   {
@@ -60,18 +59,13 @@ const TOOLS = [
   },
   {
     name: "graph.rebuild",
-    description: "Re-read the caller tenant's .graph/ and re-emit its snapshot to that tenant's subscribers.",
+    description: "Re-index the caller tenant's repo, persist the result, and re-emit its snapshot to that tenant's subscribers.",
     inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" } } },
   },
   {
     name: "session.register",
     description: "Register a session under a tenant. Returns { token, userId, tenantId }. Token is in-memory (lost on restart).",
     inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" }, tenant: { type: "string" } } },
-  },
-  {
-    name: "graph.import",
-    description: "Migrate a Phase-1 .graph/ into the authoritative SQLite for the caller's tenant (idempotent).",
-    inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" }, repoPath: { type: "string" } } },
   },
   {
     name: "changeset.open",
@@ -135,20 +129,19 @@ const TOOLS = [
 function callTool(state: ServerState, name: string, args: any): unknown {
   switch (name) {
     case "graph.bootstrap":
-      // requireToken (não tenantOf): bootstrap ESCREVE — publica um grafo e emite evento no log do
-      // tenant. Um token inválido não pode cair em DEFAULT_TENANT em silêncio, que é o que tenantOf
-      // faz por design p/ as leituras. Publicar grafo sem autenticação nenhuma era o buraco.
-      return bootstrap(state, args?.repoPath ?? state.repoPath, requireToken(state, args?.token).tenantId)
+      // Um comando só: indexa o repo E persiste no tenant do chamador. Eram dois
+      // (`graph.bootstrap` publicava em memória, `graph.import` levava ao banco) e ninguém
+      // encadeava — o grafo sumia no restart. requireToken (não tenantOf, que cai em
+      // DEFAULT_TENANT em silêncio): indexar ESCREVE.
+      return graphBootstrap(state, args)
     case "graph.query":
       return query(state, { terms: args.terms, domain: args.domain, layer: args.layer, limit: args.limit }, tenantOf(state, args.token))
     case "graph.subscribe":
       return subscribe(state, args.sessionId, (args.filters ?? []) as Filter[])
     case "graph.rebuild":
-      return rebuild(state, requireToken(state, args?.token).tenantId)
+      return graphRebuild(state, args)
     case "session.register":
       return sessionRegister(state, args)
-    case "graph.import":
-      return graphImport(state, args)
     case "changeset.open":
       return changesetOpen(state, args)
     case "changeset.claim":

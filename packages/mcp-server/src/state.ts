@@ -1,7 +1,9 @@
 /**
  * state.ts — ServerState. Fase 1 mantinha tudo em memória; a Fase 2 move o estado durável p/ SQLite +
- * espelho JSONL por tenant (ADR §4.1), mas o GRAFO de conhecimento (query/watch/drift) segue em memória
- * por tenant como índice quente. Eventos, changesets, locks e o grafo autoritativo (import) vivem no banco.
+ * espelho JSONL por tenant (ADR §4.1). O GRAFO agora TAMBÉM vive no banco (nodes/edges/authority por
+ * tenant): `tg.graph` é só um índice quente, hidratado do SQLite no start (graph-bootstrap.ts
+ * `hydrateFromDb`) e reescrito a cada indexação — não é mais a única cópia, e por isso o grafo
+ * sobrevive a restart. Eventos, changesets e locks seguem no banco.
  *
  * Tokens/sessions são EM MEMÓRIA (spec §9): somem no restart; os changesets sobrevivem no SQLite.
  * `seq` de eventos é monotônico POR TENANT (D13).
@@ -83,7 +85,10 @@ export type Presence = {
   typingState: "typing" | "idle" | "quiet"
 }
 
-export type Pipeline = "skeleton" | "existing"
+/** "indexed" = servidor indexou o repo e persistiu no tenant. "skeleton"/"existing" eram os
+ *  caminhos antigos, quando o grafo vinha de `.graph/` no repo-alvo — mantidos só p/ leitura de
+ *  snapshots gravados antes da migração. */
+export type Pipeline = "indexed" | "skeleton" | "existing"
 
 /** Grafo de conhecimento por tenant (índice quente p/ query/watch). O default carrega o fluxo Fase 1. */
 /** `repoPath`: cada tenant indexa o SEU repo. `state.repoPath` continua existindo como default de
@@ -121,6 +126,11 @@ export type ServerState = {
   /** Aggregate point-lookup observability; deliberately contains no tenant or claim identifiers. */
   claimLookupMetrics: { hits: number; misses: number; totalLatencyMs: number; maxLatencyMs: number }
   claimFileProjectionMetrics: { repoRelative: number; basenameFallback: number; omitted: number }
+  /** Nós em drift por tenant (índice vivo do watch-bridge). Perdível: recomputado no 1o tick. */
+  driftStale: Map<string, Set<string>>
+  /** Regras de posse de domínio (`{ pattern, domain }`, first-match-wins). CONFIG DO SERVIDOR —
+   *  vinham de `.graph/domains.json` no repo-alvo, mas o repo não hospeda mais nada de grafo. */
+  domains: readonly { pattern: string; domain: string }[] | null
 }
 
 export function createState(opts: {
@@ -131,6 +141,7 @@ export function createState(opts: {
   focusDebounceMs?: number
   typingMs?: number
   idleMs?: number
+  domains?: readonly { pattern: string; domain: string }[] | null
   db?: Database
 }): ServerState {
   const db = opts.db ?? openDb(opts.stateDir === ":memory:" ? ":memory:" : `${opts.stateDir}/state.sqlite`)
@@ -155,6 +166,8 @@ export function createState(opts: {
     claimsCache: new Map(),
     claimLookupMetrics: { hits: 0, misses: 0, totalLatencyMs: 0, maxLatencyMs: 0 },
     claimFileProjectionMetrics: { repoRelative: 0, basenameFallback: 0, omitted: 0 },
+    domains: opts.domains?.length ? opts.domains : null,
+    driftStale: new Map(),
   }
 }
 

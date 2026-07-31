@@ -50,16 +50,16 @@ function tempFixtureRepo(sessionNodes = 0): { root: string; cleanup: () => void 
     const domain = index % 2 ? "auth" : "billing"
     writeFileSync(path.join(root, "src", domain, `session-${index}.ts`), `/** # Session node ${index}\n * - rich content\n */\nexport function sessionNode${index}() { return ${index} }\n`)
   }
-  mkdirSync(path.join(root, ".graph"), { recursive: true })
-  writeFileSync(
-    path.join(root, ".graph", "domains.json"),
-    JSON.stringify([
-      { pattern: "src/auth/*", domain: "auth" },
-      { pattern: "src/billing/*", domain: "billing" },
-    ]),
-  )
+  // Sem `.graph/` no repo: as regras de domínio são config do SERVIDOR (FIXTURE_DOMAINS abaixo,
+  // passado em StartOptions) — o repo-alvo não hospeda nada de grafo (ADR D1).
   return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) }
 }
+
+/** Posse de domínio da fixture — passada ao servidor, não escrita no repo. */
+const FIXTURE_DOMAINS = [
+  { pattern: "src/auth/*", domain: "auth" },
+  { pattern: "src/billing/*", domain: "billing" },
+] as const
 
 async function rpc(base: string, method: string, params?: unknown): Promise<any> {
   const res = await fetch(`${base}/mcp`, {
@@ -144,7 +144,7 @@ export async function startHarness(opts: StartOptions & { sessionNodes?: number 
   const { sessionNodes = 0, ...serverOptions } = opts
   const { root, cleanup: cleanupRepo } = tempFixtureRepo(sessionNodes)
   const stateDir = mkdtempSync(path.join(tmpdir(), "og-e2e-state-"))
-  const startOpts: StartOptions = { repoPath: root, stateDir, autoBootstrap: true, ...DEFAULT_KNOBS, ...serverOptions }
+  const startOpts: StartOptions = { repoPath: root, stateDir, autoBootstrap: true, domains: FIXTURE_DOMAINS, ...DEFAULT_KNOBS, ...serverOptions }
 
   let proc = await spawnServer(startOpts)
   const port = new URL(proc.mcpUrl).port
