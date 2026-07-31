@@ -1,60 +1,112 @@
 /**
- * watch-bridge.ts — o zíper com opencode/graph/watch. A cada tick roda o ciclo herdado sobre o
- * repo-alvo (re-checa âncoras, propaga drift, demote células β), recarrega o graph.json que o watch
- * carimbou e publica os eventos novos no log/SSE. Ciclo sem novidade que sucede um com novidade
- * emite `watch.converged` (telemetria, spec §4.4). Estado 100% em memória.
+ * watch-bridge.ts — detecção de drift SOBRE O GRAFO DO SERVIDOR.
  *
- * `tick` é exportado p/ os testes dispararem um ciclo determinístico sem esperar o intervalo de 5s;
+ * Antes isto era um zíper com `graph-core/watch`, que roda sobre `.graph/` no repo-alvo: ele
+ * recarimbava `graph.json` no disco e o bridge relia esse arquivo para a memória. Com o grafo
+ * vivendo no servidor (ADR D1 — o repo não hospeda mais estado de grafo), a checagem passa a ser
+ * feita aqui, contra os nós do tenant: o repo é só LIDO.
+ *
+ * Mecânica: cada nó carrega uma âncora verbatim. A cada tick lê-se o arquivo e verifica-se se a
+ * âncora ainda está lá (`excerptCheck`). Sumiu → `drift.node`. Voltou → `watch.healed`. Se a célula
+ * do nó é β (authority "graph"), o drift também a DEMOVE (`authority.demoted`, authority vira
+ * "suspended"): o código mudou embaixo de um grafo que se dizia autoritativo.
+ *
+ * O conjunto de nós em drift é índice VIVO (memória, por tenant) — recomputável do disco + banco a
+ * qualquer momento, e por isso não precisa de durabilidade (ADR §4.1: locks/presença/índice vivo
+ * são perdíveis; o log JSONL é que é a verdade).
+ *
+ * `tick` é exportado p/ os testes dispararem um ciclo determinístico sem esperar o intervalo;
  * `startWatchLoop` é o mesmo tick num setInterval p/ produção.
  */
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import type { Graph } from "@open-graph-mcp/graph-core/build"
-import { watch, type WatchEvent } from "@open-graph-mcp/graph-core/watch"
-import { appendEvent, nodeCell, tenantGraph, DEFAULT_TENANT, type ServerState } from "./state"
+import { excerptCheck } from "@open-graph-mcp/graph-core/extract"
+import { appendEvent, tenantGraph, DEFAULT_TENANT, type ServerState } from "./state"
+import { write } from "./db"
 
-/** WatchEvent herdado → envelope MCP (kinds da spec §4.4). */
-function toEnvelope(state: ServerState, e: WatchEvent): { kind: string; target: string | null; payload: Record<string, unknown> } {
-  const base = { ts: e.ts, cause: e.cause, status: e.type }
-  if (e.kind === "cell") {
-    // demoted → gone (β→source); suspended → structural (β→suspended). grade incluída (spec §4.4).
-    const domain = e.id.slice(0, e.id.lastIndexOf(":"))
-    return {
-      kind: "authority.demoted",
-      target: e.id,
-      payload: { ...base, cell: e.id, domain, grade: e.type === "demoted" ? "gone" : "structural" },
-    }
-  }
-  if (e.type === "recovered") {
-    const cell = nodeCell(state, e.id)
-    return { kind: "watch.healed", target: e.id, payload: { ...base, ...(cell ?? {}) } }
-  }
-  const cell = nodeCell(state, e.id)
-  return { kind: "drift.node", target: e.id, payload: { ...base, refKind: e.kind, ...(cell ?? {}) } }
+export type WatchEvent = { kind: "node" | "cell"; id: string; type: string; cause: string; ts: string }
+
+/**
+ * Nós em drift por tenant. Índice vivo — some no restart, recomputado no primeiro tick.
+ *
+ * Vive no ServerState, NÃO num Map de módulo: dois servidores no mesmo processo (o que todo teste
+ * faz, e o que um host multi-instância faria) compartilhariam o conjunto, e o segundo já nasceria
+ * achando que os nós estão em drift — logo não emitiria `drift.node` nenhum.
+ */
+function staleSet(state: ServerState, tenant: string): Set<string> {
+  let set = state.driftStale.get(tenant)
+  if (!set) state.driftStale.set(tenant, (set = new Set()))
+  return set
 }
 
+const cellOf = (domain: string | null, level: unknown): string => `${domain ?? "(unassigned)"}:${String(level).replace(/^P/, "")}`
+
 export async function tick(state: ServerState, tenant = DEFAULT_TENANT): Promise<WatchEvent[]> {
-  if (!state.repoPath) return []
-  const { newEvents } = await watch(state.repoPath)
+  const tg = tenantGraph(state, tenant)
+  const graph = tg.graph
+  const root = tg.repoPath ?? state.repoPath
+  if (!graph || !root) return []
 
-  // watch carimbou stale/demotion no graph.json — recarrega p/ o snapshot refletir.
-  try {
-    tenantGraph(state, tenant).graph = JSON.parse(readFileSync(path.join(state.repoPath, ".graph", "graph.json"), "utf8")) as Graph
-  } catch {
-    /* graph.json ausente/malformado — mantém o corrente */
+  const ts = new Date().toISOString()
+  const stale = staleSet(state, tenant)
+  const events: WatchEvent[] = []
+  /** célula β → pior grade de drift nela neste tick */
+  const demote = new Map<string, "gone" | "structural">()
+
+  for (const node of graph.nodes) {
+    if (!node.anchor) continue // nó sem âncora não é verificável
+    let content: string | null = null
+    try {
+      content = readFileSync(path.join(root, node.file), "utf8")
+    } catch {
+      content = null
+    }
+    // arquivo sumiu = "gone"; arquivo existe mas a âncora não está mais lá = "structural"
+    const grade = content === null ? "gone" : excerptCheck(content, node.anchor) ? null : "structural"
+    const wasStale = stale.has(node.id)
+
+    if (grade && !wasStale) {
+      stale.add(node.id)
+      const cell = cellOf(node.domain, node.level)
+      events.push({ kind: "node", id: node.id, type: "stale", cause: grade, ts })
+      appendEvent(state, tenant, {
+        kind: "drift.node",
+        targetId: node.id,
+        payload: { ts, cause: grade, status: "stale", refKind: "anchor", domain: node.domain ?? "(unassigned)", cell },
+      })
+      if ((graph.authority?.[cell] ?? "source") === "graph") {
+        demote.set(cell, demote.get(cell) === "gone" ? "gone" : grade)
+      }
+    } else if (!grade && wasStale) {
+      stale.delete(node.id)
+      events.push({ kind: "node", id: node.id, type: "recovered", cause: "anchor", ts })
+      appendEvent(state, tenant, {
+        kind: "watch.healed",
+        targetId: node.id,
+        payload: { ts, cause: "anchor", status: "recovered", domain: node.domain ?? "(unassigned)", cell: cellOf(node.domain, node.level) },
+      })
+    }
   }
 
-  for (const e of newEvents) {
-    const env = toEnvelope(state, e)
-    appendEvent(state, tenant, { kind: env.kind, targetId: env.target, payload: env.payload })
+  // Demoção de célula β: o grafo deixou de ser autoritativo ali. Persiste (authority é durável) e
+  // reflete na cópia quente, senão o snapshot seguiria dizendo "graph".
+  for (const [cell, grade] of demote) {
+    write(state.db, state.stateDir, tenant, "authority", { tenant_id: tenant, cell, value: "suspended", last_flip_seq: 0, last_flip_by: "watch" })
+    graph.authority = { ...(graph.authority ?? {}), [cell]: "suspended" }
+    events.push({ kind: "cell", id: cell, type: "suspended", cause: grade, ts })
+    appendEvent(state, tenant, {
+      kind: "authority.demoted",
+      targetId: cell,
+      payload: { ts, cause: grade, status: "suspended", cell, domain: cell.slice(0, cell.lastIndexOf(":")), grade },
+    })
   }
 
-  if (newEvents.length) state.lastTickHadEvents = true
+  if (events.length) state.lastTickHadEvents = true
   else if (state.lastTickHadEvents) {
     appendEvent(state, tenant, { kind: "watch.converged", targetId: null, payload: {} })
     state.lastTickHadEvents = false
   }
-  return newEvents
+  return events
 }
 
 export function startWatchLoop(state: ServerState, intervalMs = 5000, tenant = DEFAULT_TENANT): () => void {

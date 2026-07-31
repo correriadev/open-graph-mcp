@@ -26,7 +26,7 @@ test.describe(`web contra repo-alvo real (${targetRepoPath()})`, () => {
     repo = prepareTargetRepo()
     // startHarness espalha serverOptions DEPOIS de `repoPath: <fixture sintética>`,
     // então passar repoPath aqui substitui a fixture pelo repo-alvo.
-    h = await startHarness({ repoPath: repo.root })
+    h = await startHarness({ repoPath: repo.root, domains: TARGET_DOMAINS })
   })
   test.afterAll(async () => {
     await h?.stop()

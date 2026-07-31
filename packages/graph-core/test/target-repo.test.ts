@@ -104,12 +104,13 @@ describe.skipIf(!targetRepoAvailable())(`graph-core vs repo-alvo (${targetRepoPa
     }
   })
 
-  test("domains.ts: cada arquivo do repo-alvo mapeia para o domínio esperado via .graph/domains.json", () => {
+  test("domains.ts: cada arquivo do repo-alvo mapeia para o domínio esperado", () => {
     const { root, cleanup } = prepareTargetRepo()
     try {
-      const map = loadDomains(root)
-      expect(map).not.toBeNull()
-      expect(map).toEqual(TARGET_DOMAINS as any)
+      // As regras vêm da CONFIG DO SERVIDOR (StartOptions.domains), não mais de
+      // `.graph/domains.json` no repo-alvo — o repo não hospeda nada de grafo (ADR D1).
+      // `assignDomain` continua sendo função pura de (arquivo, claims, regras).
+      const map = TARGET_DOMAINS as unknown as Parameters<typeof assignDomain>[2]
 
       const files = listSourceFiles(root)
       const byDomain: Record<string, number> = {}

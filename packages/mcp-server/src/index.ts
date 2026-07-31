@@ -19,7 +19,7 @@ import type { Server } from "bun"
 import { createState, DEFAULT_TENANT, type ServerState } from "./state"
 import { handleRpc } from "./transport"
 import { handleEvents } from "./sse"
-import { bootstrap } from "./tools/graph-bootstrap"
+import { bootstrap, hydrateFromDb } from "./tools/graph-bootstrap"
 import { startWatchLoop, tick } from "./watch-bridge"
 import { startSweeper, sweepTtl, flushDeltas } from "./sweeper"
 import { sweepPresence } from "./tools/presence"
@@ -79,6 +79,9 @@ export type StartOptions = {
    * single-org-trust behavior (D2) — pass a specific list to restrict which browser Origins may reach
    * this server at all (not just which ones can read the response). */
   allowedOrigins?: string[]
+  /** Regras de posse de domínio (`{ pattern, domain }`). CONFIG DO SERVIDOR: vinham de
+   *  `.graph/domains.json` no repo-alvo, mas o repo não hospeda mais nada de grafo. */
+  domains?: readonly { pattern: string; domain: string }[]
 }
 export type RunningServer = {
   state: ServerState
@@ -102,15 +105,21 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     focusDebounceMs: opts.focusDebounceMs,
     typingMs: opts.typingMs,
     idleMs: opts.idleMs,
+    domains: opts.domains,
   })
   const watchTenant = opts.watchTenant ?? DEFAULT_TENANT
   const allowedOrigins = opts.allowedOrigins ?? ["*"]
+
+  // Hidrata os grafos do BANCO antes de qualquer coisa: com o grafo persistido por tenant, subir o
+  // servidor sobre um stateDir existente já devolve o grafo. Antes disto o estado era 100% em
+  // memória e um restart respondia "not bootstrapped" até alguém reindexar na mão.
+  hydrateFromDb(state)
 
   if (opts.autoBootstrap && opts.repoPath) {
     try {
       bootstrap(state, opts.repoPath)
     } catch {
-      /* sem .graph/ e sem fonte: sobe vazio, admin chama graph.bootstrap/import depois */
+      /* repo ilegível: sobe vazio, admin chama graph.bootstrap depois */
     }
   }
 

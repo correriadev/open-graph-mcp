@@ -13,7 +13,7 @@
  * regressão. O que segue valendo de §0: `claims: 0`, porque claim com subject/verdict é trabalho
  * de agente LLM (Pass A/B/C) e não do piso determinístico.
  */
-import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, test } from "bun:test"
 import { startServer } from "../src/index"
@@ -26,7 +26,7 @@ const DEFAULT_IGNORE = ["node_modules", ".next", "dist", "build", ".git", ".grap
 /** Mesma poda + seleção de graph-bootstrap.ts::walkSource, reimplementada localmente (não é
  *  exportada de lá) — usada só para calcular a contagem esperada de nós EM RUNTIME, nunca um
  *  número mágico fixo (o repo-alvo pode mudar). */
-function expectedSkeletonNodeCount(root: string): number {
+function expectedIndexedNodeCount(root: string): number {
   let count = 0
   const walk = (dir: string) => {
     let entries: import("node:fs").Dirent[]
@@ -42,7 +42,7 @@ function expectedSkeletonNodeCount(root: string): number {
       if (e.isDirectory()) {
         walk(full)
       } else if (e.isFile() && SOURCE_EXT.has(path.extname(e.name))) {
-        // buildSkeleton só cria um MetaRecord se houver uma âncora (1a linha não-vazia) — arquivo
+        // indexRepo só cria um nó se houver âncora (1a linha não-vazia) — arquivo
         // vazio não conta.
         let content: string
         try {
@@ -59,16 +59,16 @@ function expectedSkeletonNodeCount(root: string): number {
 }
 
 describe.skipIf(!targetRepoAvailable())(`mcp-server bootstrap/query em escala (${targetRepoPath()})`, () => {
-  test("graph.bootstrap fresh produz pipeline skeleton com stats.nodes derivado em runtime", async () => {
+  test("graph.bootstrap indexa o repo e persiste no tenant, com stats.nodes derivado em runtime", async () => {
     const { root, cleanup } = prepareTargetRepo()
     try {
-      const expectedNodes = expectedSkeletonNodeCount(root)
+      const expectedNodes = expectedIndexedNodeCount(root)
       expect(expectedNodes).toBeGreaterThan(100) // repo-alvo tem ~186 arquivos-fonte
 
-      const s = startServer({ repoPath: root, watch: false })
+      const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
       try {
         const boot = await bootstrapAs(s.url, root)
-        expect(boot.stats.pipeline).toBe("skeleton")
+        expect(boot.stats.pipeline).toBe("indexed")
         expect(boot.stats.nodes).toBe(expectedNodes)
         // ARESTAS: o esqueleto extrai imports relativos (extract.ts, determinístico) e os resolve
         // p/ ids conhecidos — um repo TS real tem centenas. Era `toBe(0)` enquanto buildSkeleton
@@ -87,7 +87,7 @@ describe.skipIf(!targetRepoAvailable())(`mcp-server bootstrap/query em escala ($
         expect(snap.graph.stats.nodes).toBe(expectedNodes)
         expect(snap.graph.nodes).toHaveLength(expectedNodes)
 
-        // domínio explícito (via .graph/domains.json injetado pela Fase 0) realmente aplicado:
+        // domínio explícito (via StartOptions.domains — config do servidor) realmente aplicado:
         // pelo menos um nó por domínio esperado, e nenhum id com separador Windows vazando.
         const byDomain = new Map<string, number>()
         for (const n of snap.graph.nodes) byDomain.set(n.domain ?? "(null)", (byDomain.get(n.domain ?? "(null)") ?? 0) + 1)
@@ -101,10 +101,10 @@ describe.skipIf(!targetRepoAvailable())(`mcp-server bootstrap/query em escala ($
     }
   })
 
-  test("idempotência: 2o bootstrap sobre conteúdo inalterado mantém graphId e não emite evento novo; após remover .graph e tocar um arquivo, o 3o bootstrap gera um graphId diferente", async () => {
+  test("idempotência: reindexar conteúdo inalterado mantém graphId e não emite evento; adicionar ou EDITAR um arquivo muda o graphId", async () => {
     const { root, cleanup } = prepareTargetRepo()
     try {
-      const s = startServer({ repoPath: root, watch: false })
+      const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
       try {
         const boot1 = await bootstrapAs(s.url, root)
         const historyAfterFirst = await readResource(s.url, "graph://history?limit=500")
@@ -113,33 +113,25 @@ describe.skipIf(!targetRepoAvailable())(`mcp-server bootstrap/query em escala ($
 
         const boot2 = await bootstrapAs(s.url, root)
         expect(boot2.graphId).toBe(boot1.graphId)
-        expect(boot2.stats.pipeline).toBe("existing") // .graph/ já existe desde o boot1
+        expect(boot2.stats.pipeline).toBe("indexed")
         const historyAfterSecond = await readResource(s.url, "graph://history?limit=500")
         expect(countBootstrapEvents(historyAfterSecond.events)).toBe(before) // idempotente: nenhum evento novo
 
-        // Simula drift real: adiciona um arquivo-fonte NA CÓPIA e apaga .graph/ para forçar o
-        // pipeline "no-graph" a regerar o esqueleto do zero (bootstrap() só reconstrói meta/
-        // graph.json quando .graph/ está ausente — não faz watch nem rescan por conta própria).
-        //
-        // NOTA (achado real, não escondido): graphChecksum (boot-gate.ts) é calculado só a partir
-        // de ids de nó ordenados + tuplas de aresta + authority — NUNCA da âncora/conteúdo. Editar
-        // o CONTEÚDO de um arquivo já existente (sem mudar o conjunto de nós) reescreve o esqueleto
-        // mas produz o MESMO checksum e, portanto, o MESMO graphId — e como
-        // `bootstrap()` faz `if (tg.graphId === graphId && tg.graph) return` antes de reatribuir
-        // `tg.graph`, o servidor mantém em memória o grafo ANTIGO mesmo depois de reescrever
-        // graph.json no disco com a âncora nova. Verificado manualmente durante este QA (não incluso
-        // como assert aqui para não acoplar o teste a um comportamento que pode ser endurecido depois
-        // — mas é uma lacuna real de invalidação de cache que vale registrar). Por isso este teste
-        // muda o CONJUNTO de arquivos (adiciona um novo), que É capturado pelo checksum via os ids
-        // de nó, para exercitar o caminho de graphId realmente mudando.
+        // arquivo NOVO → conjunto de nós muda → graphId muda
         const target = path.join(root, "sdk", "src")
         writeFileSync(path.join(target, "qa7-drift-marker.ts"), "export const qa7DriftMarker = true\n")
-        rmSync(path.join(root, ".graph"), { recursive: true, force: true })
-
         const boot3 = await bootstrapAs(s.url, root)
-        expect(boot3.stats.pipeline).toBe("skeleton")
         expect(boot3.stats.nodes).toBe(boot1.stats.nodes + 1)
         expect(boot3.graphId).not.toBe(boot1.graphId)
+
+        // EDITAR um arquivo existente (sem mudar o conjunto de nós) também muda o graphId, porque
+        // a âncora entra no graphChecksum. Era a lacuna registrada aqui antes: o checksum só via
+        // ids/arestas/authority, então editar conteúdo devolvia o MESMO graphId e o servidor
+        // mantinha em memória o grafo antigo — disco e memória divergiam em silêncio.
+        writeFileSync(path.join(target, "qa7-drift-marker.ts"), "// âncora nova\nexport const qa7DriftMarker = true\n")
+        const boot4 = await bootstrapAs(s.url, root)
+        expect(boot4.stats.nodes).toBe(boot3.stats.nodes) // mesmo conjunto de arquivos
+        expect(boot4.graphId).not.toBe(boot3.graphId)
       } finally {
         s.stop()
       }
@@ -148,45 +140,48 @@ describe.skipIf(!targetRepoAvailable())(`mcp-server bootstrap/query em escala ($
     }
   })
 
-  test("bootstrap existing: .graph/graph.json já presente no disco → pipeline existing sem reescrever meta", async () => {
+  /**
+   * Substitui "bootstrap existing: .graph/graph.json já presente → pipeline existing". Reindexar
+   * SUBSTITUI as linhas do tenant em vez de acumulá-las — sem isto, cada reindexação duplicaria
+   * 186 nós e 376 arestas no banco.
+   */
+  test("reindexar substitui as linhas do tenant, não acumula", async () => {
     const { root, cleanup } = prepareTargetRepo()
     try {
-      const first = startServer({ repoPath: root, watch: false })
-      const boot1 = await bootstrapAs(first.url, root)
-      first.stop()
-
-      const metaDir = path.join(root, ".graph", "meta")
-      const shardsBefore = readdirSync(metaDir).sort()
-
-      const second = startServer({ repoPath: root, watch: false })
+      const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
       try {
-        const boot2 = await bootstrapAs(second.url, root)
-        expect(boot2.stats.pipeline).toBe("existing")
-        expect(boot2.graphId).toBe(boot1.graphId)
-        expect(boot2.stats.nodes).toBe(boot1.stats.nodes)
-        expect(readdirSync(metaDir).sort()).toEqual(shardsBefore) // nenhum shard novo escrito
+        const boot = await bootstrapAs(s.url, root)
+        const count = (table: string) => (s.state.db.query(`SELECT COUNT(*) AS c FROM ${table} WHERE tenant_id = ?`).get("default") as { c: number }).c
+        expect(count("nodes")).toBe(boot.stats.nodes)
+        expect(count("edges")).toBe(boot.stats.edges)
+
+        writeFileSync(path.join(root, "sdk", "src", "qa7-extra.ts"), "export const extra = 1\n")
+        const again = await bootstrapAs(s.url, root)
+        expect(count("nodes")).toBe(again.stats.nodes) // substituído, não somado
+        expect(count("edges")).toBe(again.stats.edges)
       } finally {
-        second.stop()
+        s.stop()
       }
     } finally {
       cleanup()
     }
   })
 
-  test("graph.json truncado → veredito corrupt → bootstrap lança, nunca publica esqueleto silencioso por cima", async () => {
+  /**
+   * Substitui "graph.json truncado → corrupt": não há mais graph.json p/ corromper. O invariante
+   * que ficou no lugar é mais forte e é a razão desta mudança inteira (ADR D1) — indexar um repo
+   * de 186 arquivos não deixa NADA para trás nele.
+   */
+  test("indexar não escreve NADA no repo-alvo", async () => {
     const { root, cleanup } = prepareTargetRepo()
     try {
-      const first = startServer({ repoPath: root, watch: false })
-      await bootstrapAs(first.url, root)
-      first.stop()
-
-      const graphJsonPath = path.join(root, ".graph", "graph.json")
-      const original = readFileSync(graphJsonPath, "utf8")
-      writeFileSync(graphJsonPath, original.slice(0, Math.floor(original.length / 2))) // trunca no meio
-
-      const s = startServer({ repoPath: root, watch: false })
+      const before = readdirSync(root).sort()
+      const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
       try {
-        await expect(bootstrapAs(s.url, root)).rejects.toThrow(/corrupt/)
+        const boot = await bootstrapAs(s.url, root)
+        expect(boot.stats.nodes).toBeGreaterThan(100)
+        expect(existsSync(path.join(root, ".graph"))).toBe(false)
+        expect(readdirSync(root).sort()).toEqual(before) // nem um arquivo a mais na raiz
       } finally {
         s.stop()
       }
@@ -198,7 +193,7 @@ describe.skipIf(!targetRepoAvailable())(`mcp-server bootstrap/query em escala ($
   test("graph.query e resources (graph://snapshot, graph://cell, graph://domain) sobre os domínios reais do repo-alvo", async () => {
     const { root, cleanup } = prepareTargetRepo()
     try {
-      const s = startServer({ repoPath: root, watch: false })
+      const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
       try {
         await bootstrapAs(s.url, root)
         const snap = await readResource(s.url, "graph://snapshot")
@@ -232,7 +227,7 @@ describe.skipIf(!targetRepoAvailable())(`mcp-server bootstrap/query em escala ($
   test("paginação graph://claims atravessa a fronteira de 100 (default limit) com nextCursor + hasMore", async () => {
     const { root, cleanup } = prepareTargetRepo()
     try {
-      const s = startServer({ repoPath: root, watch: false })
+      const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
       try {
         await bootstrapAs(s.url, root)
         // O esqueleto fresh não gera claims (§0) — para exercitar a paginação de verdade (default
@@ -274,7 +269,7 @@ describe.skipIf(!targetRepoAvailable())(`mcp-server bootstrap/query em escala ($
   test("graph.rebuild re-lê .graph/ do disco e re-emite snapshot", async () => {
     const { root, cleanup } = prepareTargetRepo()
     try {
-      const s = startServer({ repoPath: root, watch: false })
+      const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
       try {
         const boot = await bootstrapAs(s.url, root)
         const rebuilt = await rebuildAs(s.url)

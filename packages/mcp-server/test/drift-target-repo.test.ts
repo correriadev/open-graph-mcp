@@ -16,7 +16,7 @@ import { writeFileSync } from "node:fs"
 import path from "node:path"
 import { startServer } from "../src/index"
 import { callTool, openSse, bootstrapAs } from "./helpers"
-import { prepareTargetRepo, targetRepoAvailable } from "./fixtures/target-repo"
+import { prepareTargetRepo, targetRepoAvailable, TARGET_DOMAINS } from "./fixtures/target-repo"
 
 // arquivo real sob sdk/src usado como alvo de edição — âncora é a 1ª linha não-vazia (esqueleto,
 // graph-bootstrap.ts:71). excerptCheck (extract.ts:182-184) é `content.includes(excerpt)` — um
@@ -33,7 +33,7 @@ test.skipIf(!targetRepoAvailable())(
   "editing an anchored source file under sdk/src emits drift.node to a subscribed client (repo-alvo real)",
   async () => {
     const { root, cleanup } = prepareTargetRepo()
-    const s = startServer({ repoPath: root, watch: false })
+    const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
     try {
       await bootstrapAs(s.url, root)
       const sse = await openSse(s.url)
@@ -59,7 +59,7 @@ test.skipIf(!targetRepoAvailable())(
   "two connected clients receive the same drift event in the same tick (repo-alvo real)",
   async () => {
     const { root, cleanup } = prepareTargetRepo()
-    const s = startServer({ repoPath: root, watch: false })
+    const s = startServer({ repoPath: root, watch: false, domains: TARGET_DOMAINS })
     try {
       await bootstrapAs(s.url, root)
       const a = await openSse(s.url)

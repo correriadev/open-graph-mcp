@@ -1,14 +1,16 @@
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
+import { existsSync } from "node:fs"
+import path from "node:path"
 import { callTool, readResource, tempRepo, bootstrapAs } from "./helpers"
 
-test("bootstrap on a repo without .graph/ builds a skeleton graph with nodes", async () => {
+test("bootstrap indexa o repo e publica o grafo no tenant (nada é escrito no repo)", async () => {
   const { root, cleanup } = tempRepo("fresh")
   const s = startServer({ repoPath: root, watch: false })
   try {
     const boot = await bootstrapAs(s.url, root)
     expect(boot.graphId).toBeString()
-    expect(boot.stats.pipeline).toBe("skeleton")
+    expect(boot.stats.pipeline).toBe("indexed")
     expect(boot.stats.nodes).toBeGreaterThan(0)
 
     const snap = await readResource(s.url, "graph://snapshot")
