@@ -23,6 +23,7 @@ import path from "node:path"
 import { excerptCheck } from "@open-graph-mcp/graph-core/extract"
 import { appendEvent, tenantGraph, DEFAULT_TENANT, type ServerState } from "./state"
 import { write } from "./db"
+import { tenantRepoPath } from "./tools/graph-bootstrap"
 
 export type WatchEvent = { kind: "node" | "cell"; id: string; type: string; cause: string; ts: string }
 
@@ -44,7 +45,7 @@ const cellOf = (domain: string | null, level: unknown): string => `${domain ?? "
 export async function tick(state: ServerState, tenant = DEFAULT_TENANT): Promise<WatchEvent[]> {
   const tg = tenantGraph(state, tenant)
   const graph = tg.graph
-  const root = tg.repoPath ?? state.repoPath
+  const root = tg.repoPath ?? tenantRepoPath(state, tenant)
   if (!graph || !root) return []
 
   const ts = new Date().toISOString()

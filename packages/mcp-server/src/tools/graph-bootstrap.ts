@@ -198,7 +198,7 @@ export function graphFromDb(state: ServerState, tenant: string, repoPath: string
  * Persiste o grafo no tenant: SQLite + espelho JSONL, tudo numa transação. Substitui o conteúdo
  * anterior (reindexar é idempotente por definição — o repo é a fonte da estrutura).
  */
-function persistGraph(state: ServerState, tenant: string, userId: string, graph: Graph): void {
+function persistGraph(state: ServerState, tenant: string, userId: string, graph: Graph, repoPath: string): void {
   durableTransaction(state.db, () => {
     state.db.query("DELETE FROM nodes WHERE tenant_id = ?").run(tenant)
     state.db.query("DELETE FROM edges WHERE tenant_id = ?").run(tenant)
@@ -225,8 +225,36 @@ function persistGraph(state: ServerState, tenant: string, userId: string, graph:
       tenant_id: tenant, id: BOOTSTRAP_ID, intent: "bootstrap (index)", parent: null, status: "admitted", opened_by: userId,
       opened_at: now, closed_at: now, base_seq: 0, admit_seq: 0, blast_cells: JSON.stringify([...cells].sort()),
     })
+    // qual repo este tenant indexou — durável, senão só uma env var global saberia (ver db.ts)
+    // regras de domínio também são duráveis por tenant: um restart sem elas reindexaria tudo como
+    // "(unassigned)" em silêncio — a mesma armadilha da env var de repo, com outro nome.
+    write(state.db, state.stateDir, tenant, "tenants", { tenant_id: tenant, repo_path: repoPath, domains: JSON.stringify(state.domains ?? []), indexed_at: now })
   })
   invalidateClaimsCache(state, tenant)
+}
+
+/** Repo que o tenant indexou, do banco. Fonte única — não há default de servidor. */
+export function tenantRepoPath(state: ServerState, tenant: string): string | null {
+  const row = state.db.query("SELECT repo_path FROM tenants WHERE tenant_id = ?").get(tenant) as { repo_path: string | null } | null
+  return row?.repo_path ?? null
+}
+
+/**
+ * Regras de domínio EFETIVAS do tenant: as gravadas no último bootstrap, com fallback na config do
+ * processo (primeiro bootstrap ainda não gravou nada). Sem isto, um restart sem `StartOptions.domains`
+ * reindexaria tudo como "(unassigned)" em silêncio — a mesma armadilha da env var de repo.
+ */
+export function tenantDomains(state: ServerState, tenant: string): DomainRules {
+  const row = state.db.query("SELECT domains FROM tenants WHERE tenant_id = ?").get(tenant) as { domains: string | null } | null
+  if (row?.domains) {
+    try {
+      const parsed = JSON.parse(row.domains)
+      if (Array.isArray(parsed) && parsed.length) return parsed
+    } catch {
+      /* linha corrompida: cai na config do processo */
+    }
+  }
+  return state.domains
 }
 
 export type BootstrapResult = { graphId: string; stats: Graph["stats"] & { pipeline: Pipeline } }
@@ -239,15 +267,14 @@ export type BootstrapResult = { graphId: string; stats: Graph["stats"] & { pipel
  */
 export function bootstrap(state: ServerState, repoPath: string, tenant: string = DEFAULT_TENANT, userId = "system"): BootstrapResult {
   const root = path.resolve(repoPath)
-  const graph = indexRepo(root, state.domains)
+  const graph = indexRepo(root, state.domains ?? tenantDomains(state, tenant))
   const graphId = createHash("sha256").update(`${root}:${tenant}:${graphChecksum(graph)}`).digest("hex").slice(0, 16)
   const stats = { ...graph.stats, pipeline: "indexed" as Pipeline }
 
   const tg = tenantGraph(state, tenant)
   if (tg.graphId === graphId && tg.graph) return { graphId, stats } // idempotente: nada mudou
 
-  persistGraph(state, tenant, userId, graph)
-  if (!state.repoPath) state.repoPath = root // default de servidor: só o 1º bootstrap o define
+  persistGraph(state, tenant, userId, graph, root)
   tg.repoPath = root
   tg.graph = graph
   tg.graphId = graphId
@@ -257,21 +284,24 @@ export function bootstrap(state: ServerState, repoPath: string, tenant: string =
   return { graphId, stats }
 }
 
-/** Tool: exige token — indexar ESCREVE no tenant do chamador. */
+/**
+ * Tool: exige token — indexar ESCREVE no tenant do chamador. `repoPath` é omissível só depois do
+ * primeiro bootstrap: aí ele vem do banco (tabela `tenants`). Não há default de servidor.
+ */
 export function graphBootstrap(state: ServerState, args: { token: string; repoPath?: string }): BootstrapResult {
   const { userId, tenantId } = requireToken(state, args.token)
-  const root = args.repoPath ?? tenantGraph(state, tenantId).repoPath ?? state.repoPath
-  if (!root) throw new Error("graph.bootstrap: repoPath required (no server default configured)")
+  const root = args.repoPath ?? tenantRepoPath(state, tenantId)
+  if (!root) throw new Error("graph.bootstrap: repoPath required (this tenant has not indexed a repo yet)")
   return bootstrap(state, root, tenantId, userId)
 }
 
 /** graph.rebuild: re-indexa o repo do tenant e re-emite snapshot p/ ele (spec §4.2). */
 export function rebuild(state: ServerState, tenant: string = DEFAULT_TENANT, userId = "system"): { ok: true; stats: Graph["stats"] & { pipeline: Pipeline } } {
   const tg = tenantGraph(state, tenant)
-  const root = tg.repoPath ?? state.repoPath
+  const root = tg.repoPath ?? tenantRepoPath(state, tenant)
   if (!root) throw new Error("not bootstrapped")
-  const graph = indexRepo(path.resolve(root), state.domains)
-  persistGraph(state, tenant, userId, graph)
+  const graph = indexRepo(path.resolve(root), tenantDomains(state, tenant))
+  persistGraph(state, tenant, userId, graph, root)
   tg.graph = graph
   tg.graphId = createHash("sha256").update(`${root}:${tenant}:${graphChecksum(graph)}`).digest("hex").slice(0, 16)
   const stats = { ...graph.stats, pipeline: "indexed" as Pipeline }
@@ -293,10 +323,12 @@ export function hydrateFromDb(state: ServerState): number {
   const tenants = state.db.query("SELECT DISTINCT tenant_id FROM nodes").all() as { tenant_id: string }[]
   let count = 0
   for (const { tenant_id: tenant } of tenants) {
-    const tg = tenantGraph(state, tenant)
-    const repoPath = tg.repoPath ?? state.repoPath
+    // repo do tenant vem do BANCO. Antes vinha de `state.repoPath` (env GRAPH_REPO_PATH), o que
+    // fazia a env var ser load-bearing depois de todo restart — e amarrava o servidor a UM repo.
+    const repoPath = tenantRepoPath(state, tenant) ?? ""
     const graph = graphFromDb(state, tenant, repoPath)
     if (!graph) continue
+    const tg = tenantGraph(state, tenant)
     tg.graph = graph
     tg.graphId = createHash("sha256").update(`${repoPath}:${tenant}:${graphChecksum(graph)}`).digest("hex").slice(0, 16)
     tg.pipeline = "indexed"
