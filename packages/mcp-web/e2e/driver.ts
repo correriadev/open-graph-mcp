@@ -18,7 +18,18 @@ export function turns(h: Harness, token: string) {
   return {
     open: (cells: string[], intent: string): Promise<any> => h.callTool("changeset.open", { token, cells, intent }),
     claim: (csId: string, delta: unknown): Promise<any> => h.callTool("changeset.claim", { token, csId, delta }),
-    commit: (csId: string): Promise<any> => h.callTool("changeset.commit", { token, csId }),
+    commit: (csId: string, intent: string): Promise<any> => h.callTool("changeset.commit", { token, csId, intent }),
     abort: (csId: string): Promise<any> => h.callTool("changeset.abort", { token, csId }),
   }
+}
+
+/**
+ * F1 — gatilho de UI da transição LEITURA → EDIÇÃO: clica o `.og-card` do nó (abre #panel via
+ * NodePanel) e depois `#edit-node` (dispara `node.edit`, abre/reusa o turno da célula do nó). Não
+ * espera `#draft` aparecer — chamadores que testam contenção precisam observar o estado ANTES disso.
+ */
+export async function enterEdit(page: Page, nodeId: string): Promise<void> {
+  await page.locator(`.og-card[data-id="${nodeId}"]`).click()
+  await page.locator("#panel").waitFor({ state: "visible" })
+  await page.locator("#edit-node").click()
 }

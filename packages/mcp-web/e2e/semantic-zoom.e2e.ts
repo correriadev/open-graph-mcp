@@ -81,11 +81,9 @@ test("semantic zoom keeps roots mounted and pins selection", async ({ browser })
   await expect(page.locator(`.og-card[data-id="${id}"] .og-node-status`)).toContainText("suspended")
   await expect(page.locator(`.og-card[data-id="${id}"] .og-node-status`)).toContainText("drift")
 
+  // F1: header da cell não abre mais modal nenhum — virou leitura pura (sem gatilho de "abrir turno").
   await freeHeader.click()
-  await expect(page.locator("#modal")).toBeVisible()
-  await expect(page.locator("#modal .cd")).toHaveValue(targetCell!.split(":")[0]!)
-  await expect(page.locator("#modal .cl")).toHaveValue(targetCell!.split(":")[1]!)
-  await page.locator("#modal button", { hasText: "Cancelar" }).click().catch(() => page.locator("#modal button", { hasText: "Fechar" }).click())
+  await expect(page.locator("#modal")).toHaveCount(0)
 
   const viewportBefore = await page.evaluate(() => (window as any).__og_e2e.getViewport())
   await page.locator(".react-flow__minimap").click({ position: { x: 12, y: 12 } })

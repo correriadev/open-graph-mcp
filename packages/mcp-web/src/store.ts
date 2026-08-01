@@ -30,8 +30,10 @@ export function loadSettings(): Settings {
 
 export type ActiveCs = { csId: string; intent: string; cells: string[]; expiresAt: string }
 export type MyTurn = { csId: string; intent: string; cells: string[]; openedAt: string; expiresAt: string | null }
-export type Denied = { cell: string; holder: string; csId: string; expiresAt: string }
 export type DraftDelta = { kind: string; summary: string; id?: string; at?: number }
+/** F1 — projeção de node.editing/node.idle: quem está editando a célula agora (nome já resolvido
+ *  server-side, não depende do roster). Chave = cell no dialeto de exibição ("auth:P5"). */
+export type EditingInfo = { byUser: string; holderName: string; nodes: string[] }
 
 // UI-3 (F002): types for claims/query/history/sidebar
 export type ClaimRecord = {
@@ -122,7 +124,9 @@ type UiState = {
   /** Deltas ghost por cell (dialeto de exibição) — sub-cards tracejados. */
   ghostDeltasByCell: Record<string, DraftDelta[]>
   myTurns: MyTurn[]
-  denied: Denied | null
+  /** F1: cell → quem está editando agora (node.editing/node.idle). Substitui o antigo banner
+   *  `denied` de contenção — o estado aparece ANTES da tentativa, direto no card/painel do nó. */
+  editingByCell: Record<string, EditingInfo>
   /** Modo ref-por-clique: clique em nó/ghost appenda id em refDraft. */
   refPicking: boolean
   refDraft: string[]
@@ -181,10 +185,6 @@ type UiState = {
   setHistoryError: (e: string | null) => void
   setSidebarFilter: (f: QuickFilter) => void
   navigate: (route: string) => void
-
-  /** UI-3: signal to open TurnModal (UI-2) with a cell prefilled — from OpenClaim footer. */
-  openTurnRequest: string | null
-  requestOpenTurn: (cell: string | null) => void
 }
 
 export const useUi = create<UiState>((set) => ({
@@ -209,7 +209,7 @@ export const useUi = create<UiState>((set) => ({
   draftDeltas: [],
   ghostDeltasByCell: {},
   myTurns: [],
-  denied: null,
+  editingByCell: {},
   refPicking: false,
   refDraft: [],
 
@@ -271,6 +271,4 @@ export const useUi = create<UiState>((set) => ({
     if (typeof window !== "undefined") window.location.hash = route
     set({ route })
   },
-  openTurnRequest: null,
-  requestOpenTurn: (openTurnRequest) => set({ openTurnRequest }),
 }))

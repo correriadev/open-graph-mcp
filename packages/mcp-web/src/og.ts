@@ -50,6 +50,9 @@ const presence = new PresenceStore()
 const ghosts = new GhostStore()
 const toasts = new ToastQueue()
 const demotions = new Map<string, number>()
+/** F1 — projeção viva de node.editing/node.idle, cell (dialeto server) → quem edita. Mapa cru (como
+ *  `demotions`); `projectEditing` converte pro dialeto de exibição antes de publicar no zustand. */
+const editingByCell = new Map<string, { byUser: string; holderName: string; nodes: string[] }>()
 
 let handle: OgHandle | null = null
 export const og = (): OgHandle | null => handle
@@ -92,6 +95,10 @@ function projectDrift(patch: Record<string, string>): void {
 function refreshDemotions(): void {
   const cutoff = Date.now() - 24 * 3600_000
   useUi.setState({ demotions: [...demotions.values()].filter((ts) => ts >= cutoff).length })
+}
+
+function projectEditing(): void {
+  useUi.setState({ editingByCell: Object.fromEntries([...editingByCell.entries()].map(([cell, info]) => [toUiCell(cell), info])) })
 }
 
 // ---- toasts ----------------------------------------------------------------
@@ -269,6 +276,19 @@ function applyEvent(env: Envelope): void {
     projectPresence()
   }
 
+  // F1: node.editing/node.idle — projeção "em edição por X" por célula. Não depende de roster nem de
+  // o cliente ter tentado editar: chega pra TODOS conectados assim que alguém entra/sai de edição.
+  if (env.kind === "node.editing") {
+    const p = env.payload as { cell: string; byUser: string; holderName: string; nodes?: string[] }
+    editingByCell.set(p.cell, { byUser: p.byUser, holderName: p.holderName, nodes: p.nodes ?? [] })
+    projectEditing()
+  }
+  if (env.kind === "node.idle") {
+    const p = env.payload as { cell: string }
+    editingByCell.delete(p.cell)
+    projectEditing()
+  }
+
   maybeToast(env)
 
   if (CS_KINDS.has(env.kind) || env.kind === "authority.flipped") {
@@ -287,33 +307,35 @@ function applyEvent(env: Envelope): void {
   }
 }
 
-// ---- turnos (UI-2) ---------------------------------------------------------
-export type OpenTurnResult = { ok: true } | { ok: false; denied?: true }
+// ---- edição (F1 — lock implícito) -------------------------------------------
+export type EditNodeResult = { ok: true } | { ok: false; editingBy: string; holderName: string; since: string | null }
 
-/** Abre turno nas cells (dialeto de exibição); converte pro server aqui (cells.ts). */
-export async function openTurn(uiCells: string[], intent: string): Promise<OpenTurnResult> {
+/**
+ * node.edit — gatilho da transição LEITURA → EDIÇÃO (F1): chamado quando o usuário entra em edição
+ * NUM NÓ, não numa cell abstrata. Abre/reusa o turno da célula do nó no server; em contenção devolve
+ * `editingBy`/`holderName` — a UI volta pra leitura SEM banner de erro (o estado já aparecia antes,
+ * via node.editing/node.idle projetados em `editingByCell`).
+ */
+export async function editNode(nodeId: string): Promise<EditNodeResult> {
   const h = handle
-  if (!h) return { ok: false }
-  const res: any = await h.call("changeset.open", { cells: uiCells.map(toServerCell), intent })
-  if (res?.ok === false) {
-    if (res.reason === "cell_locked") {
-      useUi.setState({ denied: { cell: toUiCell(res.cell), holder: res.holder, csId: res.csId, expiresAt: res.expiresAt } })
-      return { ok: false, denied: true }
-    }
-    return { ok: false }
-  }
-  const active: ActiveCs = { csId: res.csId, intent, cells: uiCells, expiresAt: res.expiresAt }
-  ghosts.track({
-    csId: res.csId,
-    intent,
-    cells: uiCells.map(toServerCell),
-    byUser: myUserId(),
-    openedAt: Date.now(),
-    expiresAt: res.expiresAt,
-    deltaCount: 0,
-    deltas: [],
-  })
-  useUi.setState({ activeCs: active, denied: null })
+  if (!h) return { ok: false, editingBy: "", holderName: "", since: null }
+  const res: any = await h.call("node.edit", { nodeId })
+  if (res?.ok === false) return { ok: false, editingBy: res.editingBy, holderName: res.holderName, since: res.since ?? null }
+  const uiCell = toUiCell(res.cell)
+  // AUDITORIA (achado 1): o server já uniu esta célula ao turno aberto do chamador (nodeEdit em
+  // changeset.ts) — uma sessão de edição multi-célula é UM changeset só. Aqui só refletimos a MESMA
+  // união do lado do cliente: soma `res.cell` às cells já conhecidas do turno (ghosts + activeCs),
+  // NUNCA substitui — sobrescrever perderia as outras células (e o draft de quem já estava editando
+  // uma delas) sempre que uma nova entrasse.
+  const priorGhost = ghosts.changesets.get(res.csId)
+  const ghostCells = [...new Set([...(priorGhost?.cells ?? []), res.cell])]
+  if (priorGhost) priorGhost.cells = ghostCells
+  else ghosts.track({ csId: res.csId, intent: "", cells: ghostCells, byUser: myUserId(), openedAt: Date.now(), expiresAt: res.expiresAt ?? "", deltaCount: 0, deltas: [] })
+  refetchDeltas(res.csId)
+  const currentActive = useUi.getState().activeCs
+  const sameCs = currentActive?.csId === res.csId
+  const cells = [...new Set([...(sameCs ? currentActive!.cells : []), uiCell])]
+  useUi.setState({ activeCs: { csId: res.csId, intent: sameCs ? currentActive!.intent : "", cells, expiresAt: res.expiresAt ?? "" } })
   projectGhosts()
   listMine()
   return { ok: true }
@@ -341,17 +363,19 @@ export async function claimDraft(form: ClaimForm | Record<string, unknown>, rawJ
   return outcome
 }
 
-async function csAction(tool: string): Promise<{ ok: boolean; reasons: string[]; expiresAt?: string }> {
+async function csAction(tool: string, extra: Record<string, unknown> = {}): Promise<{ ok: boolean; reasons: string[]; expiresAt?: string }> {
   const h = handle
   const cs = useUi.getState().activeCs
   if (!h || !cs) return { ok: false, reasons: ["sem turno ativo"] }
-  const res: any = await h.call(tool, { csId: cs.csId })
+  const res: any = await h.call(tool, { csId: cs.csId, ...extra })
   if (res?.ok === false) return { ok: false, reasons: res.reasons ?? ["recusado"] }
   return { ok: true, reasons: [], expiresAt: res?.expiresAt }
 }
 
-export async function commitTurn(): Promise<{ ok: boolean; reasons: string[] }> {
-  const r = await csAction("changeset.commit")
+/** F1 — intent migrou pro commit (decisão 2 do plano): pedido aqui, num campo simples do DraftPanel,
+ *  em vez do modal "Abrir turno" que existia antes de saber o que se ia fazer. */
+export async function commitTurn(intent: string): Promise<{ ok: boolean; reasons: string[] }> {
+  const r = await csAction("changeset.commit", { intent })
   if (r.ok) {
     useUi.setState({ activeCs: null })
     listMine()
@@ -377,6 +401,19 @@ export async function extendTurn(): Promise<{ ok: boolean; reasons: string[] }> 
     if (cs) useUi.setState({ activeCs: { ...cs, expiresAt: r.expiresAt } })
   }
   return r
+}
+
+/**
+ * F1 (risco "turno órfão", achado 2 da auditoria): `node.edit` pode trancar uma célula que nunca
+ * recebe delta — usuário entra em edição e desiste. O TTL cobre o caso geral (sweeper expira o
+ * lock), mas deixar a célula "em edição por X" pros outros até lá é ruim quando o próprio X já saiu
+ * de cena. Chamado nos gestos de "sair da leitura/edição do nó" (fechar #panel, clicar no canvas
+ * vazio) — SÓ aborta se NENHUM delta foi staged ainda; com deltas, o rascunho é do usuário e fica.
+ */
+export async function abandonEmptyDraft(): Promise<void> {
+  const { activeCs, draftDeltas } = useUi.getState()
+  if (!activeCs || draftDeltas.length > 0) return
+  await abortTurn()
 }
 
 // ---- UI-3 (F002): claims/query/history/reverse-index ----------------------

@@ -22,12 +22,10 @@ function RefChip({ refId, onNavigate }: { refId: string; onNavigate: (refId: str
   return <button className="ref-chip" onClick={() => onNavigate(refId)} title={`navegar p/ ref ${refId}`}>{refId}</button>
 }
 
-function OpenClaim({ claim, referencedBy, onRefClick, onOpenTurn, canOpenTurn }: {
+function OpenClaim({ claim, referencedBy, onRefClick }: {
   claim: ClaimRecord
   referencedBy: string[]
   onRefClick: (refId: string) => void
-  onOpenTurn?: () => void
-  canOpenTurn?: boolean
 }) {
   return (
     <div className="open-claim" data-id={claim.id}>
@@ -50,11 +48,6 @@ function OpenClaim({ claim, referencedBy, onRefClick, onOpenTurn, canOpenTurn }:
           referencedBy.map((id) => <RefChip key={id} refId={id} onNavigate={onRefClick} />)}
       </div>
       <Provenance c={claim} />
-      {canOpenTurn && (
-        <div className="open-claim-footer">
-          <button id="open-turn-from-claim" onClick={() => onOpenTurn?.()}>abrir turno nesta cell</button>
-        </div>
-      )}
     </div>
   )
 }
@@ -74,8 +67,6 @@ export function ClaimsBrowser(): JSX.Element {
   const claimsLoadingMore = useUi((s) => s.claimsLoadingMore)
   const cellPage = useUi((s) => cell ? s.claimCellPages[cell] : undefined)
   const graph = useUi((s) => s.graph)
-  const activeCsNull = useUi((s) => s.activeCs === null)
-  const requestOpenTurn = useUi((s) => s.requestOpenTurn)
 
   useEffect(() => {
     if (cell) {
@@ -123,8 +114,6 @@ export function ClaimsBrowser(): JSX.Element {
           claim={active}
           referencedBy={visibleReverseIndex.get(active.id) ?? []}
           onRefClick={navigateToClaim}
-          canOpenTurn={activeCsNull}
-          onOpenTurn={() => cell && requestOpenTurn(cell)}
         />
       )}
       {controls.showSnapshotContinuation && (

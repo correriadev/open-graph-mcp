@@ -10,7 +10,7 @@ test("all connected clients receive changeset.committed in the same broadcast ti
 
     const { csId } = await callTool(s.url, "changeset.open", { token: a.token, cells: ["ui:5"], intent: "fairness" })
     await callTool(s.url, "changeset.claim", { token: a.token, csId, delta: { kind: "claim.add", payload: { id: "c1", subject: "s", domain: "ui", level: 5, refs: [] } } })
-    await callTool(s.url, "changeset.commit", { token: a.token, csId })
+    await callTool(s.url, "changeset.commit", { token: a.token, csId, intent: "fairness" })
 
     const isCommit = (e: any) => e.kind === "changeset.committed" && e.payload.csId === csId
     const evts = await Promise.all(clients.map((c) => c.waitFor(isCommit)))

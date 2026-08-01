@@ -30,7 +30,7 @@ async function setupHistory(browser: import("@playwright/test").Browser) {
   if (!aliceCs.ok || !aliceCs.csId) throw new Error("alice open failed: " + JSON.stringify(aliceCs))
   await turns(h, aliceToken).claim(aliceCs.csId, { kind: "claim.add", payload: { id: "h-b1", subject: "billing root a", domain: "billing", level: "P2", refs: [] } })
   await turns(h, aliceToken).claim(aliceCs.csId, { kind: "claim.add", payload: { id: "h-b2", subject: "billing root b", domain: "billing", level: "P2", refs: [] } })
-  const commit = await turns(h, aliceToken).commit(aliceCs.csId)
+  const commit = await turns(h, aliceToken).commit(aliceCs.csId, "billing turn")
   expect(commit.ok).toBe(true)
   // bob opens auth:P4 and aborts
   const bobCs = await turns(h, bobToken).open(["auth:P4"], "bob trial")

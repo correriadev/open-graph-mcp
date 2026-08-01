@@ -218,7 +218,7 @@ async function runSoak() {
         claimCount++
         n++
         if (n % SOAK_CLAIMS_PER_CYCLE === 0) {
-          await callTool(s.url, "changeset.commit", { token: u.token, csId }).catch(() => {})
+          await callTool(s.url, "changeset.commit", { token: u.token, csId, intent: `soak-${i}-${n}` }).catch(() => {})
           csId = await callTool(s.url, "changeset.open", { token: u.token, cells: [holderCells[i]], intent: `soak-${i}-${n}` })
             .then((r: any) => r.csId)
             .catch(() => csId)

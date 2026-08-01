@@ -23,6 +23,11 @@
       --orange: #ff9800;
       --violet: #8b5cf6;
       --teal: #43b8ad;
+      --p1: #a0a0a0;
+      --p2: #64a8ee;
+      --p3: #43b8ad;
+      --p4: #f59e0b;
+      --p5: #ef6461;
     }
 
     * { box-sizing: border-box; }
@@ -91,9 +96,14 @@
         radial-gradient(320px circle at var(--mouse-x) var(--mouse-y), rgba(139,92,246,.055), transparent 72%),
         radial-gradient(circle at 65% 40%, transparent 0, rgba(0,0,0,.07) 45%, rgba(0,0,0,.35) 100%);
     }
-    .workspace[data-tool="hand"] { cursor: grab; }
-    .workspace[data-tool="hand"].is-panning { cursor: grabbing; }
-    .workspace[data-tool="comment"] { cursor: crosshair; }
+    .workspace[data-tool="hand"],
+    .workspace[data-tool="hand"] .card,
+    .workspace[data-tool="hand"] .text-node { cursor: grab !important; }
+    .workspace[data-tool="hand"].is-panning,
+    .workspace[data-tool="hand"].is-panning .card,
+    .workspace[data-tool="hand"].is-panning .text-node { cursor: grabbing !important; }
+    .workspace[data-tool="comment"],
+    .workspace[data-tool="text"] { cursor: crosshair; }
 
     .sidebar {
       position: absolute;
@@ -195,6 +205,152 @@
     .edge-hit:hover + .edge { stroke: #b89cff; opacity: 1; stroke-width: 2; }
     .cluster-zone { position: absolute; z-index: 0; border: 1px solid rgba(255,255,255,.055); border-radius: 28px; background: rgba(255,255,255,.008); pointer-events: none; }
     .cluster-zone::after { content: attr(data-label) "  ·  " attr(data-count) " nós"; position: absolute; left: 22px; top: 17px; color: var(--cluster-color); font: 500 12px "IBM Plex Mono", monospace; letter-spacing: .035em; opacity: .72; }
+    .text-node {
+      position: absolute;
+      min-width: 120px;
+      max-width: 220px;
+      padding: 10px 12px 10px 14px;
+      border-left: 3px solid var(--level-color, var(--violet));
+      border: 1px solid #383a3c;
+      border-radius: 8px;
+      background: linear-gradient(145deg, rgba(27,28,29,.97), rgba(18,19,20,.98));
+      box-shadow: 0 18px 42px rgba(0,0,0,.22);
+      font-size: 12px;
+      line-height: 1.5;
+      color: #e9e9e7;
+      word-wrap: break-word;
+      cursor: default;
+      z-index: 4;
+      animation: cardIn .35s both cubic-bezier(.2,.8,.2,1);
+    }
+    .text-node:hover { border-color: #56595d; box-shadow: 0 23px 55px rgba(0,0,0,.32); }
+    .text-node.selected { border-color: var(--violet); box-shadow: 0 0 0 2px rgba(139,92,246,.18), 0 26px 70px rgba(0,0,0,.45); }
+    .text-node.dragging { cursor: grabbing; transition: none; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+    .text-node .node-text { white-space: pre-wrap; }
+    .text-node .node-level {
+      position: absolute;
+      bottom: 4px;
+      right: 6px;
+      font: 400 7px "IBM Plex Mono", monospace;
+      color: #6f7376;
+    }
+    .text-node .node-actions {
+      display: none;
+      position: absolute;
+      top: -30px;
+      right: 0;
+      gap: 4px;
+    }
+    .text-node:hover .node-actions { display: flex; }
+    .text-node .node-actions button {
+      width: 24px; height: 24px;
+      border: 1px solid #383a3c;
+      border-radius: 4px;
+      background: #1c1d1f;
+      cursor: pointer;
+      font-size: 10px;
+      display: grid;
+      place-items: center;
+    }
+    .text-node .node-actions button:hover { background: #2a2c2e; }
+    .workspace[data-lod="overview"] .text-node {
+      width: 13px; height: 13px; min-height: 0; min-width: 0;
+      padding: 0; border: 0; border-radius: 50%;
+      background: var(--node-color, var(--violet));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--violet)) 12%, transparent);
+      overflow: visible;
+    }
+    .workspace[data-lod="overview"] .text-node > * { display: none; }
+    .workspace[data-lod="overview"] .text-node.selected {
+      box-shadow: 0 0 0 5px rgba(139,92,246,.4), 0 0 26px var(--node-color, var(--violet));
+    }
+
+    .data-legend {
+      position: absolute;
+      z-index: 12;
+      left: 320px;
+      bottom: 76px;
+      width: 240px;
+      border: 1px solid #383a3c;
+      border-radius: 10px;
+      background: rgba(16,17,18,.94);
+      box-shadow: 0 12px 35px rgba(0,0,0,.3);
+      font-size: 11px;
+      overflow: hidden;
+      transition: .2s ease;
+    }
+    .data-legend:hover { border-color: #4a4c50; }
+    .data-legend.closed .legend-body { display: none; }
+    .data-legend.closed { width: auto; }
+    .legend-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      color: #c8cacb;
+      user-select: none;
+    }
+    .legend-header:hover { background: #1e1f21; }
+    .legend-body { padding: 0 12px 10px; display: grid; gap: 5px; }
+    .legend-row { display: grid; grid-template-columns: 55px 14px 1fr; align-items: center; gap: 4px; color: #9fa2a4; }
+    .legend-field { font-family: "IBM Plex Mono", monospace; font-size: 10px; color: #d4d5d2; }
+    .legend-arrow { color: var(--violet); font-size: 9px; text-align: center; }
+    .legend-mapping { font-size: 10px; color: #7e8185; }
+    .legend-divider { height: 1px; background: #2e3033; margin: 4px 0; }
+    .legend-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; color: #b2b4b5; font-size: 10px; }
+    .stat-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; vertical-align: middle; margin-right: 3px; }
+    .legend-levels { display: flex; gap: 5px; margin-top: 4px; }
+    .level-pill {
+      padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 600;
+      border: 1.5px solid; background: rgba(255,255,255,.03); color: #c8cacb; font-family: "IBM Plex Mono", monospace;
+    }
+
+    .create-text-dialog {
+      position: absolute;
+      z-index: 20;
+      display: none;
+      border: 1px solid #3b3d40;
+      border-radius: 10px;
+      background: #1a1b1d;
+      padding: 10px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.45);
+    }
+    .create-text-dialog.open { display: grid; gap: 8px; animation: panelIn .15s ease-out; }
+    .create-text-dialog textarea {
+      border: 1px solid #3c3e42;
+      border-radius: 6px;
+      background: #101113;
+      color: white;
+      padding: 8px 10px;
+      resize: none;
+      width: 200px;
+      min-height: 50px;
+      font-family: inherit;
+      font-size: 12px;
+    }
+    .create-text-dialog textarea:focus { outline: 2px solid #d4d4d4; outline-offset: 2px; }
+    .create-text-dialog .dialog-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .create-text-dialog .dialog-actions button {
+      padding: 5px 12px;
+      border: 1px solid #3c3e42;
+      border-radius: 6px;
+      background: #242628;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .create-text-dialog .dialog-actions button:hover { background: #323436; }
+    .create-text-dialog .dialog-actions button.primary { background: var(--violet); border-color: var(--violet); }
+
+    .level-selector { display: flex; gap: 4px; }
+    .level-opt {
+      padding: 2px 7px; border-radius: 4px; font-size: 9px; font-weight: 600; cursor: pointer;
+      border: 1.5px solid; background: rgba(255,255,255,.03); color: #b2b4b5;
+      font-family: "IBM Plex Mono", monospace; transition: .1s ease;
+    }
+    .level-opt:hover { background: rgba(255,255,255,.08); }
+    .level-opt.selected { background: rgba(255,255,255,.12); color: #e9e9e7; }
+
     .card {
       position: absolute;
       border: 1px solid #383a3c;
@@ -466,7 +622,8 @@
       <button class="round-button" id="menuButton" aria-label="Alternar menu"><i class="fa-solid fa-bars"></i></button>
       <h1>Open-Graph</h1>
       <span class="sync-state">Sincronizado agora</span>
-      <span class="graph-health"><strong id="nodeTotal">— nós</strong> · <span id="edgeTotal">— relações</span> · 8 domínios</span>
+      <span class="graph-health"><strong id="nodeTotal">— nós</strong> · <span id="edgeTotal">— relações</span> · <span id="domainTotal">— domínios</span></span>
+      <span class="graph-health" style="border-left-color:var(--violet)"><i class="fa-solid fa-database" style="margin-right:4px;color:var(--violet)"></i><span id="dataSource">graph.json</span></span>
     </div>
     <div class="top-actions">
       <div class="presence-stack" aria-label="3 pessoas online"><span style="background:#7655ca">AC</span><span style="background:#278f87">LA</span><span style="background:#3972b9">MA</span></div>
@@ -539,61 +696,7 @@
         <g id="edgePaths"></g>
       </svg>
 
-      <article class="card hero-card document-card" tabindex="0" data-node="ADR.md" data-node-id="adr-turnos">
-        <header class="card-header">
-          <i class="fa-regular fa-file-lines"></i>
-          <h2>ADR.md</h2>
-          <div class="card-actions"><button class="expand-card" aria-label="Expandir"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button><button class="more-card" aria-label="Mais opções"><i class="fa-solid fa-ellipsis"></i></button></div>
-        </header>
-        <div class="document-body">
-          <section><h4>Título</h4><p>Modelo de orquestração baseada em turnos e prioridade</p></section>
-          <section><h4>Status</h4><p>Aceito</p></section>
-          <section><h4>Contexto</h4><p>Precisamos de um modelo que garanta colaboração assíncrona segura em um grafo de conhecimento, evitando conflitos e permitindo rastreabilidade completa das decisões.</p></section>
-          <section><h4>Decisão</h4><p>Adotaremos um modelo de turnos explícitos com prioridade baseada em:</p><ul><li>Nível do nó (P1 &gt; P2 &gt; P3 &gt; P4 &gt; P5)</li><li>Tempo desde o último acesso</li><li>Bloqueios ativos e dependências</li></ul><p>Somente um agente pode abrir um turno por vez em um nó. Outros agentes entram em modo de observação ou edição sombra.</p></section>
-          <section><h4>Consequências</h4><p>Positivas</p><ul><li>Redução de conflitos</li><li>Rastreabilidade temporal</li><li>Clareza de intenção de edição</li></ul><p style="margin-top:5px">Negativas</p><ul><li>Pode introduzir espera em nós muito disputados</li><li>Requer disciplina dos agentes</li></ul></section>
-          <div class="document-meta"><div><strong>Data</strong>2025-07-12</div><div><strong>Decisor</strong>Thais N. Baldino</div></div>
-        </div>
-      </article>
-
-      <article class="card hero-card media-card first" tabindex="0" data-node="Arquitetura visual" data-node-id="architecture-map">
-        <header class="card-header"><i class="fa-regular fa-image"></i><h3>image.png</h3><span class="card-actions"><i class="fa-solid fa-ellipsis"></i></span></header>
-        <div class="preview"><div class="mini-graph"><span class="graph-node" style="left:6px;top:7px"></span><span class="graph-node" style="left:54px;top:24px;border-radius:50%;width:20px"></span><span class="graph-node" style="left:103px;top:4px"></span><span class="graph-node" style="left:106px;top:46px"></span><span class="graph-node" style="left:18px;top:48px"></span></div></div>
-      </article>
-
-      <article class="card hero-card media-card second" tabindex="0" data-node="Mapa de relações" data-node-id="dependency-map">
-        <header class="card-header"><i class="fa-regular fa-image"></i><h3>image.png</h3><span class="card-actions"><i class="fa-solid fa-ellipsis"></i></span></header>
-        <div class="preview"><div class="mini-graph" style="transform:scale(1.15)"><span class="graph-node" style="left:2px;top:25px;border-radius:50%;width:19px"></span><span class="graph-node" style="left:40px;top:3px;border-radius:50%;width:20px"></span><span class="graph-node" style="left:62px;top:40px;border-radius:50%;width:22px"></span><span class="graph-node" style="left:104px;top:19px"></span><span class="graph-node" style="left:126px;top:49px"></span></div></div>
-      </article>
-
-      <article class="card hero-card tokens-card" tabindex="0" data-node="Kinetic Truth" data-node-id="kinetic-truth">
-        <header class="card-header"><i class="fa-solid fa-rotate"></i><h3>Kinetic Truth</h3><span class="card-actions"><i class="fa-solid fa-ellipsis"></i></span></header>
-        <section class="token-section">
-          <h4>Cores</h4>
-          <div class="swatches">
-            <div class="swatch"><div class="swatch-color" style="background:#0f1115"></div><code>#0F1115</code></div>
-            <div class="swatch"><div class="swatch-color" style="background:#171a21"></div><code>#171A21</code></div>
-            <div class="swatch"><div class="swatch-color" style="background:#23272f"></div><code>#23272F</code></div>
-            <div class="swatch"><div class="swatch-color" style="background:#e5e7eb"></div><code>#E5E7EB</code></div>
-            <div class="swatch"><div class="swatch-color" style="background:#a1a1aa"></div><code>#A1A1AA</code></div>
-          </div>
-        </section>
-        <section class="token-section">
-          <h4>Tipografia</h4>
-          <div class="font-row"><span class="sample">Aa</span><span><b>Inter</b><small>Heading / UI</small></span><span class="type-lines"><span style="width:68%"></span><span></span></span></div>
-          <div class="font-row"><span class="sample">Aa</span><span><b class="mono">IBM Plex Mono</b><small>Code / Data</small></span><span class="type-lines"><span style="width:70%"></span><span style="width:45%"></span></span></div>
-          <div class="font-row"><span class="sample">Aa</span><span><b>Source Sans 3</b><small>Body / Text</small></span><span class="type-lines"><span style="width:62%"></span><span style="width:80%"></span></span></div>
-        </section>
-        <section class="token-section">
-          <h4>Componentes</h4>
-          <div class="component-grid"><button class="primary">Botão primário</button><button>Botão secundário</button><div class="fake-input">Dropdown <i class="fa-solid fa-chevron-down"></i></div><div class="fake-input">Campo de texto</div></div>
-          <div class="component-row"><span class="toggle"></span><span class="square-control"><i class="fa-solid fa-check"></i></span><span class="square-control"><i class="fa-solid fa-check"></i></span><span class="square-control"><i class="fa-regular fa-circle-dot"></i></span><span class="square-control"><i class="fa-regular fa-circle-dot"></i></span></div>
-          <div class="component-footer"><span class="square-control"><i class="fa-regular fa-square-plus"></i></span><span class="square-control"><i class="fa-solid fa-list"></i></span><span class="square-control"><i class="fa-solid fa-circle-info"></i></span><span class="square-control"><i class="fa-regular fa-map"></i></span><span class="square-control"><i class="fa-regular fa-circle-dot"></i></span><span class="square-control notify">3&nbsp;&nbsp;3</span></div>
-        </section>
-      </article>
-
-      <button class="comment-pin" style="left:812px;top:212px" data-count="3" aria-label="3 comentários em ADR.md">AC</button>
-      <button class="comment-pin" style="left:1347px;top:510px;background:#278f87" data-count="1" aria-label="1 comentário em Kinetic Truth">LA</button>
-      <div class="remote-cursor" style="left:1018px;top:275px"><i class="fa-solid fa-arrow-pointer"></i><span>Ana Carolina</span></div>
+<!-- nós removidos -->
       <div class="selection-bar" id="selectionBar" aria-label="Ações do item selecionado">
         <button data-selection-action="focus" title="Focar"><i class="fa-solid fa-crosshairs"></i></button>
         <button data-selection-action="favorite" title="Favoritar"><i class="fa-regular fa-star"></i></button>
@@ -621,6 +724,7 @@
       <button class="tool-button" data-tool="data" data-label="Dados · D"><i class="fa-solid fa-database"></i></button>
       <button class="tool-button" data-tool="comment" data-label="Comentar · C"><i class="fa-regular fa-comments"></i></button>
       <button class="tool-button" data-tool="agent" data-label="Agente · A"><i class="fa-regular fa-star"></i></button>
+      <button class="tool-button" data-tool="text" data-label="Texto · T"><i class="fa-solid fa-font"></i></button>
     </nav>
 
     <aside class="inspector" id="inspector" aria-live="polite">
@@ -660,14 +764,58 @@
     </form>
     <div class="agent-progress" id="agentProgress"><i class="fa-solid fa-circle-notch"></i><span>Agente conectando contexto…</span></div>
 
+    <div class="create-text-dialog" id="createTextDialog">
+      <textarea id="textNodeInput" placeholder="Digite o texto do nó..." rows="2"></textarea>
+      <div class="level-selector" id="levelSelector">
+        <span class="level-opt" data-level="P1" style="border-color:#a0a0a0">P1</span>
+        <span class="level-opt" data-level="P2" style="border-color:#64a8ee">P2</span>
+        <span class="level-opt selected" data-level="P3" style="border-color:#43b8ad">P3</span>
+        <span class="level-opt" data-level="P4" style="border-color:#f59e0b">P4</span>
+        <span class="level-opt" data-level="P5" style="border-color:#ef6461">P5</span>
+      </div>
+      <div class="dialog-actions">
+        <button id="cancelTextNode">Cancelar</button>
+        <button class="primary" id="confirmTextNode">Criar</button>
+      </div>
+    </div>
+
     <div class="minimap" aria-label="Minimapa do canvas">
       <span class="mini-node" style="left:37px;top:18px;width:37px;height:55px"></span><span class="mini-node" style="left:82px;top:23px;width:17px;height:13px"></span><span class="mini-node" style="left:82px;top:43px;width:17px;height:17px"></span><span class="mini-node" style="left:106px;top:22px;width:27px;height:51px"></span><span class="mini-viewport" id="miniViewport"></span>
     </div>
     <div class="interaction-hint" id="interactionHint"><kbd>Espaço</kbd> arrastar canvas <span>·</span> <kbd>Scroll</kbd> zoom <span>·</span> <kbd>?</kbd> atalhos</div>
 
+    <div class="data-legend" id="dataLegend">
+      <div class="legend-header" id="legendToggle">
+        <i class="fa-solid fa-database"></i>
+        <span>.graph/graph.json</span>
+        <i class="fa-solid fa-chevron-down" style="margin-left:auto;font-size:9px"></i>
+      </div>
+      <div class="legend-body" id="legendBody">
+        <div class="legend-row"><span class="legend-field">kind</span><span class="legend-arrow">→</span><span class="legend-mapping">ícone + cor do nó</span></div>
+        <div class="legend-row"><span class="legend-field">level</span><span class="legend-arrow">→</span><span class="legend-mapping">borda lateral (P1–P5)</span></div>
+        <div class="legend-row"><span class="legend-field">domain</span><span class="legend-arrow">→</span><span class="legend-mapping">zona de agrupamento</span></div>
+        <div class="legend-row"><span class="legend-field">claims</span><span class="legend-arrow">→</span><span class="legend-mapping">badge de metadados</span></div>
+        <div class="legend-row"><span class="legend-field">confidence</span><span class="legend-arrow">→</span><span class="legend-mapping">opacidade / brilho</span></div>
+        <div class="legend-divider"></div>
+        <div class="legend-stats">
+          <div><span class="stat-dot" style="background:#8b5cf6"></span> <span id="legendNodes">0</span> nós</div>
+          <div><span class="stat-dot" style="background:#43b8ad"></span> <span id="legendEdges">0</span> arestas</div>
+          <div><span class="stat-dot" style="background:#f59e0b"></span> <span id="legendClaims">0</span> claims</div>
+          <div><span class="stat-dot" style="background:#ef6461"></span> <span id="legendDomains">0</span> domínios</div>
+        </div>
+        <div class="legend-levels">
+          <span class="level-pill" style="border-color:#a0a0a0">P1</span>
+          <span class="level-pill" style="border-color:#64a8ee">P2</span>
+          <span class="level-pill" style="border-color:#43b8ad">P3</span>
+          <span class="level-pill" style="border-color:#f59e0b">P4</span>
+          <span class="level-pill" style="border-color:#ef6461">P5</span>
+        </div>
+      </div>
+    </div>
+
     <div class="canvas-controls">
       <div class="control-group"><button id="undoButton" aria-label="Desfazer"><i class="fa-solid fa-rotate-left"></i></button><button id="redoButton" aria-label="Refazer"><i class="fa-solid fa-rotate-right"></i></button></div>
-      <div class="control-group"><button id="zoomOut"><i class="fa-solid fa-minus"></i></button><span class="zoom-value" id="zoomValue">27%</span><button id="zoomIn"><i class="fa-solid fa-plus"></i></button></div>
+      <div class="control-group"><button id="zoomOut"><i class="fa-solid fa-minus"></i></button><span class="zoom-value" id="zoomValue">100%</span><button id="zoomIn"><i class="fa-solid fa-plus"></i></button></div>
       <button class="help" id="helpButton" aria-label="Ver atalhos"><i class="fa-solid fa-question"></i></button>
     </div>
   </main>
@@ -699,7 +847,7 @@
     const prompt = $('#prompt');
     const commandMenu = $('#commandMenu');
     const selectionBar = $('#selectionBar');
-    let zoom = 27;
+    let zoom = 100;
     let panX = 0;
     let panY = 0;
     let tool = 'select';
@@ -708,60 +856,20 @@
     let spaceHeld = false;
     let toastTimer;
     let agentIndex = 0;
+    let textNodeIdCounter = 0;
+    let textNodes = [];
+    let pendingCreatePos = null;
     let history = [];
     let future = [];
     let edgeFrame = 0;
     const nodeElements = new Map();
     const edgeRecords = [];
     const graphEdges = [];
-    const owners = ['Ana', 'Lucas', 'Marco', 'Thais', 'Artur', 'Agente Atlas'];
-    const statuses = [
-      { name: 'Publicado', color: '#43b8ad' },
-      { name: 'Em revisão', color: '#f59e0b' },
-      { name: 'Rascunho', color: '#8b5cf6' },
-      { name: 'Drift', color: '#ef6461' }
-    ];
-    const clusters = [
-      { id: 'architecture', label: 'Arquitetura', color: '#7c8cff', x: 180, y: 900, w: 1320, h: 560, names: ['Event Store','Snapshot Boundary','Authority Matrix','Level Resolver','Domain Partition','Durable JSONL','SQLite Projection','Resource URI','Token Vault','Layout Projection','Reverse Index','Claim Aggregate','Graph Builder','File Watcher','Bootstrap Pipeline','Redaction Boundary','Federation Boundary','Audit Trail'] },
-      { id: 'graph', label: 'Graph Core', color: '#49b9aa', x: 1690, y: 900, w: 1320, h: 560, names: ['Topology Scanner','Node Identity','Edge Resolver','Anchor Parser','Reference Index','Drift Detector','Ascent Rule','Confidence Score','Overclaim Guard','Semantic Level','Domain Mapper','Snapshot Cache','Dependency Walker','Cycle Detector','Orphan Finder','Provenance Store','Schema Validator','Graph Diff'] },
-      { id: 'protocol', label: 'Protocolo MCP', color: '#c483ff', x: 3200, y: 900, w: 1320, h: 560, names: ['tools/call','resources/read','resources/list','initialize','notifications','SSE Stream','JSON-RPC Bridge','Error Envelope','Capability Negotiation','Token Handshake','Reconnect Flow','Pagination Cursor','Graph Query','Changeset Open','Claim Delta','Commit Gate','Abort Flow','TTL Extension'] },
-      { id: 'collaboration', label: 'Colaboração', color: '#f4a75d', x: 180, y: 1640, w: 1320, h: 560, names: ['Presence Roster','Focus Signal','Typing State','Cell Lock','Lock Contention','Ghost Drafts','Changeset Lifecycle','Turn Recovery','Activity Feed','Toast Rules','User Identity','Agent Identity','Visibility Setting','Commit Notify','Session Heartbeat','Reauth Flow','Event Projection','Conflict Queue'] },
-      { id: 'web', label: 'Web Experience', color: '#f06f92', x: 1690, y: 1640, w: 1320, h: 560, names: ['Canvas Shell','Semantic Zoom','Rich Markdown','Cell Container','Minimap','Query Palette','Claims Browser','History View','Draft Panel','Turn Modal','Node Inspector','Sidebar Tree','Comment Threads','Command Composer','Keyboard Map','Viewport History','Accessibility Layer','Visual Tokens'] },
-      { id: 'integrations', label: 'Integrações', color: '#64a8ee', x: 3200, y: 1640, w: 1320, h: 560, names: ['Claude Plugin','Codex Skill','OpenCode Plugin','Stdio Proxy','MCP Client','Token Store','Node Store','Event Stream','Presence Store','Connection Kit','Editor Bridge','Distribution Pack','Release Artifact','Tunnel Adapter','CLI Commands','Agent Context','Resource Cache','Compatibility Matrix'] },
-      { id: 'operations', label: 'Operações', color: '#9aa56a', x: 950, y: 2400, w: 1320, h: 560, names: ['Health Probe','Metrics Sink','Audit Log','Backup Job','Restore Drill','Load Profile','Latency Budget','Reconnect Monitor','Lock Heatmap','Session Report','Error Budget','CI Gate','Browser Matrix','Security Scan','Redaction Test','Release Workflow','Migration Plan','Incident Runbook'] },
-      { id: 'decisions', label: 'Decisões', color: '#db9769', x: 2550, y: 2400, w: 1320, h: 560, names: ['ADR Turn Model','ADR Authority','ADR Storage','ADR Federation','ADR Identity','ADR Layout','ADR Query Gaps','ADR Rich Nodes','ADR Beta Gate','Hosted Boundary','Self-hosted Path','Threat Model','Data Retention','Compatibility Policy','Version Strategy','Scope Ledger','Product Thesis','Open Questions'] }
-    ];
-    const graphNodes = clusters.flatMap((cluster, clusterIndex) => cluster.names.map((name, index) => ({
-      id: `${cluster.id}-${index + 1}`,
-      title: name,
-      cluster: cluster.id,
-      kind: ['capability', 'decision', 'resource', 'workflow'][index % 4],
-      x: cluster.x + 70 + (index % 6) * 202 + ((index * 17 + clusterIndex * 11) % 23),
-      y: cluster.y + 78 + Math.floor(index / 6) * 142 + ((index * 13) % 17),
-      owner: owners[(index + clusterIndex) % owners.length],
-      claims: 2 + ((index * 7 + clusterIndex) % 16),
-      status: statuses[(index + clusterIndex * 2) % statuses.length],
-      updated: `${2 + ((index * 11) % 58)}m`
-    })));
+    const levelColors = { P1: '#a0a0a0', P2: '#64a8ee', P3: '#43b8ad', P4: '#f59e0b', P5: '#ef6461' };
+    const graphData = { nodes: [], edges: [] };
+    graphData.nodes = [["README.md","File","P1",null,null,0],["docs/roadmap-integrations/00-scope-int-0-mcp-compliance.md","File","P4",null,null,0],["docs/roadmap-integrations/01-scope-int-1-connection-kit.md","File","P4",null,null,0],["docs/roadmap-integrations/02-scope-int-2-client-lib.md","File","P4",null,null,0],["docs/roadmap-integrations/03-scope-int-3-claude-code-plugin.md","File","P4",null,null,0],["docs/roadmap-integrations/04-scope-int-4-opencode-plugin.md","File","P4",null,null,0],["docs/roadmap-integrations/05-scope-int-5-editor-agents.md","File","P4",null,null,0],["docs/roadmap-integrations/06-scope-int-6-distribution.md","File","P4",null,null,0],["docs/roadmap-integrations/README.md","File","P1",null,null,0],["docs/roadmap-integrations/compliance-matrix.md","File","P4",null,null,0],["docs/roadmap-integrations/int-3-validation-harness.md","File","P4",null,null,0],["docs/roadmap-integrations/int-3-validation-run.md","File","P4",null,null,0],["docs/roadmap-integrations/quickstart.md","File","P4",null,null,0],["docs/roadmap-mcp/01-scope-phase-1.md","File","P4",null,null,0],["docs/roadmap-mcp/02-scope-phase-2.md","File","P4",null,null,0],["docs/roadmap-mcp/03-scope-phase-3.md","File","P4",null,null,0],["docs/roadmap-mcp/04-scope-phase-4.md","File","P4",null,null,0],["docs/roadmap-mcp/05-business-hosted-vs-self-hosted.md","File","P4",null,null,0],["docs/roadmap-mcp/05-scope-phase-5-federacao.md","File","P4",null,null,0],["docs/roadmap-mcp/ADR.md","File","P4",null,null,0],["docs/roadmap-mcp/README.md","File","P1",null,null,0],["docs/roadmap-mcp/plan-fase-3-execution.md","File","P4",null,null,0],["docs/roadmap-qa/00-scope-qa-0-ci.md","File","P4",null,null,0],["docs/roadmap-qa/01-scope-qa-1-smoke.md","File","P4",null,null,0],["docs/roadmap-qa/02-scope-qa-2-e2e.md","File","P4",null,null,0],["docs/roadmap-qa/03-scope-qa-3-multi-client.md","File","P4",null,null,0],["docs/roadmap-qa/04-scope-qa-4-graph-core.md","File","P4",null,null,0],["docs/roadmap-qa/05-scope-qa-5-perf-soak.md","File","P4",null,null,0],["docs/roadmap-qa/06-scope-qa-6-security.md","File","P4",null,null,0],["docs/roadmap-qa/README.md","File","P1",null,null,0],["docs/roadmap-qa/smoke-checklist.md","File","P4",null,null,0],["packages/claude-plugin/README.md","File","P1",null,null,0],["packages/claude-plugin/commands/abort.md","File","P4",null,null,0],["packages/claude-plugin/commands/commit.md","File","P4",null,null,0],["packages/claude-plugin/commands/turno.md","File","P4",null,null,0],["packages/claude-plugin/commands/who.md","File","P4",null,null,0],["packages/claude-plugin/skills/using-open-graph/SKILL.md","File","P4",null,null,0],["packages/client/README.md","File","P1",null,null,0],["packages/client/src/connect.ts","File","P4",null,null,0],["packages/client/src/index.ts","File","P2",null,null,0],["packages/client/src/node-store.ts","File","P4",null,null,0],["packages/client/src/presence-state.ts","File","P4",null,null,0],["packages/client/src/rpc.ts","File","P4",null,null,0],["packages/client/src/store.ts","File","P4",null,null,0],["packages/client/src/subscribe.ts","File","P4",null,null,0],["packages/client/test/connect.test.ts","File","P3",null,null,0],["packages/client/test/dist-smoke.mjs","File","P4",null,null,0],["packages/client/test/eventstream.test.ts","File","P3",null,null,0],["packages/client/test/index.test.ts","File","P3",null,null,0],["packages/client/test/node-store.test.ts","File","P3",null,null,0],["packages/client/test/polling.test.ts","File","P3",null,null,0],["packages/client/test/presence-state.test.ts","File","P3",null,null,0],["packages/client/test/subscribe.test.ts","File","P3",null,null,0],["packages/graph-core/PROVENANCE.md","File","P4",null,null,0],["packages/graph-core/src/ascent.ts","File","P4",null,null,0],["packages/graph-core/src/authority.ts","File","P4",null,null,0],["packages/graph-core/src/boot-gate.ts","File","P4",null,null,0],["packages/graph-core/src/boot-router.ts","File","P4",null,null,0],["packages/graph-core/src/build.ts","File","P4",null,null,0],["packages/graph-core/src/cell-dag.ts","File","P4",null,null,0],["packages/graph-core/src/changeset-store.ts","File","P4",null,null,0],["packages/graph-core/src/claim-store.ts","File","P4",null,null,0],["packages/graph-core/src/claims.ts","File","P4",null,null,0],["packages/graph-core/src/classify.ts","File","P4",null,null,0],["packages/graph-core/src/context-compiler.ts","File","P4",null,null,0],["packages/graph-core/src/descent.ts","File","P4",null,null,0],["packages/graph-core/src/docs.ts","File","P4",null,null,0],["packages/graph-core/src/domains.ts","File","P4",null,null,0],["packages/graph-core/src/events-snapshot.ts","File","P4",null,null,0],["packages/graph-core/src/expand.ts","File","P4",null,null,0],["packages/graph-core/src/extract-go.ts","File","P4",null,null,0],["packages/graph-core/src/extract-python.ts","File","P4",null,null,0],["packages/graph-core/src/extract-rust.ts","File","P4",null,null,0],["packages/graph-core/src/extract.ts","File","P4",null,null,0],["packages/graph-core/src/federation.ts","File","P4",null,null,0],["packages/graph-core/src/graphci.ts","File","P4",null,null,0],["packages/graph-core/src/greenfield.ts","File","P4",null,null,0],["packages/graph-core/src/imports-lang.ts","File","P4",null,null,0],["packages/graph-core/src/imports-manifest.ts","File","P4",null,null,0],["packages/graph-core/src/indexer.ts","File","P4",null,null,0],["packages/graph-core/src/intent-changeset.ts","File","P4",null,null,0],["packages/graph-core/src/layout.ts","File","P4",null,null,0],["packages/graph-core/src/merge-driver.ts","File","P4",null,null,0],["packages/graph-core/src/meta.ts","File","P4",null,null,0],["packages/graph-core/src/migrate.ts","File","P4",null,null,0],["packages/graph-core/src/module-map.ts","File","P4",null,null,0],["packages/graph-core/src/outline.ts","File","P4",null,null,0],["packages/graph-core/src/project.ts","File","P4",null,null,0],["packages/graph-core/src/prune.ts","File","P4",null,null,0],["packages/graph-core/src/quadtree.ts","File","P4",null,null,0],["packages/graph-core/src/resolve.ts","File","P4",null,null,0],["packages/graph-core/src/roundtrip.ts","File","P4",null,null,0],["packages/graph-core/src/scan.ts","File","P4",null,null,0],["packages/graph-core/src/score.ts","File","P4",null,null,0],["packages/graph-core/src/state-index.ts","File","P4",null,null,0],["packages/graph-core/src/symbols.ts","File","P4",null,null,0],["packages/graph-core/src/treesitter.ts","File","P4",null,null,0],["packages/graph-core/src/util/lazy.ts","File","P4",null,null,0],["packages/graph-core/src/verify.ts","File","P4",null,null,0],["packages/graph-core/src/view.ts","File","P4",null,null,0],["packages/graph-core/src/watch.ts","File","P4",null,null,0],["packages/graph-core/src/worktree.ts","File","P4",null,null,0],["packages/mcp-server/README.md","File","P1",null,null,0],["packages/mcp-server/src/affinity.ts","File","P4",null,null,0],["packages/mcp-server/src/db.ts","File","P4",null,null,0],["packages/mcp-server/src/gates.ts","File","P4",null,null,0],["packages/mcp-server/src/index.ts","File","P2",null,null,0],["packages/mcp-server/src/resources.ts","File","P4",null,null,0],["packages/mcp-server/src/sse.ts","File","P4",null,null,0],["packages/mcp-server/src/state.ts","File","P4",null,null,0],["packages/mcp-server/src/store.ts","File","P4",null,null,0],["packages/mcp-server/src/sweeper.ts","File","P4",null,null,0],["packages/mcp-server/src/system-message.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/authority.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/changeset.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/graph-bootstrap.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/graph-import.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/graph-query.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/graph-subscribe.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/presence.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/session.ts","File","P4",null,null,0],["packages/mcp-server/src/tools/typing.ts","File","P4",null,null,0],["packages/mcp-server/src/transport.ts","File","P4",null,null,0],["packages/mcp-server/src/watch-bridge.ts","File","P4",null,null,0],["packages/mcp-server/test/affinity-router.test.ts","File","P3",null,null,0],["packages/mcp-server/test/authority-flip.test.ts","File","P3",null,null,0],["packages/mcp-server/test/bootstrap-existing.test.ts","File","P3",null,null,0],["packages/mcp-server/test/bootstrap-fresh.test.ts","File","P3",null,null,0],["packages/mcp-server/test/broadcast-fairness.test.ts","File","P3",null,null,0],["packages/mcp-server/test/broadcast.test.ts","File","P3",null,null,0],["packages/mcp-server/test/commit-atomic.test.ts","File","P3",null,null,0],["packages/mcp-server/test/commit-stress.test.ts","File","P3",null,null,0],["packages/mcp-server/test/fixtures/demote/src/app.ts","File","P2",null,null,0],["packages/mcp-server/test/fixtures/fresh/src/audit.ts","File","P4",null,null,0],["packages/mcp-server/test/fixtures/fresh/src/refine.ts","File","P4",null,null,0],["packages/mcp-server/test/ghost-render.test.ts","File","P3",null,null,0],["packages/mcp-server/test/heartbeat-expire.test.ts","File","P3",null,null,0],["packages/mcp-server/test/helpers.ts","File","P4",null,null,0],["packages/mcp-server/test/history-query.test.ts","File","P3",null,null,0],["packages/mcp-server/test/history-replay.test.ts","File","P3",null,null,0],["packages/mcp-server/test/incremental-gate-early.test.ts","File","P3",null,null,0],["packages/mcp-server/test/invisible-mode.test.ts","File","P3",null,null,0],["packages/mcp-server/test/join-and-leave.test.ts","File","P3",null,null,0],["packages/mcp-server/test/load/presence-load.ts","File","P4",null,null,0],["packages/mcp-server/test/lock-denied-private.test.ts","File","P3",null,null,0],["packages/mcp-server/test/migrate-from-phase-1.test.ts","File","P3",null,null,0],["packages/mcp-server/test/open-pessimistic.test.ts","File","P3",null,null,0],["packages/mcp-server/test/presence-ownership.test.ts","File","P3",null,null,0],["packages/mcp-server/test/protocol-compliance.test.ts","File","P3",null,null,0],["packages/mcp-server/test/query.test.ts","File","P3",null,null,0],["packages/mcp-server/test/rebuild-from-jsonl.test.ts","File","P3",null,null,0],["packages/mcp-server/test/reconnect-after-restart.test.ts","File","P3",null,null,0],["packages/mcp-server/test/reconnect-reattach.test.ts","File","P3",null,null,0],["packages/mcp-server/test/sdk-client-compliance.test.ts","File","P3",null,null,0],["packages/mcp-server/test/subscribe-demote.test.ts","File","P3",null,null,0],["packages/mcp-server/test/subscribe-drift.test.ts","File","P3",null,null,0],["packages/mcp-server/test/system-message.test.ts","File","P3",null,null,0],["packages/mcp-server/test/tenant-isolation.test.ts","File","P3",null,null,0],["packages/mcp-server/test/ttl-expire.test.ts","File","P3",null,null,0],["packages/mcp-server/test/typing-network-aggregation.test.ts","File","P3",null,null,0],["packages/mcp-web/src/api.ts","File","P4",null,null,0],["packages/mcp-web/src/ghosts.ts","File","P4",null,null,0],["packages/mcp-web/src/main.ts","File","P2",null,null,0],["packages/mcp-web/src/node-stub.ts","File","P4",null,null,0],["packages/mcp-web/src/render.ts","File","P4",null,null,0],["packages/mcp-web/src/toasts.ts","File","P4",null,null,0],["packages/mcp-web/src/token-store.ts","File","P4",null,null,0],["packages/mcp-web/test/api.test.ts","File","P3",null,null,0],["packages/mcp-web/test/ghosts.test.ts","File","P3",null,null,0],["packages/mcp-web/test/toasts.test.ts","File","P3",null,null,0],["packages/mcp-web/vite.config.ts","File","P2",null,null,0],["packages/stdio-proxy/src/cli.ts","File","P4",null,null,0],["packages/stdio-proxy/src/credentials.ts","File","P4",null,null,0],["packages/stdio-proxy/test/cli.test.ts","File","P3",null,null,0],["packages/stdio-proxy/test/credentials.test.ts","File","P3",null,null,0],["packages/stdio-proxy/test/helpers.ts","File","P4",null,null,0],["packages/stdio-proxy/test/live.test.ts","File","P3",null,null,0]];
 
-    clusters.forEach((cluster, clusterIndex) => {
-      const ids = graphNodes.filter(node => node.cluster === cluster.id).map(node => node.id);
-      ids.forEach((id, index) => {
-        graphEdges.push({ source: id, target: ids[(index + 1) % ids.length], relation: 'depends-on', secondary: false });
-        graphEdges.push({ source: id, target: ids[(index + 6) % ids.length], relation: 'references', secondary: true });
-      });
-      const nextIds = graphNodes.filter(node => node.cluster === clusters[(clusterIndex + 1) % clusters.length].id).map(node => node.id);
-      [0, 5, 11].forEach((index, offset) => graphEdges.push({ source: ids[index], target: nextIds[(offset * 6 + 2) % nextIds.length], relation: 'cross-domain', secondary: false }));
-    });
-    graphEdges.push(
-      { source: 'adr-turnos', target: 'collaboration-4', relation: 'governs', secondary: false },
-      { source: 'adr-turnos', target: 'decisions-1', relation: 'documented-by', secondary: false },
-      { source: 'architecture-map', target: 'architecture-10', relation: 'visualizes', secondary: false },
-      { source: 'dependency-map', target: 'graph-13', relation: 'visualizes', secondary: false },
-      { source: 'kinetic-truth', target: 'web-18', relation: 'defines', secondary: false }
-    );
-
-    const scale = () => zoom / 27;
+    const scale = () => zoom / 100;
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
     function makeElement(tag, className, text) {
@@ -771,37 +879,69 @@
       return element;
     }
 
-    function buildLargeGraph() {
+    function loadGraphNodes() {
       const edgeLayer = $('.edge-layer');
-      clusters.forEach(cluster => {
+      const levelX = { P1: 120, P2: 350, P3: 580, P4: 810, P5: 1040 };
+      const levelY = { P1: 100, P2: 220, P3: 340, P4: 460, P5: 580 };
+      const levelMap = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0 };
+
+      graphData.nodes.forEach(([id, kind, level, domain, confidence, overclaim], index) => {
+        const x = levelX[level] || 120;
+        const yBase = levelY[level] || 100;
+        const y = yBase + levelMap[level];
+        levelMap[level] += 34;
+
+        const packageName = id.includes('/') ? id.split('/')[0] : 'root';
+        const shortName = id.split('/').pop();
+        const levelColor = levelColors[level] || '#8b5cf6';
+
+        const card = makeElement('article', 'card graph-card');
+        card.tabIndex = 0;
+        card.dataset.node = shortName;
+        card.dataset.nodeId = id;
+        card.dataset.level = level;
+        card.dataset.package = packageName;
+        Object.assign(card.style, { left: `${x}px`, top: `${y}px`, '--node-color': levelColor, '--status-color': levelColor });
+
+        const top = makeElement('div', 'node-top');
+        const kindEl = makeElement('span', 'node-kind', kind);
+        top.append(kindEl);
+
+        const title = makeElement('h3', '', shortName);
+        const meta = makeElement('div', 'node-meta');
+        meta.append(makeElement('span', 'node-owner', level), makeElement('span', '', packageName));
+
+        card.append(top, title, meta);
+        canvas.appendChild(card);
+        nodeElements.set(id, card);
+      });
+
+      graphData.edges.forEach(edge => {
+        graphEdges.push({ source: edge[0], target: edge[1], relation: edge[2] || 'depends-on', secondary: false });
+      });
+
+      const clusterByPackage = new Map();
+      nodeElements.forEach((card, id) => {
+        const pkg = card.dataset.package;
+        if (!pkg || pkg === 'root') return;
+        if (!clusterByPackage.has(pkg)) clusterByPackage.set(pkg, []);
+        clusterByPackage.get(pkg).push(card);
+      });
+      clusterByPackage.forEach((cards, pkg) => {
+        if (cards.length < 2) return;
+        const minX = Math.min(...cards.map(c => c.offsetLeft)) - 20;
+        const minY = Math.min(...cards.map(c => c.offsetTop)) - 16;
+        const maxX = Math.max(...cards.map(c => c.offsetLeft + 164)) + 20;
+        const maxY = Math.max(...cards.map(c => c.offsetTop + 86)) + 16;
         const zone = makeElement('div', 'cluster-zone');
-        zone.dataset.cluster = cluster.id;
-        zone.dataset.label = cluster.label;
-        zone.dataset.count = cluster.names.length;
-        Object.assign(zone.style, { left: `${cluster.x}px`, top: `${cluster.y}px`, width: `${cluster.w}px`, height: `${cluster.h}px`, '--cluster-color': cluster.color });
+        zone.dataset.label = pkg;
+        zone.dataset.count = cards.length;
+        const hue = (pkg.length * 60) % 360;
+        const color = `hsl(${hue},55%,65%)`;
+        Object.assign(zone.style, { left: `${minX}px`, top: `${minY}px`, width: `${Math.max(maxX - minX, 60)}px`, height: `${Math.max(maxY - minY, 40)}px`, '--cluster-color': color });
         canvas.insertBefore(zone, edgeLayer);
       });
 
-      const insertionPoint = $('.comment-pin');
-      graphNodes.forEach(node => {
-        const cluster = clusters.find(item => item.id === node.cluster);
-        const card = makeElement('article', 'card graph-card');
-        card.tabIndex = 0;
-        card.dataset.node = node.title;
-        card.dataset.nodeId = node.id;
-        card.dataset.cluster = node.cluster;
-        Object.assign(card.style, { left: `${node.x}px`, top: `${node.y}px`, '--node-color': cluster.color, '--status-color': node.status.color });
-        const top = makeElement('div', 'node-top');
-        top.append(makeElement('span', 'node-kind', `${node.kind} · ${node.cluster}`), makeElement('span', 'node-status'));
-        const title = makeElement('h3', '', node.title);
-        const meta = makeElement('div', 'node-meta');
-        meta.append(makeElement('span', 'node-owner', node.owner), makeElement('span', '', `${node.claims} claims · ${node.updated}`));
-        card.append(top, title, meta);
-        canvas.insertBefore(card, insertionPoint);
-        nodeElements.set(node.id, card);
-      });
-
-      $$('.hero-card').forEach(card => nodeElements.set(card.dataset.nodeId, card));
       $('#nodeTotal').textContent = `${nodeElements.size} nós`;
       $('#edgeTotal').textContent = `${graphEdges.length} relações`;
       buildEdges();
@@ -894,11 +1034,11 @@
       const viewport = miniViewport;
       [...nodeElements.entries()].forEach(([id, card]) => {
         const dot = makeElement('span', 'mini-node dense');
-        const cluster = clusters.find(item => item.id === card.dataset.cluster);
+        const color = levelColors[card.dataset.level] || '#8b5cf6';
         Object.assign(dot.style, {
           left: `${card.offsetLeft / 4800 * 145}px`,
           top: `${card.offsetTop / 3400 * 86}px`,
-          '--mini-color': cluster?.color ?? '#e5e7eb'
+          '--mini-color': color
         });
         dot.dataset.nodeId = id;
         $('.minimap').insertBefore(dot, viewport);
@@ -953,26 +1093,43 @@
       message(`${connected.length} caminhos a partir de ${source.dataset.node}`);
     }
 
-    function focusCluster(clusterId) {
-      const cluster = clusters.find(item => item.id === clusterId);
-      if (!cluster) return;
+    function focusPackage(pkg) {
+      const cards = [...nodeElements.values()].filter(c => c.dataset.package === pkg);
+      if (!cards.length) return message(`Pacote "${pkg}" não encontrado`);
       remember();
+      const minX = Math.min(...cards.map(c => c.offsetLeft));
+      const minY = Math.min(...cards.map(c => c.offsetTop));
+      const maxX = Math.max(...cards.map(c => c.offsetLeft + 164));
+      const maxY = Math.max(...cards.map(c => c.offsetTop + 86));
+      const w = maxX - minX, h = maxY - minY;
       const usableWidth = workspace.clientWidth - (sidebar.classList.contains('closed') ? 120 : 370);
-      const targetScale = Math.min(usableWidth / cluster.w, (workspace.clientHeight - 150) / cluster.h, 1.15);
-      zoom = clamp(targetScale * 27, 15, 38);
-      panX = (sidebar.classList.contains('closed') ? 50 : 320) + usableWidth / 2 - (cluster.x + cluster.w / 2) * scale();
-      panY = workspace.clientHeight / 2 - (cluster.y + cluster.h / 2) * scale();
-      $('#viewportLabel').textContent = cluster.label;
-      $$('.tree-row[data-cluster]').forEach(row => row.classList.toggle('current', row.dataset.cluster === clusterId));
+      const targetScale = Math.min(usableWidth / w, (workspace.clientHeight - 150) / h, 1.15);
+      zoom = clamp(targetScale * 100, 30, 200);
+      panX = (sidebar.classList.contains('closed') ? 50 : 320) + usableWidth / 2 - (minX + w / 2) * scale();
+      panY = workspace.clientHeight / 2 - (minY + h / 2) * scale();
+      $('#viewportLabel').textContent = pkg;
       renderView(true);
-      message(`${cluster.label}: ${cluster.names.length} nós conectados`);
+      message(`${pkg}: ${cards.length} nós`);
     }
 
     function focusAll() {
       remember();
-      zoom = Math.min((workspace.clientWidth - 80) / 4700, (workspace.clientHeight - 100) / 3150) * 27;
-      panX = (workspace.clientWidth - 4700 * scale()) / 2;
-      panY = (workspace.clientHeight - 3150 * scale()) / 2;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      nodeElements.forEach(card => {
+        const x = card.offsetLeft, y = card.offsetTop;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x + 164 > maxX) maxX = x + 164;
+        if (y + 86 > maxY) maxY = y + 86;
+      });
+      if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 1000; maxY = 800; }
+      const pad = 80;
+      const contentW = maxX - minX + pad * 2;
+      const contentH = maxY - minY + pad * 2;
+      const fitScale = Math.min((workspace.clientWidth - pad) / contentW, (workspace.clientHeight - pad) / contentH, 1.2);
+      zoom = clamp(fitScale * 100, 10, 300);
+      panX = (workspace.clientWidth - contentW * scale()) / 2 - minX * scale() + pad / 2 * scale();
+      panY = (workspace.clientHeight - contentH * scale()) / 2 - minY * scale() + pad / 2 * scale();
       $('#viewportLabel').textContent = 'Canvas completo';
       $$('.tree-row.current').forEach(row => row.classList.remove('current'));
       renderView(true);
@@ -988,7 +1145,7 @@
     function renderView(smooth = false) {
       canvas.classList.toggle('smooth', smooth);
       canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale()})`;
-      workspace.dataset.lod = zoom < 16 ? 'overview' : zoom < 34 ? 'compact' : 'detail';
+      workspace.dataset.lod = zoom < 40 ? 'overview' : zoom < 80 ? 'compact' : 'detail';
       const gridSize = workspace.dataset.lod === 'overview' ? 18 : Math.max(12, 20 * scale());
       workspace.style.backgroundPosition = `${panX % gridSize}px ${panY % gridSize}px`;
       workspace.style.backgroundSize = `${gridSize}px ${gridSize}px`;
@@ -1031,7 +1188,7 @@
       const oldScale = scale();
       const worldX = (x - panX) / oldScale;
       const worldY = (y - panY) / oldScale;
-      zoom = clamp(nextZoom, 6, 65);
+      zoom = clamp(nextZoom, 10, 400);
       panX = x - worldX * scale();
       panY = y - worldY * scale();
       renderView(smooth);
@@ -1041,10 +1198,11 @@
       tool = nextTool;
       workspace.dataset.tool = tool;
       $$('.tool-button').forEach(button => button.classList.toggle('active', button.dataset.tool === tool));
-      const labels = { select: 'Selecionar', frame: 'Criar área', draw: 'Desenhar', hand: 'Mover canvas', image: 'Adicionar imagem', data: 'Adicionar dados', comment: 'Clique no canvas para comentar', agent: 'Chamar agente' };
+      const labels = { select: 'Selecionar', frame: 'Criar área', draw: 'Desenhar', hand: 'Mover canvas', image: 'Adicionar imagem', data: 'Adicionar dados', text: 'Clique no canvas para criar nó de texto', comment: 'Clique no canvas para comentar', agent: 'Chamar agente' };
       if (announce) message(labels[tool]);
       if (tool === 'comment') openInspector('comments', 'Comentários');
       if (tool === 'agent') { prompt.focus(); prompt.placeholder = 'Peça ao agente para criar, conectar ou revisar…'; }
+      updateHint();
     }
 
     function selectCard(card) {
@@ -1062,7 +1220,7 @@
       if (!card) return;
       remember();
       selectCard(card);
-      const targetZoom = Math.max(card.classList.contains('graph-card') ? 38 : 32, zoom);
+      const targetZoom = Math.max(card.classList.contains('graph-card') ? 130 : 120, zoom);
       zoom = targetZoom;
       panX = workspace.clientWidth / 2 - (card.offsetLeft + card.offsetWidth / 2) * scale();
       panY = workspace.clientHeight / 2 - (card.offsetTop + card.offsetHeight / 2) * scale();
@@ -1119,19 +1277,18 @@
       wireCard(card);
       buildEdges();
       buildMinimap();
-      $('#nodeTotal').textContent = `${nodeElements.size} nós`;
-      $('#edgeTotal').textContent = `${graphEdges.length} relações`;
+      updateNodeTotal();
       selectCard(card);
       message('Novo rascunho criado no canvas');
     }
 
     function wireCard(card) {
       card.addEventListener('click', event => {
-        if (event.target.closest('button')) return;
+        if (tool !== 'select' || event.target.closest('button')) return;
         event.stopPropagation();
         selectCard(card);
       });
-      card.addEventListener('dblclick', event => { event.stopPropagation(); focusCard(card); });
+      card.addEventListener('dblclick', event => { if (tool === 'select') { event.stopPropagation(); focusCard(card); } });
       card.addEventListener('keydown', event => { if (event.key === 'Enter') focusCard(card); });
       const dragHandle = card.querySelector('.card-header') ?? card;
       dragHandle.addEventListener('pointerdown', event => {
@@ -1150,13 +1307,154 @@
       commandMenu.classList.remove('open');
       $('#connectionNav').classList.remove('show');
       $('#searchResults').classList.remove('open');
+      $('#createTextDialog').classList.remove('open');
+      pendingCreatePos = null;
       selectCard(null);
     }
 
-    buildLargeGraph();
+    const textColors = ['#8b5cf6', '#43b8ad', '#f59e0b', '#ef6461', '#64a8ee', '#f06f92', '#9aa56a'];
+
+    function createTextNode(worldX, worldY, text, level = 'P3') {
+      textNodeIdCounter++;
+      const id = `text-node-${textNodeIdCounter}`;
+      const color = textColors[textNodeIdCounter % textColors.length];
+
+      const node = document.createElement('div');
+      node.className = 'text-node';
+      node.dataset.nodeId = id;
+      node.dataset.level = level;
+      node.style.left = `${worldX}px`;
+      node.style.top = `${worldY}px`;
+      node.style.setProperty('--node-color', color);
+      node.style.setProperty('--level-color', levelColors[level]);
+
+      const textEl = document.createElement('div');
+      textEl.className = 'node-text';
+      textEl.textContent = text;
+
+      const levelBadge = document.createElement('span');
+      levelBadge.className = 'node-level';
+      levelBadge.textContent = level;
+
+      const actions = document.createElement('div');
+      actions.className = 'node-actions';
+      const delBtn = document.createElement('button');
+      delBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+      delBtn.title = 'Remover nó';
+      delBtn.addEventListener('click', event => {
+        event.stopPropagation();
+        removeTextNode(id);
+      });
+      actions.append(delBtn);
+      node.append(textEl, levelBadge, actions);
+
+      canvas.append(node);
+      textNodes.push({ id, element: node, x: worldX, y: worldY, text, color, level });
+      wireTextNode(node);
+      updateNodeTotal();
+      rebuildTextClusters();
+      return node;
+    }
+
+    function removeTextNode(id) {
+      const idx = textNodes.findIndex(n => n.id === id);
+      if (idx === -1) return;
+      textNodes[idx].element.remove();
+      textNodes.splice(idx, 1);
+      if (selectedCard === textNodes[idx]?.element) selectedCard = null;
+      updateNodeTotal();
+      rebuildTextClusters();
+      message('Nó removido');
+    }
+
+    function wireTextNode(node) {
+      node.addEventListener('click', event => {
+        if (tool !== 'select' || event.target.closest('.node-actions')) return;
+        event.stopPropagation();
+        selectTextNode(node);
+      });
+
+      node.addEventListener('pointerdown', event => {
+        if (tool !== 'select' || event.target.closest('.node-actions') || event.button !== 0) return;
+        selectTextNode(node);
+        interaction = {
+          type: 'text-card',
+          node,
+          startX: event.clientX,
+          startY: event.clientY,
+          worldStartX: parseFloat(node.style.left) || 0,
+          worldStartY: parseFloat(node.style.top) || 0
+        };
+        node.classList.add('dragging');
+        event.preventDefault();
+        event.stopPropagation();
+      });
+    }
+
+    function selectTextNode(node) {
+      if (selectedCard) selectedCard.classList.remove('selected');
+      selectedCard = node;
+      if (node) node.classList.add('selected');
+    }
+
+    function updateNodeTotal() {
+      const total = textNodes.length + nodeElements.size;
+      $('#nodeTotal').textContent = `${total} nós`;
+      $('#edgeTotal').textContent = `${graphEdges.length} relações`;
+    }
+
+    function rebuildTextClusters() {
+      if (textNodes.length < 2) return;
+      const used = new Set();
+      const groups = [];
+      textNodes.forEach((a, i) => {
+        if (used.has(i)) return;
+        const group = [i];
+        used.add(i);
+        textNodes.forEach((b, j) => {
+          if (used.has(j)) return;
+          if (Math.hypot(a.x - b.x, a.y - b.y) < 300) {
+            group.push(j);
+            used.add(j);
+          }
+        });
+        if (group.length > 1) {
+          const ns = group.map(idx => textNodes[idx]);
+          groups.push({
+            x: Math.min(...ns.map(n => n.x)) - 20,
+            y: Math.min(...ns.map(n => n.y)) - 20,
+            w: Math.max(...ns.map(n => n.x + 120)) - Math.min(...ns.map(n => n.x)) + 40,
+            h: Math.max(...ns.map(n => n.y + 50)) - Math.min(...ns.map(n => n.y)) + 40,
+            count: ns.length,
+            color: ns[0].color,
+            label: 'Agrupamento'
+          });
+        }
+      });
+      $$('.text-cluster-zone').forEach(el => el.remove());
+      const edgeLayer = $('.edge-layer');
+      groups.forEach(g => {
+        const zone = document.createElement('div');
+        zone.className = 'cluster-zone text-cluster-zone';
+        zone.dataset.label = g.label;
+        zone.dataset.count = g.count;
+        Object.assign(zone.style, { left: `${g.x}px`, top: `${g.y}px`, width: `${g.w}px`, height: `${g.h}px`, '--cluster-color': g.color });
+        canvas.insertBefore(zone, edgeLayer);
+      });
+    }
+
+    loadGraphNodes();
     $$('.card').forEach(wireCard);
     workspace.dataset.tool = tool;
     renderView();
+    const legendNodes = graphData.nodes.length;
+    const legendEdges = graphData.edges.length;
+    $('#legendNodes').textContent = legendNodes;
+    $('#legendEdges').textContent = legendEdges;
+    $('#legendClaims').textContent = 0;
+    $('#legendDomains').textContent = 0;
+    $('#domainTotal').textContent = `0 domínios`;
+    updateNodeTotal();
 
     workspace.addEventListener('pointermove', event => {
       const rect = workspace.getBoundingClientRect();
@@ -1165,8 +1463,8 @@
     });
 
     workspace.addEventListener('pointerdown', event => {
-      if (event.target.closest('.sidebar,.tool-rail,.composer,.canvas-controls,.inspector,.minimap,.interaction-hint,.connection-nav,.viewport-breadcrumb')) return;
-      if (tool === 'comment' && event.button === 0 && !event.target.closest('.card,.comment-pin')) {
+      if (event.target.closest('.sidebar,.tool-rail,.composer,.canvas-controls,.inspector,.minimap,.interaction-hint,.connection-nav,.viewport-breadcrumb,.create-text-dialog,.data-legend')) return;
+      if (tool === 'comment' && event.button === 0 && !event.target.closest('.card')) {
         remember();
         createCommentPin(event.clientX, event.clientY);
         return;
@@ -1176,12 +1474,18 @@
         return;
       }
       if (tool === 'agent') { prompt.focus(); return; }
+      if (tool === 'text' && event.button === 0) {
+        const rect = workspace.getBoundingClientRect();
+        showCreateDialog((event.clientX - rect.left - panX) / scale(), (event.clientY - rect.top - panY) / scale());
+        return;
+      }
       if (tool === 'hand' || spaceHeld || event.button === 1) {
         remember();
         interaction = { type: 'pan', startX: event.clientX, startY: event.clientY, panX, panY };
         workspace.classList.add('is-panning');
+        if (selectedCard) selectCard(null);
         event.preventDefault();
-      } else if (!event.target.closest('.card,.comment-pin')) selectCard(null);
+      } else if (!event.target.closest('.card')) selectCard(null);
     });
 
     document.addEventListener('pointermove', event => {
@@ -1198,28 +1502,39 @@
         selectionBar.style.top = `${Math.max(8, interaction.card.offsetTop - 43)}px`;
         scheduleGraphRefresh();
       }
+      if (interaction.type === 'text-card') {
+        const worldX = interaction.worldStartX + (event.clientX - interaction.startX) / scale();
+        const worldY = interaction.worldStartY + (event.clientY - interaction.startY) / scale();
+        interaction.node.style.left = `${worldX}px`;
+        interaction.node.style.top = `${worldY}px`;
+        const data = textNodes.find(n => n.element === interaction.node);
+        if (data) { data.x = worldX; data.y = worldY; }
+      }
     });
 
     document.addEventListener('pointerup', () => {
       const movedCard = interaction?.type === 'card' ? interaction.card : null;
+      const movedText = interaction?.type === 'text-card' ? interaction.node : null;
       interaction?.card?.classList.remove('dragging');
+      interaction?.node?.classList.remove('dragging');
       workspace.classList.remove('is-panning');
       interaction = null;
       if (movedCard) { scheduleGraphRefresh(); message('Nó reposicionado · relações recalculadas'); }
+      if (movedText) { rebuildTextClusters(); message('Nó reposicionado'); }
     });
 
     workspace.addEventListener('wheel', event => {
       if (event.target.closest('.sidebar,.inspector,.composer')) return;
       event.preventDefault();
-      changeZoom(zoom + (event.deltaY < 0 ? 2.2 : -2.2), event.clientX, event.clientY);
+      changeZoom(zoom + (event.deltaY < 0 ? 6 : -6), event.clientX, event.clientY);
     }, { passive: false });
 
     $('#menuButton').addEventListener('click', () => { sidebar.classList.toggle('closed'); message(sidebar.classList.contains('closed') ? 'Mais espaço para pensar' : 'Navegação aberta'); });
-    $('#zoomOut').addEventListener('click', () => { remember(); changeZoom(zoom - 5, undefined, undefined, true); });
-    $('#zoomIn').addEventListener('click', () => { remember(); changeZoom(zoom + 5, undefined, undefined, true); });
+    $('#zoomOut').addEventListener('click', () => { remember(); changeZoom(zoom - 15, undefined, undefined, true); });
+    $('#zoomIn').addEventListener('click', () => { remember(); changeZoom(zoom + 15, undefined, undefined, true); });
     $$('.tool-button').forEach(button => button.addEventListener('click', () => setTool(button.dataset.tool)));
     $$('.tree-toggle').forEach(row => row.addEventListener('click', () => row.classList.toggle('collapsed')));
-    $$('.tree-row[data-cluster]').forEach(row => row.addEventListener('click', () => focusCluster(row.dataset.cluster)));
+    $$('.tree-row[data-cluster]').forEach(row => row.addEventListener('click', () => focusPackage(row.dataset.cluster)));
     $$('[data-message]').forEach(button => button.addEventListener('click', () => message(button.dataset.message)));
 
     $$('.nav button').forEach(button => button.addEventListener('click', () => {
@@ -1269,7 +1584,7 @@
         const button = makeElement('button', `search-result${index === 0 ? ' active' : ''}`);
         button.dataset.nodeId = id;
         const icon = makeElement('i', card.classList.contains('hero-card') ? 'fa-regular fa-file-lines' : 'fa-solid fa-circle-nodes');
-        button.append(icon, makeElement('span', '', card.dataset.node), makeElement('small', '', card.dataset.cluster ? clusters.find(item => item.id === card.dataset.cluster)?.label : 'Destaque'));
+        button.append(icon, makeElement('span', '', card.dataset.node), makeElement('small', '', card.dataset.package ? `${card.dataset.package} · ${card.dataset.level}` : 'Destaque'));
         searchResults.append(button);
       });
       if (!matches.length) {
@@ -1302,6 +1617,16 @@
       searchInput.value = '';
       focusCard(card);
     });
+
+    function updateHint() {
+      const hints = {
+        select: '<kbd>Espaço</kbd> arrastar canvas <span>·</span> <kbd>Scroll</kbd> zoom <span>·</span> <kbd>H</kbd> mão',
+        hand: '<kbd>Clique e arraste</kbd> para mover o canvas <span>·</span> <kbd>Scroll</kbd> zoom',
+        text: '<kbd>Clique</kbd> para criar nó de texto <span>·</span> <kbd>Esc</kbd> cancelar'
+      };
+      $('#interactionHint').innerHTML = hints[tool] || hints.select;
+    }
+    updateHint();
 
     $('.composer button[aria-label="Comandos"]').addEventListener('click', () => commandMenu.classList.toggle('open'));
     prompt.addEventListener('input', () => {
@@ -1379,6 +1704,48 @@
       if (action === 'more') message('Ações: abrir turno · copiar link · exportar nó');
     }));
 
+    function showCreateDialog(worldX, worldY) {
+      pendingCreatePos = { x: worldX, y: worldY };
+      const rect = workspace.getBoundingClientRect();
+      const screenX = worldX * scale() + panX + rect.left;
+      const screenY = worldY * scale() + panY + rect.top + 10;
+      $('#createTextDialog').style.left = `${Math.min(screenX - rect.left, workspace.clientWidth - 240)}px`;
+      $('#createTextDialog').style.top = `${Math.min(screenY - rect.top + 20, workspace.clientHeight - 140)}px`;
+      $('#createTextDialog').classList.add('open');
+      $('#textNodeInput').value = '';
+      $('#textNodeInput').focus();
+    }
+
+    function hideCreateDialog() {
+      $('#createTextDialog').classList.remove('open');
+      pendingCreatePos = null;
+    }
+
+    $('#confirmTextNode').addEventListener('click', () => {
+      const text = $('#textNodeInput').value.trim();
+      if (!text || !pendingCreatePos) return hideCreateDialog();
+      const level = $('#levelSelector .selected')?.dataset?.level || 'P3';
+      createTextNode(pendingCreatePos.x, pendingCreatePos.y, text, level);
+      message('Nó de texto criado');
+      hideCreateDialog();
+    });
+
+    $('#cancelTextNode').addEventListener('click', hideCreateDialog);
+
+    $('#textNodeInput').addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); $('#confirmTextNode').click(); }
+      if (event.key === 'Escape') hideCreateDialog();
+    });
+
+    $$('.level-opt').forEach(opt => opt.addEventListener('click', () => {
+      $$('.level-opt').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+    }));
+
+    $('#legendToggle').addEventListener('click', () => {
+      $('#dataLegend').classList.toggle('closed');
+    });
+
     document.addEventListener('keydown', event => {
       const typing = /INPUT|TEXTAREA/.test(document.activeElement.tagName);
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); searchInput.focus(); return; }
@@ -1387,14 +1754,18 @@
       if (event.code === 'Space' && !typing) { event.preventDefault(); spaceHeld = true; workspace.dataset.tool = 'hand'; return; }
       if (typing) return;
       if (event.key === '0') { focusAll(); return; }
-      if (/^[1-8]$/.test(event.key)) { focusCluster(clusters[Number(event.key) - 1].id); return; }
+      if (/^[1-8]$/.test(event.key)) {
+        const pkgs = [...new Set([...nodeElements.values()].map(c => c.dataset.package).filter(Boolean))].sort();
+        if (pkgs[Number(event.key) - 1]) focusPackage(pkgs[Number(event.key) - 1]);
+        return;
+      }
       if (event.key.toLowerCase() === 'g' && selectedCard) {
         const point = nodeCenter(selectedCard);
         const rect = workspace.getBoundingClientRect();
         showConnections(selectedCard.dataset.nodeId, rect.left + point.x * scale() + panX, rect.top + point.y * scale() + panY);
         return;
       }
-      const shortcuts = { v: 'select', f: 'frame', p: 'draw', h: 'hand', i: 'image', d: 'data', c: 'comment', a: 'agent' };
+      const shortcuts = { v: 'select', f: 'frame', p: 'draw', h: 'hand', i: 'image', d: 'data', c: 'comment', a: 'agent', t: 'text' };
       if (shortcuts[event.key.toLowerCase()]) setTool(shortcuts[event.key.toLowerCase()]);
     });
     document.addEventListener('keyup', event => { if (event.code === 'Space') { spaceHeld = false; workspace.dataset.tool = tool; } });

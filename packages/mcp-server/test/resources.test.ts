@@ -107,7 +107,7 @@ test("graph://claims?cell= returns full ClaimRecord[] for that cell only", async
       csId,
       delta: { kind: "claim.add", payload: { id: "c2", subject: "login mid", domain: "auth", level: "P5", refs: [] } },
     })
-    const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId })
+    const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId, intent: "claims resource test" })
     expect(commit.ok).toBe(true)
 
     const env = await readResource(s.url, "graph://claims?cell=auth:P5", a.token)
@@ -191,7 +191,7 @@ test("graph://claims redacts file path prefix (server filesystem layout non-disc
       csId,
       delta: { kind: "claim.add", payload: { id: "cR", subject: "s", domain: "auth", level: "P5", refs: [], file: "/abs/repo/src/auth/login.ts" } },
     })
-    const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId })
+    const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId, intent: "redact test" })
     expect(commit.ok).toBe(true)
 
     const env = await readResource(s.url, "graph://claims?cell=auth:P5", a.token)
@@ -230,7 +230,7 @@ test("graph://claims?scope=snapshot returns a bounded flat cursor page", async (
     for (const [cell, id, level] of [["auth:P5", "root", "P5"], ["billing:P5", "bill", "P5"]] as const) {
       const cs = await callTool(s.url, "changeset.open", { token: a.token, cells: [cell], intent: id })
       await callTool(s.url, "changeset.claim", { token: a.token, csId: cs.csId, delta: { kind: "claim.add", payload: { id, subject: id, domain: cell.split(":")[0], level, refs: [] } } })
-      expect((await callTool(s.url, "changeset.commit", { token: a.token, csId: cs.csId })).ok).toBe(true)
+      expect((await callTool(s.url, "changeset.commit", { token: a.token, csId: cs.csId, intent: id })).ok).toBe(true)
     }
     const env = await readResource(s.url, "graph://claims?scope=snapshot", a.token)
     expect(env.claims.map((claim: any) => claim.id)).toEqual(["root", "bill"])
@@ -247,7 +247,7 @@ test("snapshot claims projection isolates corrupt persisted refs", async () => {
     const a = await register(s.url, "alice")
     const cs = await callTool(s.url, "changeset.open", { token: a.token, cells: ["auth:P5"], intent: "legacy" })
     await callTool(s.url, "changeset.claim", { token: a.token, csId: cs.csId, delta: { kind: "claim.add", payload: { id: "legacy", subject: "legacy", domain: "auth", level: "P5", refs: [] } } })
-    await callTool(s.url, "changeset.commit", { token: a.token, csId: cs.csId })
+    await callTool(s.url, "changeset.commit", { token: a.token, csId: cs.csId, intent: "legacy" })
     s.state.db.query("UPDATE claims SET refs = ? WHERE tenant_id = ? AND id = ?").run("{broken", "default", "legacy")
     const env = await readResource(s.url, "graph://claims?scope=snapshot", a.token)
     expect(env.claims[0].refs).toEqual([])
@@ -265,7 +265,7 @@ test("claims and history cursor pages traverse without overlap and reject malfor
       token: a.token, csId: cs.csId,
       delta: { kind: "claim.add", payload: { id: `page-${i}`, subject: `claim ${i}`, domain: "auth", level: "P5", refs: [] } },
     })
-    expect((await callTool(s.url, "changeset.commit", { token: a.token, csId: cs.csId })).ok).toBe(true)
+    expect((await callTool(s.url, "changeset.commit", { token: a.token, csId: cs.csId, intent: "pagination" })).ok).toBe(true)
 
     const seen: string[] = []
     let since = 0

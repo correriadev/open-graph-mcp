@@ -17,7 +17,7 @@ test("concurrent commits serialize: unique monotonic seqs, zero lost deltas, cle
     }
 
     // Commit ALL concurrently.
-    const results = await Promise.all(ids.map((csId) => callTool(s.url, "changeset.commit", { token: a.token, csId })))
+    const results = await Promise.all(ids.map((csId) => callTool(s.url, "changeset.commit", { token: a.token, csId, intent: "stress" })))
     expect(results.every((r) => r.ok)).toBe(true)
 
     const admitSeqs = results.map((r) => r.admitSeq)

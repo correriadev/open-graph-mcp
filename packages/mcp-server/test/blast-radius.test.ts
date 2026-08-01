@@ -60,7 +60,7 @@ test("commit registra o raio REAL quando o turno é EXPANDIDO com uma célula no
     expect((await callTool(s.url, "changeset.claim", { token: a.token, csId, delta: claim("b1", "ui", 5) })).ok).toBe(true)
     expect((await callTool(s.url, "changeset.claim", { token: a.token, csId, delta: claim("b2", "auth", 5) })).ok).toBe(true)
 
-    const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId })
+    const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId, intent: "raio real" })
     expect(commit.ok).toBe(true)
 
     // registro de auditoria persistido: as DUAS células, não só a trancada

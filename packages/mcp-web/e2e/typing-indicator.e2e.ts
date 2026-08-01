@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { turns, webToken } from "./driver"
+import { enterEdit, turns, webToken } from "./driver"
 import { startHarness, type Harness } from "./fixture"
 
 // UI-1 (cenários QA-2): typing — aparece no claim, some na transição quiet, some
@@ -62,9 +62,7 @@ test("typing in the web draft is observable by another session", async ({ browse
   await alice.page.evaluate((cell) => (window as any).__og_e2e.setFocus(cell), h.firstCell)
   await bob.page.evaluate((cell) => (window as any).__og_e2e.setFocus(cell), h.firstCell)
 
-  await alice.page.locator("#openturn").click()
-  await alice.page.locator("#intent").fill("web typing")
-  await alice.page.locator("#doopen").click()
+  await enterEdit(alice.page, h.firstNodeId)
   await expect(alice.page.locator("#draft")).toBeVisible()
   let typingCalls = 0
   alice.page.on("request", (request) => {

@@ -23,7 +23,7 @@ test("S2 commits a changeset, S1 sees a toast and clicking it centers the camera
   const bob = turns(h, await webToken(s2.page))
   const opened = await bob.open([h.firstCell], "toast e2e turn")
   const csId = opened.csId ?? opened.id
-  await bob.commit(csId)
+  await bob.commit(csId, "toast e2e turn")
 
   const toast = s1.page.locator(".toast[data-id]").first()
   await expect(toast).toBeVisible()

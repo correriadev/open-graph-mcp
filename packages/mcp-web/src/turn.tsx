@@ -1,17 +1,15 @@
 /**
- * Turnos (UI-2): modal de abertura (lock.denied como estado de primeira classe),
- * draft panel (deltas re-hidratados do server — risco 1: estado local é só o form
- * não submetido), overlays de cell (lock âmbar na CELL inteira + ghosts
- * tracejados), widget "meus turnos". Dialeto de cell: exibição "P2" aqui; a
- * fronteira og.ts converte pro numérico do server (cells.ts).
+ * Turnos (F1 — lock implícito): sem modal de abertura — o gatilho é `node.edit` (og.ts), disparado ao
+ * entrar em edição num nó (app.tsx NodePanel). Draft panel (deltas re-hidratados do server — risco 1:
+ * estado local é só o form não submetido), overlays de cell (ghosts tracejados), widget "meus turnos".
+ * `intent` migrou pro commit (decisão 2 do plano F1) — pedido aqui, não mais na abertura. Dialeto de
+ * cell: exibição "P2" aqui; a fronteira og.ts converte pro numérico do server (cells.ts).
  */
 import { ViewportPortal } from "@xyflow/react"
 import { useEffect, useRef, useState } from "react"
 import type { CellRect } from "./flow/to-flow"
-import { abortTurn, claimDraft, commitTurn, extendTurn, openTurn, reopenTurn, signalTyping } from "./og"
+import { abortTurn, claimDraft, commitTurn, extendTurn, reopenTurn, signalTyping } from "./og"
 import { useUi } from "./store"
-
-const LEVELS = ["P1", "P2", "P3", "P4", "P5"]
 
 /** mm:ss até expiresAt, tick de 1s. Impreciso em segundos é aceitável (risco 3). */
 function useCountdown(expiresAt: string | null): string {
@@ -28,93 +26,6 @@ function useCountdown(expiresAt: string | null): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
 }
 
-// ---- modal de abertura ------------------------------------------------------
-export function TurnModal({ open, onClose, initialCell }: { open: boolean; onClose: () => void; initialCell?: string | null }) {
-  const graph = useUi((s) => s.graph)
-  const denied = useUi((s) => s.denied)
-  const locks = useUi((s) => s.locks)
-  const roster = useUi((s) => s.roster)
-  const [intent, setIntent] = useState("")
-  const [rows, setRows] = useState<{ d: string; l: string }[]>([{ d: "", l: "P5" }])
-  const [err, setErr] = useState("")
-  useEffect(() => {
-    if (!open || !initialCell) return
-    const cut = initialCell.lastIndexOf(":")
-    setRows([{ d: initialCell.slice(0, cut), l: initialCell.slice(cut + 1) }])
-  }, [open, initialCell])
-  const deniedCountdown = useCountdown(denied?.expiresAt ?? null)
-  if (!open) return null
-
-  const domains = graph ? [...new Set(graph.nodes.map((n) => n.domain).filter((d): d is string => !!d))].sort() : []
-  const holderName = denied ? (roster.find((u) => u.userId === denied.holder)?.name ?? denied.holder) : ""
-  // habilita re-tentar ao vivo: o lock da cell negada caiu (lock.released já projetado)
-  const lockGone = denied ? !locks[denied.cell] : false
-
-  async function doOpen() {
-    const cells = rows.map((r) => `${r.d || domains[0] || "(unassigned)"}:${r.l}`)
-    if (!intent.trim() || !cells.length) {
-      setErr("intent e pelo menos uma cell são obrigatórios")
-      return
-    }
-    setErr("")
-    const res = await openTurn(cells, intent.trim())
-    if (res.ok) onClose()
-    else if (!res.denied) setErr("abertura recusada")
-  }
-
-  return (
-    <div id="modal">
-      <div className="dialog">
-        <h3>Abrir turno</h3>
-        {denied && (
-          <div id="denied">
-            <div className="denied-head">🔒 cell [{denied.cell}] em uso</div>
-            <div className="denied-body">
-              {holderName} segura {denied.csId}
-              <br />
-              expira em <span className="mono">{deniedCountdown}</span>
-              {lockGone && <div className="denied-free">lock caiu — pode tentar de novo</div>}
-            </div>
-            <div className="row">
-              <button id="retry" onClick={doOpen}>Tentar de novo</button>
-              <button onClick={() => useUi.setState({ denied: null })}>Trocar de cell</button>
-            </div>
-          </div>
-        )}
-        <label>Intent</label>
-        <input id="intent" value={intent} placeholder="ex.: validar CPF no login" onChange={(e) => setIntent(e.target.value)} />
-        <label>Cells</label>
-        <div id="cells">
-          {rows.map((r, i) => (
-            <div className="cellrow" key={i}>
-              <select className="cd" value={r.d} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, d: e.target.value } : x)))}>
-                <option value="">{domains[0] ?? "(unassigned)"}</option>
-                {domains.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-              <select className="cl" value={r.l} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, l: e.target.value } : x)))}>
-                {LEVELS.map((l) => (
-                  <option key={l}>{l}</option>
-                ))}
-              </select>
-              {rows.length > 1 && (
-                <button type="button" className="rmcell" onClick={() => setRows(rows.filter((_, j) => j !== i))}>−</button>
-              )}
-            </div>
-          ))}
-        </div>
-        <button type="button" id="addcell" onClick={() => setRows([...rows, { d: "", l: "P5" }])}>+ cell</button>
-        <div id="turnerr" className="err">{err}</div>
-        <div className="row">
-          <button id="doopen" onClick={doOpen}>Abrir</button>
-          <button type="button" onClick={onClose}>Cancelar</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ---- draft panel ------------------------------------------------------------
 export function DraftPanel() {
   const cs = useUi((s) => s.activeCs)
@@ -128,6 +39,8 @@ export function DraftPanel() {
   const [rawJson, setRawJson] = useState("")
   const [reasons, setReasons] = useState<string[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
+  // F1: intent migrou pro commit — campo simples aqui, não mais pré-declarado num modal.
+  const [intent, setIntent] = useState("")
   const refsInput = useRef(form.refs)
   refsInput.current = form.refs
   const updateForm = (patch: Partial<typeof form>) => {
@@ -191,13 +104,14 @@ export function DraftPanel() {
   return (
     <section id="draft">
       <h3>drafting {cs.csId}</h3>
-      <div className="intent">{cs.intent}</div>
       <div className="cells mono">{cs.cells.join(" · ")}</div>
       <div className="ttl">
         TTL <span id="ttl" className="mono">{countdown}</span>
       </div>
+      <label htmlFor="intent">Intent</label>
+      <input id="intent" value={intent} placeholder="ex.: validar CPF no login" onChange={(e) => setIntent(e.target.value)} />
       <div className="acts">
-        <button id="commit" onClick={() => run(commitTurn)}>Commit</button>
+        <button id="commit" onClick={() => run(() => commitTurn(intent.trim()))}>Commit</button>
         <button id="abort" onClick={() => run(abortTurn)}>Abort</button>
         <button id="extend" onClick={() => run(extendTurn)}>Extend TTL</button>
       </div>
@@ -248,14 +162,15 @@ export function DraftPanel() {
   )
 }
 
-// ---- overlays de cell (lock âmbar + ghosts) — filho de <ReactFlow> ----------
+// ---- overlays de cell (badge "em edição" + ghosts) — filho de <ReactFlow> ---
+/** F1: estado ("em edição por X"), não cadeado — sem emoji de lock, texto direto. */
 function LockBadge({ cell, holder, csId, expiresAt }: { cell: string; holder: string; csId: string; expiresAt: string }) {
   const roster = useUi((s) => s.roster)
   const countdown = useCountdown(expiresAt)
   const name = roster.find((u) => u.userId === holder)?.name ?? holder
   return (
     <div className="og-lock-badge" data-cell={cell} title={csId}>
-      🔒 {name} · <span className="mono">{countdown}</span>
+      em edição por {name} · <span className="mono">{countdown}</span>
     </div>
   )
 }
