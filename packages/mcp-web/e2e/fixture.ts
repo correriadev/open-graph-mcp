@@ -110,6 +110,8 @@ export type Harness = {
   repoRoot: string
   /** First real "domain:level" cell from the bootstrapped skeleton graph — for focus/lock tests. */
   firstCell: string
+  /** Id of the node `firstCell` came from — F1: entering edit is per-NODE (node.edit), not per-cell. */
+  firstNodeId: string
   callTool: (name: string, args?: unknown) => Promise<any>
   readResource: (uri: string) => Promise<any>
   /** Deterministic hooks (mirrors RunningServer's) across the subprocess boundary — QD5. */
@@ -152,6 +154,7 @@ export async function startHarness(opts: StartOptions & { sessionNodes?: number 
   const snap = await readResource(proc.mcpUrl, "graph://snapshot")
   const firstNode = snap.graph.nodes[0]
   const firstCell = `${firstNode.domain ?? "unassigned"}:${firstNode.level}`
+  const firstNodeId = firstNode.id as string
 
   const prev: PreviewServer = await preview({
     root: MCP_WEB_ROOT,
@@ -178,6 +181,7 @@ export async function startHarness(opts: StartOptions & { sessionNodes?: number 
     previewUrl,
     repoRoot: root,
     firstCell,
+    firstNodeId,
     callTool: (name, args) => callTool(proc.mcpUrl, name, args),
     readResource: (uri) => readResource(proc.mcpUrl, uri),
     async control(action) {

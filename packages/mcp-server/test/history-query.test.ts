@@ -10,7 +10,7 @@ test("graph://history returns admitted changeset.committed events ordered by seq
       const cell = `d${i}:5`
       const { csId } = await callTool(s.url, "changeset.open", { token: a.token, cells: [cell], intent: `turn ${i}` })
       await callTool(s.url, "changeset.claim", { token: a.token, csId, delta: { kind: "claim.add", payload: { id: `c${i}`, subject: "s", domain: `d${i}`, level: 5, refs: [] } } })
-      const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId })
+      const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId, intent: `turn ${i}` })
       expect(commit.ok).toBe(true)
     }
 

@@ -12,7 +12,7 @@ import { graphBootstrap, graphRebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
 import { subscribe } from "./tools/graph-subscribe"
 import { sessionRegister, requireToken } from "./tools/session"
-import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine } from "./tools/changeset"
+import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine, nodeEdit } from "./tools/changeset"
 import { authorityFlip } from "./tools/authority"
 import { presenceWho, presenceFocus, presenceBeat } from "./tools/presence"
 import { systemPending } from "./system-message"
@@ -74,17 +74,24 @@ const TOOLS = [
   },
   {
     name: "changeset.claim",
-    description: "Add a delta (claim.add | authority.flip) to an open changeset. Runs the incremental gate.",
-    inputSchema: { type: "object", required: ["token", "csId", "delta"], properties: { token: { type: "string" }, csId: { type: "string" }, delta: { type: "object" } } },
+    description:
+      "Add a delta (claim.add | authority.flip) to an open changeset. Runs the incremental gate. csId is OPTIONAL (F1): without a turn already open on the delta's cell, opens one implicitly (intent \"\") and returns its csId.",
+    inputSchema: { type: "object", required: ["token", "delta"], properties: { token: { type: "string" }, csId: { type: "string" }, delta: { type: "object" } } },
   },
   {
     name: "changeset.commit",
-    description: "Run the final gate atomically and admit the changeset, or abort it with reasons.",
-    inputSchema: { type: "object", required: ["token", "csId"], properties: { token: { type: "string" }, csId: { type: "string" } } },
+    description: "Run the final gate atomically and admit the changeset, or abort it with reasons. intent is required here (F1: migrated from changeset.open).",
+    inputSchema: { type: "object", required: ["token", "csId", "intent"], properties: { token: { type: "string" }, csId: { type: "string" }, intent: { type: "string" } } },
   },
   { name: "changeset.abort", description: "Discard an open changeset and release its locks.", inputSchema: { type: "object", required: ["token", "csId"], properties: { token: { type: "string" }, csId: { type: "string" } } } },
   { name: "changeset.extend", description: "Renew the TTL of an open changeset's locks.", inputSchema: { type: "object", required: ["token", "csId"], properties: { token: { type: "string" }, csId: { type: "string" } } } },
   { name: "changeset.list_mine", description: "List the caller's open changesets (reattach after reconnect).", inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" } } } },
+  {
+    name: "node.edit",
+    description:
+      "F1 lock implícito: gatilho da UI ao ENTRAR em edição num nó, antes de existir delta. Abre/reusa o turno da célula do nó. Returns { ok:true, csId, cell } or { ok:false, editingBy, holderName, since } on contention.",
+    inputSchema: { type: "object", required: ["token", "nodeId"], properties: { token: { type: "string" }, nodeId: { type: "string" } } },
+  },
   {
     name: "authority.flip",
     description: "Flip a cell's authority (source ↔ graph) via an ephemeral changeset. Runs the full gate pipeline; emits authority.flipped (always broadcast to all connected sessions).",
@@ -154,6 +161,8 @@ function callTool(state: ServerState, name: string, args: any): unknown {
       return changesetExtend(state, args)
     case "changeset.list_mine":
       return changesetListMine(state, args)
+    case "node.edit":
+      return nodeEdit(state, args)
     case "authority.flip":
       return authorityFlip(state, args)
     case "presence.who":

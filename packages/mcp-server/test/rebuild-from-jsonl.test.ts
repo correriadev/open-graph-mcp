@@ -18,12 +18,12 @@ test("rebuildFromJsonl reconstructs a tenant's SQLite state from the JSONL mirro
     for (let i = 0; i < 2; i++) {
       const { csId } = await callTool(s.url, "changeset.open", { token: a.token, cells: [`d${i}:5`], intent: `t${i}` })
       await callTool(s.url, "changeset.claim", { token: a.token, csId, delta: { kind: "claim.add", payload: { id: `c${i}`, subject: "s", domain: `d${i}`, level: 5, refs: [] } } })
-      await callTool(s.url, "changeset.commit", { token: a.token, csId })
+      await callTool(s.url, "changeset.commit", { token: a.token, csId, intent: `t${i}` })
     }
     const flipCs = await callTool(s.url, "changeset.open", { token: a.token, cells: ["auth:0"], intent: "flip" })
     await callTool(s.url, "changeset.claim", { token: a.token, csId: flipCs.csId, delta: { kind: "claim.add", payload: { id: "ca", subject: "s", domain: "auth", level: 0, refs: [] } } })
     await callTool(s.url, "changeset.claim", { token: a.token, csId: flipCs.csId, delta: { kind: "authority.flip", payload: { cell: "auth:0", to: "graph" } } })
-    const fc = await callTool(s.url, "changeset.commit", { token: a.token, csId: flipCs.csId })
+    const fc = await callTool(s.url, "changeset.commit", { token: a.token, csId: flipCs.csId, intent: "flip" })
     expect(fc.ok).toBe(true)
 
     const before = { claims: count(s, "claims"), changesets: count(s, "changesets"), events: count(s, "events") }

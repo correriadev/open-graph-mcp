@@ -41,7 +41,9 @@ export function authorityFlip(state: ServerState, args: { token: string; cell: s
   // Assimetria intencional com o branch de claim: quando o gate final reprova, changesetCommit já
   // se auto-aborta dentro da MESMA transação (cs 'aborted', locks liberados, eventos emitidos) —
   // chamar changesetAbort aqui seria no-op (status já não é 'open').
-  const commit = changesetCommit(state, { token: args.token, csId: open.csId })
+  // F1: commit agora exige intent — reusa o mesmo texto do open efêmero acima (não há um "intent do
+  // usuário" separado aqui; authority.flip é uma mutação de um passo só, sem draft).
+  const commit = changesetCommit(state, { token: args.token, csId: open.csId, intent: `authority.flip ${cell} -> ${to}` })
   if (!commit.ok) return { ok: false, reasons: commit.reasons }
   return { ok: true, admitSeq: commit.admitSeq, cell, to }
 }

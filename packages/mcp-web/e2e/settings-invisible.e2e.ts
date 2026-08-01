@@ -51,7 +51,7 @@ test("commit-notification checkbox off suppresses the toast for the observer who
 
   const dave = turns(h, await webToken(s2.page))
   const opened = await dave.open([h.firstCell], "settings-invisible e2e turn")
-  await dave.commit(opened.csId ?? opened.id)
+  await dave.commit(opened.csId ?? opened.id, "settings-invisible e2e turn")
 
   // dá tempo dum round-trip real de evento, então afirma que toast nenhum apareceu
   await s1.page.waitForTimeout(1_000)

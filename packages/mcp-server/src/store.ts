@@ -113,3 +113,10 @@ export function maxClaimSeq(state: ServerState, tenant: string): number {
   const row = state.db.query("SELECT COALESCE(MAX(seq),0) AS m FROM claims WHERE tenant_id = ?").get(tenant) as { m: number }
   return row.m
 }
+
+/** Nome de exibição do holder p/ eventos "em edição por X" (node.editing/node.idle, F1) — cai pro
+ *  próprio userId se o registro de `users` sumiu (nunca deveria, mas o evento não pode quebrar por isso). */
+export function holderNameOf(state: ServerState, tenant: string, userId: string): string {
+  const row = state.db.query("SELECT name FROM users WHERE tenant_id = ? AND id = ?").get(tenant, userId) as { name: string } | null
+  return row?.name ?? userId
+}

@@ -86,7 +86,7 @@ async function main() {
     // ── graph.history: durable, gap-free replay ──────────────────────────
     const opened = await toolCall(s.url, "changeset.open", { token: creds.token, cells: ["contract:4"], intent: "history replay check" })
     check("changeset.open succeeded (setup for the history check)", !!opened.csId)
-    await toolCall(s.url, "changeset.commit", { token: creds.token, csId: opened.csId })
+    await toolCall(s.url, "changeset.commit", { token: creds.token, csId: opened.csId, intent: "history replay check" })
 
     const h1 = await rpc(s.url, "resources/read", { uri: "graph://history?since=0" })
     const events1: any[] = JSON.parse(h1.contents[0].text).events

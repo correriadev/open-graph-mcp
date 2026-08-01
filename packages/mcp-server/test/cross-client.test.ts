@@ -27,7 +27,7 @@ test("changeset.committed: non-web gets envelope + system.message, web gets enve
     await declareAgentKind(s.url, carolSse, carol.token, "web")
 
     const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: ["commitcell:4"], intent: "cross-client commit" })
-    const commit = await callTool(s.url, "changeset.commit", { token: alice.token, csId })
+    const commit = await callTool(s.url, "changeset.commit", { token: alice.token, csId, intent: "cross-client commit" })
     expect(commit.ok).toBe(true)
 
     // bob is cell-filtered, so he also received the earlier changeset.opened system.message

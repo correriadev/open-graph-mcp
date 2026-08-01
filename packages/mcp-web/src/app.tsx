@@ -12,9 +12,9 @@ import { dotColor, initials, type PresenceEntry } from "@open-graph-mcp/client"
 import { lodForZoom } from "@open-graph-mcp/graph-core/layout"
 import { BaseCard } from "./flow/base-card"
 import { CARD_H, CARD_W, toFlow, type CellRect } from "./flow/to-flow"
-import { connectOg, pollWho, pushToast, refreshFocus, setFocus, toastTarget } from "./og"
+import { abandonEmptyDraft, connectOg, editNode, pollWho, pushToast, refreshFocus, setFocus, toastTarget } from "./og"
 import { useUi } from "./store"
-import { DraftPanel, MyTurns, TurnModal } from "./turn"
+import { DraftPanel, MyTurns } from "./turn"
 import { ClaimsBrowser } from "./claims-browser"
 import { QueryBar } from "./query-bar"
 import { HistoryView } from "./history-view"
@@ -36,7 +36,7 @@ function GraphMiniMap() {
   />
 }
 
-function Topbar({ onSettings, onOpenTurn }: { onSettings: () => void; onOpenTurn: () => void }) {
+function Topbar({ onSettings }: { onSettings: () => void }) {
   const conn = useUi((s) => s.conn)
   const name = useUi((s) => s.name)
   const seq = useUi((s) => s.seq)
@@ -53,7 +53,6 @@ function Topbar({ onSettings, onOpenTurn }: { onSettings: () => void; onOpenTurn
       <button id="queryBtn" title="Buscar (⌘K)" onClick={() => openQuery(true)}>⌘K</button>
       <a id="nav-history" href="#/history" data-active={route.startsWith("/history")} onClick={(e) => { e.preventDefault(); navigate("/history") }}>histórico</a>
       <a id="nav-canvas" href="/" data-active={!route.startsWith("/history")} onClick={(e) => { e.preventDefault(); navigate("/") }}>canvas</a>
-      {name && <button id="openturn" onClick={onOpenTurn}>Abrir turno</button>}
       {name && <span id="who">{name}</span>}
       <input
         id="name"
@@ -242,12 +241,18 @@ function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }
 }
 
 // ---- painel do nó -----------------------------------------------------------
+/**
+ * F1: gatilho da transição LEITURA → EDIÇÃO. `#edit-node` chama `node.edit` — abre/reusa o turno da
+ * célula do nó no server. Em contenção, `editingByCell` (projetado de node.editing/node.idle) já
+ * mostra "em edição por X" ANTES de qualquer clique — o botão nem aparece; sem banner de erro.
+ */
 function NodePanel() {
   const graph = useUi((s) => s.graph)
   const selectedId = useUi((s) => s.selectedId)
   const select = useUi((s) => s.select)
-  const locks = useUi((s) => s.locks)
   const drift = useUi((s) => s.drift)
+  const editingByCell = useUi((s) => s.editingByCell)
+  const activeCs = useUi((s) => s.activeCs)
   const node = useMemo(
     () => (graph && selectedId ? graph.nodes.find((n) => n.id === selectedId) : undefined),
     [graph, selectedId],
@@ -255,10 +260,11 @@ function NodePanel() {
   if (!node) return null
   const cell = `${node.domain ?? "(unassigned)"}:${node.level}`
   const authority = graph!.authority?.[cell] ?? "source"
-  const lock = locks[cell]
+  const editing = editingByCell[cell]
+  const iAmEditing = !!activeCs?.cells.includes(cell)
   return (
     <div id="panel">
-      <button className="close" onClick={() => select(null)} aria-label="fechar">×</button>
+      <button className="close" onClick={() => { abandonEmptyDraft(); select(null) }} aria-label="fechar">×</button>
       <h3>{node.id}</h3>
       <dl>
         <dt>cell</dt>
@@ -271,10 +277,10 @@ function NodePanel() {
         <dd className="mono">{node.anchor || "—"}</dd>
         <dt>drift</dt>
         <dd>{drift[node.id] ?? "—"}</dd>
-        {lock && (
+        {editing && !iAmEditing && (
           <>
-            <dt>🔒 locked by</dt>
-            <dd>{lock.holder} · {lock.csId}<br />expira {new Date(lock.expiresAt).toLocaleTimeString()}</dd>
+            <dt>em edição</dt>
+            <dd id="editing-by">por {editing.holderName}</dd>
           </>
         )}
         <dt>claims</dt>
@@ -284,6 +290,11 @@ function NodePanel() {
           {node.overclaim && " · OVERCLAIM"}
         </dd>
       </dl>
+      {!editing || iAmEditing ? (
+        <button id="edit-node" disabled={iAmEditing} onClick={() => editNode(node.id)}>
+          {iAmEditing ? "editando…" : "editar"}
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -373,7 +384,7 @@ function Shell() {
             select(n.id)
             setFocus((n.data as { cell?: string }).cell ?? null) // clicar nó = focar a cell dele (spec §7)
           }}
-          onPaneClick={() => select(null)}
+          onPaneClick={() => { abandonEmptyDraft(); select(null) }}
         >
           <AvatarsLayer cells={flow.cells} />
           <CellContainers cells={flow.cells} />
@@ -395,26 +406,16 @@ function RouteDriver(): JSX.Element {
 
 export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [turnOpen, setTurnOpen] = useState(false)
-  const [requestedCell, setRequestedCell] = useState<string | null>(null)
   const route = useUi((s) => s.route)
-  const openTurnRequest = useUi((s) => s.openTurnRequest)
   useEffect(() => {
     const syncRoute = () => useUi.setState({ route: window.location.hash.replace(/^#/, "").split("?")[0] || "/" })
     syncRoute()
     window.addEventListener("hashchange", syncRoute)
     return () => window.removeEventListener("hashchange", syncRoute)
   }, [])
-  useEffect(() => {
-    if (openTurnRequest) {
-      setRequestedCell(openTurnRequest)
-      setTurnOpen(true)
-      useUi.getState().requestOpenTurn(null) // consume
-    }
-  }, [openTurnRequest])
   return (
     <ReactFlowProvider>
-      <Topbar onSettings={() => setSettingsOpen(true)} onOpenTurn={() => setTurnOpen(true)} />
+      <Topbar onSettings={() => setSettingsOpen(true)} />
       {route.startsWith("/history") ? (
         <RouteDriver />
       ) : (
@@ -431,7 +432,6 @@ export function App() {
       <MyTurns />
       <QueryBar />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <TurnModal open={turnOpen} initialCell={requestedCell} onClose={() => { setTurnOpen(false); setRequestedCell(null) }} />
     </ReactFlowProvider>
   )
 }

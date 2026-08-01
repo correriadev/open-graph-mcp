@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { enterEdit } from "./driver"
 import { startHarness, type Harness } from "./fixture"
 
 let harness: Harness
@@ -9,9 +10,7 @@ test("active turn reattaches after restart, extends, and aborts without reload",
   test.slow()
   const alice = await harness.openSession(browser, "alice-recovery")
   const bob = await harness.openSession(browser, "bob-recovery")
-  await alice.page.locator("#openturn").click()
-  await alice.page.locator("#intent").fill("recover this turn")
-  await alice.page.locator("#doopen").click()
+  await enterEdit(alice.page, harness.firstNodeId)
   await expect(alice.page.locator("#draft")).toBeVisible()
   const heading = await alice.page.locator("#draft h3").textContent()
   await alice.page.locator("#f_subject").fill("unsent draft survives component state")

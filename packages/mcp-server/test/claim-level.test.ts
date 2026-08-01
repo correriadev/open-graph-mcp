@@ -59,7 +59,7 @@ test("P-form admission stages numeric payload and persists canonical SQLite and 
     expect((await callTool(s.url, "changeset.claim", { token: actor.token, csId, delta: { kind: "claim.add", payload: { id: "canonical", subject: "ok", domain: "canonical", level: "P5", refs: [] } } })).ok).toBe(true)
     const staged = s.state.db.query("SELECT payload FROM cs_deltas WHERE tenant_id = ? AND cs_id = ?").get("default", csId) as { payload: string }
     expect(JSON.parse(staged.payload).level).toBe(5)
-    expect((await callTool(s.url, "changeset.commit", { token: actor.token, csId })).ok).toBe(true)
+    expect((await callTool(s.url, "changeset.commit", { token: actor.token, csId, intent: "canonical level" })).ok).toBe(true)
     expect((s.state.db.query("SELECT level FROM claims WHERE tenant_id = ? AND id = ?").get("default", "canonical") as any).level).toBe("P5")
     const jsonl = readFileSync(path.join(s.state.stateDir, "tenants", "default", "claims.jsonl"), "utf8")
     expect(JSON.parse(jsonl.trim().split("\n").at(-1)!).level).toBe("P5")
@@ -87,7 +87,7 @@ test("all numeric and P wire levels commit through canonical ladders", async () 
         const { csId } = await callTool(s.url, "changeset.open", { token: actor.token, cells: [`${domain}:P${level}`], intent: id })
         const wireLevel = dialect === "numeric" ? level : `P${level}`
         expect((await callTool(s.url, "changeset.claim", { token: actor.token, csId, delta: { kind: "claim.add", payload: { id, subject: id, domain, level: wireLevel, refs: parent ? [parent] : [] } } })).ok).toBe(true)
-        expect((await callTool(s.url, "changeset.commit", { token: actor.token, csId })).ok).toBe(true)
+        expect((await callTool(s.url, "changeset.commit", { token: actor.token, csId, intent: id })).ok).toBe(true)
         expect((s.state.db.query("SELECT level FROM claims WHERE tenant_id = ? AND id = ?").get("default", id) as any).level).toBe(`P${level}`)
         expect((await readResource(s.url, `graph://claims?id=${id}`, actor.token)).claim.level).toBe(level)
         parent = id
@@ -104,7 +104,7 @@ test("commit rejects a directly injected noncanonical staged payload atomically"
     s.state.db.query("INSERT INTO cs_deltas (tenant_id,cs_id,seq,kind,payload,created_at) VALUES (?,?,?,?,?,?)").run(
       "default", csId, 1, "claim.add", JSON.stringify({ id: "bad-commit", subject: "bad", domain: "bypass", level: "5", refs: [] }), new Date().toISOString(),
     )
-    const result = await callTool(s.url, "changeset.commit", { token: actor.token, csId })
+    const result = await callTool(s.url, "changeset.commit", { token: actor.token, csId, intent: "bypass" })
     expect(result).toEqual({ ok: false, reasons: ["claim.add: invalid level"] })
     expect(s.state.db.query("SELECT id FROM claims WHERE tenant_id = ? AND id = ?").get("default", "bad-commit")).toBeNull()
   } finally { s.stop() }

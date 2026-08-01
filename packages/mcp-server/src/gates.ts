@@ -59,8 +59,10 @@ const canonicalCell = (cell: string): string => {
 }
 const toRoundtrip = (c: ClaimSnapshot): RoundtripClaim => ({ id: c.id, level: c.level, refs: c.refs ?? [] })
 
-/** Nós da célula "domain:level" (level numérico) — level do nó é "P<n>" no grafo. */
-function nodesOfCell(nodes: readonly NodeSnapshot[], cell: string): NodeSnapshot[] {
+/** Nós da célula "domain:level" (level numérico) — level do nó é "P<n>" no grafo.
+ *  Exportado: node.editing/node.idle (changeset.ts/sweeper.ts) precisam listar os nós de uma
+ *  célula trancada/destrancada pra projeção "em edição por X" no nível do nó (F1). */
+export function nodesOfCell(nodes: readonly NodeSnapshot[], cell: string): NodeSnapshot[] {
   const cut = cell.lastIndexOf(":")
   const domain = cell.slice(0, cut)
   const level = cell.slice(cut + 1)

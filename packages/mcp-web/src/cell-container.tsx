@@ -16,7 +16,6 @@ export function CellContainers({ cells }: { cells: Record<string, CellRect> }) {
   const ghosts = useUi((state) => state.ghostDeltasByCell)
   const refPicking = useUi((state) => state.refPicking)
   const pickRef = useUi((state) => state.pickRef)
-  const requestOpenTurn = useUi((state) => state.requestOpenTurn)
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1_000)
@@ -42,14 +41,16 @@ export function CellContainers({ cells }: { cells: Record<string, CellRect> }) {
       data-cell={cell}
       style={{ transform: `translate(${rect.x - 12}px, ${rect.y - 12}px)`, width: rect.w + 24, height: rect.h + 24 }}
     >
-      <button className="og-cell-header" data-cell={cell} onClick={(event) => { event.stopPropagation(); requestOpenTurn(cell) }}>
+      {/* F1: sem gatilho de "abrir turno" — o header vira leitura pura (nós/claims/quem edita).
+          A transição pra edição acontece no NÓ (NodePanel), não na célula inteira. */}
+      <div className="og-cell-header" data-cell={cell}>
         <strong>{cell}</strong><span>{stats.nodes} nós · {stats.claims.size} claims</span>
-        {lock && <span className="og-lock-badge" aria-label={`Em revisão por ${resolveHolderName(lock.holder, roster)}`}>🔒 {resolveHolderName(lock.holder, roster)} · {countdown(lock.expiresAt, now)}</span>}
+        {lock && <span className="og-lock-badge" aria-label={`em edição por ${resolveHolderName(lock.holder, roster)}`}>em edição por {resolveHolderName(lock.holder, roster)} · {countdown(lock.expiresAt, now)}</span>}
         <span className="og-cell-avatars" aria-label={`${users.length} participantes`}>
           {users.slice(0, 3).map((user) => <span key={user.userId} title={user.name}>{user.name.slice(0, 1).toUpperCase()}</span>)}
           {users.length > 3 && <span>+{users.length - 3}</span>}
         </span>
-      </button>
+      </div>
       {(ghosts[cell] ?? []).length > 0 && <div className="og-ghosts">{ghosts[cell].map((ghost, index) => <div
         key={index}
         className={`og-ghost-card${refPicking && ghost.id ? " pickable" : ""}`}
@@ -61,7 +62,7 @@ export function CellContainers({ cells }: { cells: Record<string, CellRect> }) {
   const emptyLockedCells = Object.keys(locks).filter((cell) => !cells[cell])
   return <>
     {containers}
-    {emptyLockedCells.length > 0 && <aside id="empty-cell-locks" aria-label="Locks em cells sem nós">{emptyLockedCells.map((cell) => <div key={cell} data-cell={cell}>🔒 {cell} · {resolveHolderName(locks[cell]!.holder, roster)}</div>)}</aside>}
+    {emptyLockedCells.length > 0 && <aside id="empty-cell-locks" aria-label="Em edição em cells sem nós">{emptyLockedCells.map((cell) => <div key={cell} data-cell={cell}>{cell} em edição por {resolveHolderName(locks[cell]!.holder, roster)}</div>)}</aside>}
   </>
 }
 

@@ -6,18 +6,17 @@ import { turns, webToken } from "./driver"
 // alice web token (mesma identidade da sessão); alice então pressiona ⌘K, digita termo
 // inexistente → .query-gap visível com refinements; limpa, digita 'login' → .query-result (casado
 // contra o nó src/auth/login.ts do índex); click abre ClaimsBrowser com .claim-row === 2;
-// click claimsRow abre OpenClaim com subject + anchor + provenance; clique no botão 'abrir turno
-// nesta cell' (footer OpenClaim) abre o TurnModal UI-2 com a cell pre-preenchida — fecha o ciclo.
+// click claimsRow abre OpenClaim com subject + anchor + provenance.
+//
+// F1 (lock implícito): o footer "abrir turno nesta cell" do OpenClaim (#open-turn-from-claim) foi
+// REMOVIDO — era um dos 3 gatilhos explícitos de "Abrir turno". Entrar em edição agora é por NÓ
+// (NodePanel #edit-node → node.edit), não por um botão solto na leitura de uma claim.
 //
 // ADAPTAÇÕES (vs spec 004 §3.1):
 // 1) Spec diz "spec assume pre-commit setup via driver.turns". Adaptado: setup roda DENTRO do
 //    test.after alice session, antes das asserções, esperando SSE changeset.committed + reload.
 // 2) Spec assertion #5 (RefChip navigate) — produção autocompromete-se: claims em auth:P4 com
-//    refs=[] (roundtrip aceita refs vazio) → OpenClaim sem RefChip → assert skip; 'abrir turno'
-//    cobre o write-side. RefChip path coberto por alternate-flow `ref-not-found` separado (TBD fase B).
-// 3) Spec assertion #7 (DraftPanel visible) — produção requer commit de claim submetido via UI;
-//    ponytail: assertion reduuzida a `TurnModal aberto com cell pre-fill '#f_level' = 'P4'`,
-//    com os campos do UI-2 jejuno suficientes p/ ação completa (não reproduz a sessão LLM).
+//    refs=[] (roundtrip aceita refs vazio) → OpenClaim sem RefChip → assert skip.
 
 let h: Harness
 test.beforeAll(async () => { h = await startHarness() })
@@ -33,13 +32,13 @@ async function setupClaimsAsAlice(alicePage: import("@playwright/test").Page) {
   const base = await turns(h, token).open(["auth:5"], "setup base claim")
   if (!base.ok || !base.csId) throw new Error("open base changeset failed: " + JSON.stringify(base))
   expect((await turns(h, token).claim(base.csId, { kind: "claim.add", payload: { id: "cBase", subject: "auth floor root", domain: "auth", level: 5, refs: [] } })).ok).toBe(true)
-  expect((await turns(h, token).commit(base.csId)).ok).toBe(true)
+  expect((await turns(h, token).commit(base.csId, "setup base claim")).ok).toBe(true)
 
   const refs = await turns(h, token).open(["auth:4"], "setup referencing claims")
   if (!refs.ok || !refs.csId) throw new Error("open refs changeset failed: " + JSON.stringify(refs))
   expect((await turns(h, token).claim(refs.csId, { kind: "claim.add", payload: { id: "c1", subject: "login regression coverage", domain: "auth", level: 4, refs: ["cBase"] } })).ok).toBe(true)
   expect((await turns(h, token).claim(refs.csId, { kind: "claim.add", payload: { id: "c2", subject: "login token verify", domain: "auth", level: 4, refs: ["cBase"] } })).ok).toBe(true)
-  expect((await turns(h, token).commit(refs.csId)).ok).toBe(true)
+  expect((await turns(h, token).commit(refs.csId, "setup referencing claims")).ok).toBe(true)
 }
 
 test("query-and-read: ⌘K gap → known term match → ClaimsBrowser → OpenClaim → open turn (leitura→escrita)", async ({ browser }) => {
@@ -114,12 +113,9 @@ test("query-and-read: ⌘K gap → known term match → ClaimsBrowser → OpenCl
   await expect(referencedBy).toBeVisible()
   await expect(referencedBy).toContainText("c1", { timeout: 5_000 })
 
-  // bottom: open-turn button surfaces the UI-2 TurnModal (cell prefilled)
-  const openTurnBtn = alice.page.locator("#open-turn-from-claim")
-  if (await openTurnBtn.count() > 0) {
-    await openTurnBtn.click()
-    await expect(alice.page.locator("#modal")).toBeVisible()
-  }
+  // F1: o footer "abrir turno nesta cell" do OpenClaim foi removido — entrar em edição agora é por
+  // NÓ (NodePanel #edit-node), não mais um gatilho solto no ClaimsBrowser.
+  await expect(alice.page.locator("#open-turn-from-claim")).toHaveCount(0)
 
   await alice.context.close()
 })

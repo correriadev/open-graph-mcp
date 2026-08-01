@@ -21,7 +21,7 @@ test("commit fails atomically when one delta breaks the ladder — no delta is a
     expect(bad.warnings.length).toBeGreaterThan(0)
 
     // The final gate (§5.3) is the hard wall: the whole changeset is rejected atomically.
-    const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId })
+    const commit = await callTool(s.url, "changeset.commit", { token: a.token, csId, intent: "atomicity" })
     expect(commit.ok).toBe(false)
     expect(commit.reasons.some((r: string) => r.includes("dangling-ref"))).toBe(true)
 

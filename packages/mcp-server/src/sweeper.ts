@@ -9,6 +9,8 @@ import { durableTransaction, write } from "./db"
 import { abortedPayload, appendEvent, pushEnvelope, type EventEnvelope, type ServerState } from "./state"
 import { sweepPresence } from "./tools/presence"
 import { sweepTyping } from "./tools/typing"
+import { readNodes, holderNameOf } from "./store"
+import { nodesOfCell } from "./gates"
 
 const now = () => new Date().toISOString()
 
@@ -31,7 +33,13 @@ export function sweepTtl(state: ServerState): void {
       // abortedPayload carrega byUser (holder) — crítico no TTL expiry: o router de afinidade roteia
       // por ele e o holder precisa saber que perdeu o turno mesmo sem filtro que case.
       envs.push(appendEvent(state, tenant, { kind: "changeset.aborted", targetKind: "changeset", targetId: cs.id, byUser: cs.opened_by, payload: abortedPayload(cs, "ttl_expired", cells) }, { defer: true }))
-      for (const cell of held) envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: cs.opened_by, payload: { cell, csId: cs.id, reason: "ttl_expired" } }, { defer: true }))
+      for (const cell of held) {
+        envs.push(appendEvent(state, tenant, { kind: "lock.released", targetKind: "cell", targetId: cell, byUser: cs.opened_by, payload: { cell, csId: cs.id, reason: "ttl_expired" } }, { defer: true }))
+        // node.idle par de projeção (F1) — mesmo turno órfão (risco nomeado no plano: node.edit sem
+        // delta) some da UI por aqui quando o TTL varre o lock, não só no commit/abort explícito.
+        const nodeIds = nodesOfCell(readNodes(state, tenant), cell).map((n) => n.id)
+        envs.push(appendEvent(state, tenant, { kind: "node.idle", targetKind: "cell", targetId: cell, byUser: cs.opened_by, payload: { cell, nodes: nodeIds, byUser: cs.opened_by, holderName: holderNameOf(state, tenant, cs.opened_by), csId: cs.id } }, { defer: true }))
+      }
     })
     state.deltaCounts.delete(csId)
     for (const e of envs) pushEnvelope(state, tenant, e)
