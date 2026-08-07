@@ -37,7 +37,8 @@ que a demo feliz.
 
 | # | Arquivo | Função | Status |
 |---|---|---|---|
-| 0 | `00-scope-sb-0-hardening-servidor.md` | Campanha de teste-e-correção de toda a superfície do servidor. **Primeiro.** | em execução |
+| 0 | `00-scope-sb-0-hardening-servidor.md` | Campanha de teste-e-correção de toda a superfície do servidor. **Primeiro.** | fechado (2026-08-07) |
+| 1 | `01-evidencias-fluxo-completo.md` | Exercício do fluxo completo via MCP (escada, autoridade, impacto, drift, concorrência) contra servidor real. Achados **F1–F6**. | fechado (2026-08-07) |
 
 Escopos previstos (a escrever, ordem provável):
 
