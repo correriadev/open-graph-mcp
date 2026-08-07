@@ -9,6 +9,7 @@
  */
 import { DEFAULT_TENANT, tenantGraph, type EventEnvelope, type ServerState } from "./state"
 import { normalizeClaimLevel } from "./claim-level"
+import { authorityOf } from "./store"
 
 function driftGradeOf(nodes: { stale?: unknown }[]): "fresh" | "stale" | "gone" {
   let worst: "fresh" | "stale" | "gone" = "fresh"
@@ -32,7 +33,17 @@ function cellState(state: ServerState, tenant: string, cellKey: string) {
     | null
   return {
     cell: cellKey,
-    authority: graph?.authority?.[cellKey] ?? "source",
+    // REPORT-B1 (Tier 1 fix): the hot graph's `graph?.authority?.[cellKey]` is NOT the source of
+    // truth — `bootstrap`/`rebuild` (graph-bootstrap.ts, owned by WS-F) replace `tg.graph` with a
+    // freshly indexed Graph object whose `authority` field never carries over the SQLite `authority`
+    // table's existing rows (see persistGraph: it only WRITES `graph.authority` into the table, never
+    // deletes/merges the other direction). A cell flipped before a bootstrap/rebuild — or flipped in a
+    // tenant whose hot graph was still null (commit path in changeset.ts guards `if (tg.graph)` before
+    // touching `tg.graph.authority`) — silently read back as "source" here while SQLite (and the final
+    // gate, via store.authorityOf) still say "graph"/"suspended". Reading through SQLite directly closes
+    // that gap without touching the resource's shape (same field name/type) and without needing any
+    // change outside this file.
+    authority: authorityOf(state, tenant, cellKey),
     nodeCount: nodes.length,
     claimCount: claims.size,
     driftGrade: driftGradeOf(nodes),
