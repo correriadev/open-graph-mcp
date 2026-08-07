@@ -82,6 +82,22 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS system_messages (
   tenant_id TEXT NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL
 );
+
+/* D10-lite: tokens sobrevivem a restart. SQLite SIM, JSONL NAO -- e a unica tabela com tenant_id
+   deliberadamente fora do espelho duravel, e por dois motivos. (1) Token e CREDENCIAL, nao
+   conhecimento: a verdade duravel deste sistema e o grafo, e o JSONL e append-only, ou seja,
+   espelhar tokens ali seria manter todo token ja emitido, em claro, para sempre, sem caminho de
+   revogacao. (2) Perder o SQLite nao perde trabalho: o cliente re-registra sob o mesmo nome, o
+   userId e deterministico (sha256 de tenant:name), e os changesets dele continuam la -- e
+   exatamente o caminho de recuperacao QA-1 que ja existe no packages/client.
+   token_hash e o sha256 do token: um SQLite vazado nao entrega credencial utilizavel.
+   (Sem crase neste comentario: o SCHEMA e um template literal.) */
+CREATE TABLE IF NOT EXISTS tokens (
+  tenant_id TEXT NOT NULL, token_hash TEXT NOT NULL, user_id TEXT NOT NULL, name TEXT NOT NULL,
+  created_at TEXT NOT NULL, expires_at TEXT NOT NULL,
+  PRIMARY KEY (token_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_tokens_expires ON tokens (expires_at);
 `
 
 export function openDb(sqlitePath: string): Database {

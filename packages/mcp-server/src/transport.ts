@@ -12,6 +12,7 @@ import { graphBootstrap, graphRebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
 import { subscribe } from "./tools/graph-subscribe"
 import { sessionRegister, requireToken } from "./tools/session"
+import { lookupToken } from "./tokens"
 import { changesetOpen, changesetClaim, changesetCommit, changesetAbort, changesetExtend, changesetListMine, nodeEdit } from "./tools/changeset"
 import { authorityFlip } from "./tools/authority"
 import { presenceWho, presenceFocus, presenceBeat } from "./tools/presence"
@@ -27,7 +28,7 @@ function tenantOf(state: ServerState, token: unknown): string {
   // de cima, então um token errado/expirado caía silenciosamente no tenant default e devolvia "not
   // bootstrapped" — parecendo repo errado quando na verdade é auth errada. Explicitar aqui (mesma
   // mensagem de requireToken, session.ts) em vez de conflatar os dois casos.
-  const info = state.tokens.get(token)
+  const info = lookupToken(state, token)
   if (!info) throw new Error("invalid or expired token — call session.register")
   return info.tenantId
 }
@@ -75,7 +76,8 @@ const TOOLS = [
   },
   {
     name: "session.register",
-    description: "Register a session under a tenant. Returns { token, userId, tenantId }. Token is in-memory (lost on restart).",
+    description:
+      "Register a session under a tenant. Returns { token, userId, tenantId, expiresAt }. Call this FIRST — every other tool except graph.query requires the token it returns. The token survives a server restart (persisted, 90-day expiry); if a call ever fails with 'invalid or expired token', call this again with the same name to get a fresh one — the identity (and any open changeset) is preserved.",
     inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" }, tenant: { type: "string" } } },
   },
   {

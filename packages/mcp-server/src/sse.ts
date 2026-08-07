@@ -7,6 +7,7 @@
 import { DEFAULT_TENANT, nextSeq, tenantGraph, type EventEnvelope, type Filter, type ServerState } from "./state"
 import { isRecipient } from "./affinity"
 import { presenceSessionClosed } from "./tools/presence"
+import { lookupToken } from "./tokens"
 
 /**
  * "all" | "cell:<domain:level>" | "domain:<d>" | "event:<k1,k2>" | "changeset:<id>"
@@ -43,7 +44,7 @@ function frame(event: string, data: unknown): Uint8Array {
 
 function tenantOf(state: ServerState, token: string | null): string {
   if (!token) return DEFAULT_TENANT
-  return state.tokens.get(token)?.tenantId ?? DEFAULT_TENANT
+  return lookupToken(state, token)?.tenantId ?? DEFAULT_TENANT
 }
 
 /** `?since=` parsing (SB-0 pre-classificado, Tier 1): `Number("abc")` → `NaN` → `seq > NaN` casa nada
@@ -79,11 +80,20 @@ export function handleEvents(state: ServerState, url: URL): Response {
   const tenant = tenantOf(state, token)
   // Fase 3 §6.1: identidade do token (se houver) fica presa à Session p/ o router de afinidade rotear
   // por USUÁRIO (holder, atacante de lock.denied) sem depender de presence.beat/focus ter sido chamado.
-  const userId = token ? state.tokens.get(token)?.userId ?? null : null
-  // Fase 3 §9.1: um token presente que o processo ATUAL não reconhece é o sinal pragmático de restart —
-  // tokens são em memória (spec §9), então um restart os apaga; um cliente que reconecta trazendo um
-  // token pré-restart cai aqui. Sem token nenhum (sessão nova, nunca teve nada a perder) não conta.
-  const restartPending = !!token && !state.tokens.has(token)
+  const info = token ? lookupToken(state, token) : undefined
+  const userId = info?.userId ?? null
+  // Fase 3 §9.1 + D10-lite: "este cliente está reconectando depois de um restart".
+  //
+  // Era `token && !tokens.has(token)` — funcionava só PORQUE os tokens morriam no restart, e
+  // confundia dois casos bem diferentes (o servidor reiniciou / o token é lixo). Com tokens duráveis
+  // o token SOBREVIVE, então o sinal certo é `staleBoot`: veio da hidratação, ou seja, foi emitido
+  // por um processo anterior. Um token desconhecido continua contando — é o caso de quem tinha um
+  // token de antes do SQLite ser apagado, que é restart do mesmo jeito.
+  //
+  // `staleBoot` é consumido AQUI, na primeira conexão que apresentar o token: as reconexões
+  // seguintes deste mesmo processo não são restart nenhum e não devem repetir o aviso.
+  const restartPending = !!token && (!info || info.staleBoot === true)
+  if (info?.staleBoot) info.staleBoot = false
   // Aleatório (não sequencial): o sessionId é uma capability opaca — só quem recebeu o frame
   // session.created o conhece; um atacante não consegue mais adivinhar nem pré-registrar IDs de
   // presença de vítimas (defense in depth com o binding sessionId→token em tools/presence.ts).

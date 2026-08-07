@@ -147,6 +147,7 @@ export type StartOptions = {
   focusDebounceMs?: number
   typingMs?: number
   idleMs?: number
+  tokenTtlMs?: number
   typingIntervalMs?: number
   /** Origin allowlist for the active DNS-rebinding check (spec: "MUST validate the Origin header on
    * all incoming connections"), exact-match only. Default `["*"]` preserves today's fully-open,
@@ -179,6 +180,7 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     focusDebounceMs: opts.focusDebounceMs,
     typingMs: opts.typingMs,
     idleMs: opts.idleMs,
+    tokenTtlMs: opts.tokenTtlMs,
     domains: opts.domains,
   })
   const watchTenant = opts.watchTenant ?? DEFAULT_TENANT

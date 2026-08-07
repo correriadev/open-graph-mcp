@@ -13,6 +13,7 @@ import type { Graph } from "@open-graph-mcp/graph-core/build"
 import { openDb, write } from "./db"
 import { route } from "./affinity"
 import { renderSystemMessage, pushSystemMessage } from "./system-message"
+import { hydrateTokens, DEFAULT_TOKEN_TTL_MS } from "./tokens"
 
 export const DEFAULT_TENANT = "default"
 export const DEFAULT_TTL_MS = 30 * 60 * 1000
@@ -62,8 +63,21 @@ export type Session = {
   restartPending: boolean
 }
 
-/** Token em memória → identidade. Some no restart; changesets persistem no SQLite (spec §9). */
-export type TokenInfo = { token: string; userId: string; tenantId: string; name: string }
+/**
+ * Token → identidade. D10-lite: o Map continua sendo o índice quente (todo lookup é dele), mas agora
+ * é HIDRATADO do SQLite no boot, então um token sobrevive a restart — antes, reiniciar o servidor
+ * invalidava silenciosamente todo token já emitido.
+ *
+ * `expiresAt` (epoch ms) é checado em todo lookup, não só no boot: um processo que ficou meses de pé
+ * não pode continuar aceitando um token vencido só porque a varredura de boot já passou.
+ *
+ * `staleBoot` = "este token foi emitido por um processo ANTERIOR" (veio da hidratação). É o que
+ * substitui o antigo sinal de restart: `restartPending` era `token && !tokens.has(token)`, que só
+ * funcionava PORQUE os tokens morriam. Com tokens duráveis esse sinal sumiria e o cliente nunca
+ * saberia que a presença foi zerada. Consumido uma vez, na primeira conexão SSE que apresentar o
+ * token (sse.ts), e então zerado — as reconexões seguintes do mesmo processo não são restart.
+ */
+export type TokenInfo = { token: string; userId: string; tenantId: string; name: string; expiresAt: number; staleBoot?: boolean }
 
 /**
  * Presence — estado de presença viva por sessão (Fase 3 §3), EM MEMÓRIA (nunca persistido: restart
@@ -105,6 +119,8 @@ export type ServerState = {
   /** Limiares de classificação de "digitando" (Fase 3 §5.1), configuráveis p/ teste. */
   typingMs: number
   idleMs: number
+  /** Validade de um token novo (D10-lite). Overridável p/ teste, como ttlMs/presenceTtlMs. */
+  tokenTtlMs: number
   graphs: Map<string, TenantGraph>
   tokens: Map<string, TokenInfo>
   subscriptions: Map<string, Filter[]>
@@ -147,11 +163,12 @@ export function createState(opts: {
   focusDebounceMs?: number
   typingMs?: number
   idleMs?: number
+  tokenTtlMs?: number
   domains?: readonly { pattern: string; domain: string }[] | null
   db?: Database
 }): ServerState {
   const db = opts.db ?? openDb(opts.stateDir === ":memory:" ? ":memory:" : `${opts.stateDir}/state.sqlite`)
-  return {
+  const state: ServerState = {
     repoPath: opts.repoPath ?? "",
     stateDir: opts.stateDir === ":memory:" ? "" : opts.stateDir,
     db,
@@ -160,6 +177,7 @@ export function createState(opts: {
     focusDebounceMs: opts.focusDebounceMs ?? DEFAULT_FOCUS_DEBOUNCE_MS,
     typingMs: opts.typingMs ?? DEFAULT_TYPING_MS,
     idleMs: opts.idleMs ?? DEFAULT_IDLE_MS,
+    tokenTtlMs: opts.tokenTtlMs ?? DEFAULT_TOKEN_TTL_MS,
     graphs: new Map(),
     tokens: new Map(),
     subscriptions: new Map(),
@@ -175,6 +193,12 @@ export function createState(opts: {
     domains: opts.domains?.length ? opts.domains : null,
     driftStale: new Map(),
   }
+  // D10-lite: tokens sobrevivem a restart. A hidratação é aqui — no ÚNICO ponto por onde todo
+  // caminho (produção, teste, rebuild) constrói um ServerState — e não no `import.meta.main` de
+  // index.ts, senão um teste que reabre o mesmo STATE_DIR não veria os próprios tokens de volta,
+  // que é exatamente o comportamento sob prova.
+  hydrateTokens(state)
+  return state
 }
 
 export function tenantGraph(state: ServerState, tenant: string): TenantGraph {

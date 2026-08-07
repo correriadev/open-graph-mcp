@@ -30,14 +30,19 @@ test("reconnect after restart: presence is gone, server.restarted is delivered, 
     const s2 = startServer({ stateDir, focusDebounceMs: 10 }) // same stateDir: SQLite durable state survives
     try {
       // Alice's client still holds the pre-restart token — presenting it is exactly what a reconnecting
-      // client does. The new process doesn't recognize it (tokens map is fresh): this is the signal the
-      // server uses to know "this connection follows a restart" (sse.ts `restartPending`, no bootId needed).
+      // client does. D10-lite: esse token AGORA continua válido (foi hidratado do SQLite), mas veio de
+      // um processo anterior (`staleBoot`), e é isso que o servidor usa para saber "esta conexão vem
+      // depois de um restart" — a credencial sobreviveu, a presença não. Ver sse.ts `restartPending`.
       const sse2 = await openSse(s2.url, 0, alice.token)
       const restarted = await sse2.waitFor((e) => e.kind === "server.restarted")
       expect(restarted).toBeTruthy()
 
       // Presence is empty — nobody re-declared focus yet (spec §9.1: no server-side auto-refocus).
-      const alice2 = await register(s2.url, "alice") // re-register: same deterministic userId, fresh token
+      // Re-registrar continua funcionando e continua devolvendo o MESMO userId (determinístico por
+      // tenant+name); depois do D10-lite ele deixou de ser obrigatório, mas segue sendo válido — é o
+      // caminho de recuperação de quem perdeu o token ou teve o SQLite apagado.
+      const alice2 = await register(s2.url, "alice")
+      expect(alice2.userId).toBe(alice.userId)
       const who = await callTool(s2.url, "presence.who", { token: alice2.token })
       expect(who.users).toHaveLength(0)
 

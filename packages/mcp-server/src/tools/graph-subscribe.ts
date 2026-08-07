@@ -25,6 +25,7 @@
  * teste de ataque que reproduz o sequestro e o teste unitário que prova a guarda abaixo.
  */
 import type { Filter, ServerState } from "../state"
+import { lookupToken } from "../tokens"
 
 const SESSION_ID_RE = /^s_[0-9a-f-]{12}$/i
 
@@ -48,7 +49,7 @@ export function subscribe(state: ServerState, sessionId: unknown, filters: unkno
     if (typeof token !== "string" || !token) {
       throw new Error("graph.subscribe: token inválido")
     }
-    const info = state.tokens.get(token)
+    const info = lookupToken(state, token)
     if (!info) {
       throw new Error("graph.subscribe: invalid or expired token — call session.register")
     }
