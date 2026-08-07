@@ -19,7 +19,7 @@
  * Idempotente por tenant: graphId = sha256(repoPath + tenant + checksum-semântico). Reindexar
  * conteúdo inalterado devolve o mesmo graphId e não re-emite evento nem re-escreve o banco.
  */
-import { readFileSync, readdirSync } from "node:fs"
+import { readFileSync, readdirSync, statSync } from "node:fs"
 import { createHash } from "node:crypto"
 import path from "node:path"
 import type { Graph, GraphNode } from "@open-graph-mcp/graph-core/build"
@@ -62,6 +62,32 @@ function walkSource(root: string): string[] {
   return out.sort()
 }
 
+/**
+ * Valida a raiz ANTES de indexar. Sem isto, dois jeitos de errar o `repoPath` viram perda de dados
+ * silenciosa: `bootstrap` faz DELETE+INSERT incondicional em `persistGraph` (linha ~203..234), então
+ * um "grafo vazio" que passa por engano vira um tenant de 186 nós reduzido a zero — foi assim que o
+ * bug foi reproduzido (bootstrap de um repo bom, seguido de bootstrap de um path ruim, apaga o bom).
+ *
+ * 1) path inexistente / sem permissão de stat: `statSync` lança, nós relançamos com mensagem
+ *    acionável. Sem este check explícito, era `walkSource` quem via o ENOENT — mas o catch de
+ *    `walkSource` (linha ~46) existe p/ tolerar um SUBdiretório ilegível NO MEIO do walk (ex.: link
+ *    quebrado, permissão negada numa pasta filha), não a raiz inteira. Ele engolia os dois casos
+ *    igual, e a raiz inexistente saía como `files = []` → grafo "legitimamente vazio".
+ * 2) path é um arquivo, não diretório: mensagem própria em vez de deixar `readdirSync` falhar dentro
+ *    do walk com ENOTDIR (que cairia no mesmo catch tolerante do walk e também viraria `[]`).
+ */
+function assertRepoRoot(root: string): void {
+  let st: ReturnType<typeof statSync>
+  try {
+    st = statSync(root)
+  } catch {
+    throw new Error(`graph.bootstrap: repoPath não existe (ou é ilegível): "${root}". Confira o caminho — nada foi reindexado, o grafo anterior deste tenant (se houver) continua intacto.`)
+  }
+  if (!st.isDirectory()) {
+    throw new Error(`graph.bootstrap: repoPath não é um diretório: "${root}". Nada foi reindexado.`)
+  }
+}
+
 function firstAnchor(content: string): string | null {
   for (const line of content.replace(/\r\n/g, "\n").split("\n")) {
     if (line.trim()) return line
@@ -96,7 +122,23 @@ function resolveRelative(fromRel: string, spec: string, known: ReadonlySet<strin
  * upgrade é `extractImportsAst`, async, que exigiria propagar async por todo o caminho de tool.
  */
 export function indexRepo(root: string, domains: ReturnType<typeof loadDomainRules>): Graph {
+  assertRepoRoot(root)
   const files = walkSource(root)
+  // DECISÃO (ponto crítico p/ integridade de dados): raiz existe mas rende ZERO arquivos-fonte é
+  // tratado como ERRO, não como "grafo vazio válido". Motivo: path traversal tipo `..\..\Windows`
+  // ou um typo que ainda assim resolve p/ um diretório real (mas errado) passa direto pelo check de
+  // `assertRepoRoot` acima — ele EXISTE e É diretório, só não tem nada que bata `SOURCE_EXT`. Se
+  // deixássemos isso virar `Graph{nodes:0}`, `persistGraph` (DELETE+INSERT incondicional) zeraria
+  // silenciosamente o tenant assim mesmo — exatamente o bug relatado, só que via um caminho que
+  // "existe" em vez de um que não existe. O custo desta escolha é que um repo GENUINAMENTE vazio
+  // (projeto novo, zero arquivos ainda) também vira erro em vez de bootstrap "vazio de sucesso" — é
+  // um trade-off aceito de propósito: esse caso é raro e reversível (crie um arquivo e tente de
+  // novo); apagar em silêncio um índice bom de 186 nós não é.
+  if (files.length === 0) {
+    throw new Error(
+      `graph.bootstrap: nenhum arquivo-fonte (${[...SOURCE_EXT].join(", ")}) encontrado em "${root}". Isto é tratado como erro (não como grafo vazio) para não arriscar sobrescrever um índice existente do tenant com dados vazios — confira se o caminho está correto.`,
+    )
+  }
   const known = new Set(files)
   const meta: MetaRecord[] = []
   for (const rel of files) {
