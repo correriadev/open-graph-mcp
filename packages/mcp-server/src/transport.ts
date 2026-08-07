@@ -10,6 +10,7 @@ import { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from "@modelcont
 import { DEFAULT_TENANT, type ServerState } from "./state"
 import { graphBootstrap, graphRebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
+import { impact, DEFAULT_IMPACT_DEPTH, MAX_IMPACT_DEPTH } from "./tools/graph-impact"
 import { subscribe } from "./tools/graph-subscribe"
 import { sessionRegister, requireToken } from "./tools/session"
 import { lookupToken } from "./tokens"
@@ -55,6 +56,16 @@ const TOOLS = [
         layer: { type: "string", enum: ["P1", "P2", "P3", "P4", "P5"] },
         limit: { type: "number" },
       },
+    },
+  },
+  {
+    name: "graph.impact",
+    description:
+      `What breaks if I change this file? Traverses the published graph's depends-on edges from a node id (repo-relative POSIX file path, e.g. "auth/login.ts"). Returns dependents (nodes that depend on id — the blast radius) and dependencies (nodes id depends on), up to depth hops (default ${DEFAULT_IMPACT_DEPTH}, max ${MAX_IMPACT_DEPTH}), plus the authority/lock state of every cell touched — so an agent can tell if the impact lands on a cell someone else is editing right now. Unknown id returns an explicit gap, never a silent empty result.`,
+    inputSchema: {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" }, depth: { type: "number" }, token: { type: "string" } },
     },
   },
   {
@@ -160,6 +171,8 @@ function callTool(state: ServerState, name: string, args: any): unknown {
       return graphBootstrap(state, args)
     case "graph.query":
       return query(state, { terms: args.terms, domain: args.domain, layer: args.layer, limit: args.limit }, tenantOf(state, args.token))
+    case "graph.impact":
+      return impact(state, args, tenantOf(state, args.token))
     case "graph.subscribe":
       // Sem default de filters aqui: inputSchema já marca `filters` required, e subscribe() valida
       // Array.isArray explicitamente — um `?? []` aqui mascararia um caller que manda `filters`
