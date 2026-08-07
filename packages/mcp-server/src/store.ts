@@ -65,16 +65,47 @@ export function authorityOf(state: ServerState, tenant: string, cell: string): "
   return (row?.value as any) ?? "source"
 }
 
-/** readFile injetável p/ os gates (âncora/verify). Lê do repo-alvo do tenant default; ausente → undefined. */
+/**
+ * Raízes de repo candidatas p/ resolver âncora/verify, sem exigir tenant explícito no call site (os
+ * dois chamadores, `changeset.ts::changesetClaim/changesetCommit`, chamam `makeReadFile(state)` sem
+ * tenant — mudar essa assinatura pertenceria a `changeset.ts`, arquivo de outro stream).
+ *
+ * `state.repoPath` (env/StartOptions de processo) é tentado PRIMEIRO — back-compat com quem passa
+ * repoPath explícito ao subir o servidor (ex.: testes que fazem `startServer({ repoPath })`). No
+ * caminho de PRODUÇÃO (`bun run dev`) isto é sempre `""`: `index.ts` não lê nenhuma env var de repo
+ * (D1 — o repo é argumento de `graph.bootstrap`, não config de processo), então antes deste fix
+ * `makeReadFile` devolvia `undefined` p/ TODO arquivo, e o gate de âncora (`c.anchor && c.file` em
+ * `gates.ts::incrementalGate`) RECUSAVA toda claim com âncora+arquivo — mesmo com âncora genuína.
+ *
+ * Fallback: o `repoPath` HOT de cada tenant já indexado (`TenantGraph.repoPath`, setado em
+ * `graph-bootstrap.ts::bootstrap`) e, defensivamente, `tenants.repo_path` no SQLite (tenant que por
+ * algum motivo não tem o hot preenchido neste processo). Tentamos CADA raiz candidata até uma leitura
+ * bater — não escolhemos "o" tenant do caller porque essa informação não chega aqui; colisão de
+ * caminho relativo entre dois repos de tenants diferentes é uma ambiguidade pré-existente (o campo
+ * único `state.repoPath` já não distinguia tenants) e fica documentada, não resolvida por este fix.
+ */
+function candidateRepoRoots(state: ServerState): string[] {
+  const roots = new Set<string>()
+  if (state.repoPath) roots.add(state.repoPath)
+  for (const tg of state.graphs.values()) if (tg.repoPath) roots.add(tg.repoPath)
+  const rows = state.db.query("SELECT repo_path FROM tenants WHERE repo_path IS NOT NULL").all() as { repo_path: string | null }[]
+  for (const r of rows) if (r.repo_path) roots.add(r.repo_path)
+  return [...roots]
+}
+
+/** readFile injetável p/ os gates (âncora/verify). Ausente em toda raiz candidata → undefined. */
 export function makeReadFile(state: ServerState): (f: string) => string | undefined {
   const cache = new Map<string, string | undefined>()
   return (f: string) => {
     if (cache.has(f)) return cache.get(f)
     let content: string | undefined
-    try {
-      content = state.repoPath ? readFileSync(path.join(state.repoPath, f), "utf8") : undefined
-    } catch {
-      content = undefined
+    for (const root of candidateRepoRoots(state)) {
+      try {
+        content = readFileSync(path.join(root, f), "utf8")
+        break
+      } catch {
+        continue
+      }
     }
     cache.set(f, content)
     return content
