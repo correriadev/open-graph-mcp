@@ -293,11 +293,19 @@ export function changesetAbort(state: ServerState, args: { token: string; csId: 
   })
 }
 
-export function changesetExtend(state: ServerState, args: { token: string; csId: string }): { ok: boolean; expiresAt?: string; __tenant?: string } {
+/**
+ * `reason` e ADITIVO (o shape `{ok, expiresAt}` nao muda): sem ele os tres modos de falha —
+ * changeset inexistente, ja fechado (tipicamente por TTL) e pertencente a outra pessoa — voltavam
+ * como um `{ok:false}` pelado, e um cliente de beta nao tem como distinguir "seu turno expirou,
+ * reabra" de "isso nao e seu". `changesetCommit` ja devolve `reasons`; extend so nao devolvia.
+ */
+export function changesetExtend(state: ServerState, args: { token: string; csId: string }): { ok: boolean; expiresAt?: string; reason?: string; __tenant?: string } {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
   return inTx(state, () => {
     const cs = loadCs(state, tenant, args.csId)
-    if (!cs || cs.status !== "open" || cs.opened_by !== userId) return { ok: false, __tenant: tenant }
+    if (!cs) return { ok: false, reason: `changeset ${args.csId} not found`, __tenant: tenant }
+    if (cs.status !== "open") return { ok: false, reason: `changeset ${args.csId} is ${cs.status}, not open — reopen the cell to keep working`, __tenant: tenant }
+    if (cs.opened_by !== userId) return { ok: false, reason: "not the holder of this changeset", __tenant: tenant }
     const expiresAt = new Date(nowMs() + state.ttlMs).toISOString()
     state.db.query("UPDATE locks SET expires_at = ? WHERE tenant_id = ? AND cs_id = ?").run(expiresAt, tenant, args.csId)
     return { ok: true, expiresAt, __tenant: tenant }

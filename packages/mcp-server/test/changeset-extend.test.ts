@@ -150,3 +150,32 @@ test("REPORT-A1: changeset.extend currently emits no SSE event (documented silen
 })
 
 test.todo("REPORT-A1: changeset.extend should emit changeset.extended (or lock.extended) with the new expiresAt")
+
+test("extend que falha diz PORQUE — os tres modos sao distinguiveis por um cliente", async () => {
+  const s = startServer()
+  try {
+    const a = await register(s.url, "alice")
+    const b = await register(s.url, "bob")
+
+    // 1) changeset inexistente
+    const missing = await callTool(s.url, "changeset.extend", { token: a.token, csId: "cs_naoexiste" })
+    expect(missing.ok).toBe(false)
+    expect(missing.reason).toMatch(/not found/)
+
+    // 2) fechado (o caso do TTL, que e o que um cliente de beta encontra de verdade)
+    const { csId } = await callTool(s.url, "changeset.open", { token: a.token, cells: ["ui:3"], intent: "t" })
+    s.state.db.query("UPDATE locks SET expires_at = ? WHERE tenant_id = ? AND cs_id = ?").run("1970-01-01T00:00:00.000Z", "default", csId)
+    s.sweep()
+    const expired = await callTool(s.url, "changeset.extend", { token: a.token, csId })
+    expect(expired.ok).toBe(false)
+    expect(expired.reason).toMatch(/aborted.*not open|not open/)
+
+    // 3) turno de outra pessoa
+    const mine = await callTool(s.url, "changeset.open", { token: a.token, cells: ["ui:4"], intent: "t" })
+    const notHolder = await callTool(s.url, "changeset.extend", { token: b.token, csId: mine.csId })
+    expect(notHolder.ok).toBe(false)
+    expect(notHolder.reason).toBe("not the holder of this changeset")
+  } finally {
+    s.stop()
+  }
+})
