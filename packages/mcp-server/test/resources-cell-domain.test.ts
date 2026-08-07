@@ -44,9 +44,12 @@ test("graph://cell/{k}: authority, nodeCount, claimCount, driftGrade, and lock p
   const s = startServer()
   try {
     s.state.graphs.set("default", seedGraph([
-      { id: "n1", file: "src/auth/login.ts", domain: "auth", level: "P5", claims: ["c1"], anchor: "a1", stale: "fresh" },
-      { id: "n2", file: "src/auth/logout.ts", domain: "auth", level: "P5", claims: ["c1", "c2"], anchor: "a2", stale: "stale" },
+      { id: "n1", file: "src/auth/login.ts", domain: "auth", level: "P5", claims: ["c1"], anchor: "a1" },
+      { id: "n2", file: "src/auth/logout.ts", domain: "auth", level: "P5", claims: ["c1", "c2"], anchor: "a2" },
     ]))
+    // F2 fix: drift grade is read off `state.driftStale` (the live index watch-bridge.ts maintains),
+    // not off a `stale` field on the node — nothing ever wrote that field. Seed the real index instead.
+    s.state.driftStale.set("default", new Set(["n2"]))
     const a = await register(s.url, "alice")
 
     const before = await readResource(s.url, "graph://cell/auth:5", a.token)
@@ -70,15 +73,21 @@ test("graph://cell/{k}: authority, nodeCount, claimCount, driftGrade, and lock p
   }
 })
 
-test("graph://cell/{k}: driftGrade is 'gone' when any node is gone, even if others are only stale", async () => {
+// F2 fix: `state.driftStale` (the live index `watch-bridge.ts::tick` maintains) only tracks node ids —
+// it does not persist, per node, whether the cause was "gone" (file missing) or "structural" (anchor
+// missing). So `driftGradeOf` cannot honestly distinguish "gone" from "stale" today; it reports "stale"
+// for any node id present in the set, and never fabricates "gone". This replaces the old test that
+// asserted "gone" via a synthetic `stale: "gone"` field nothing in the system ever wrote.
+test("graph://cell/{k}: driftGrade is 'stale' (not fabricated 'gone') for any node present in state.driftStale, even alongside untouched nodes", async () => {
   const s = startServer()
   try {
     s.state.graphs.set("default", seedGraph([
-      { id: "n1", file: "a.ts", domain: "d", level: "P3", claims: [], anchor: "", stale: "stale" },
-      { id: "n2", file: "b.ts", domain: "d", level: "P3", claims: [], anchor: "", stale: "gone" },
+      { id: "n1", file: "a.ts", domain: "d", level: "P3", claims: [], anchor: "" },
+      { id: "n2", file: "b.ts", domain: "d", level: "P3", claims: [], anchor: "" },
     ]))
+    s.state.driftStale.set("default", new Set(["n1", "n2"]))
     const env = resolveResource(s.state, "graph://cell/d:3", "default") as any
-    expect(env.driftGrade).toBe("gone")
+    expect(env.driftGrade).toBe("stale")
   } finally {
     s.stop()
   }
