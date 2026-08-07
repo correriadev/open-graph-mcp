@@ -8,21 +8,30 @@ import { DEFAULT_TENANT, nextSeq, tenantGraph, type EventEnvelope, type Filter, 
 import { isRecipient } from "./affinity"
 import { presenceSessionClosed } from "./tools/presence"
 
-/** "all" | "cell:<domain:level>" | "domain:<d>" | "event:<k1,k2>" | "changeset:<id>" */
-function parseFilterParam(raw: string | null): Filter[] {
+/**
+ * "all" | "cell:<domain:level>" | "domain:<d>" | "event:<k1,k2>" | "changeset:<id>"
+ *
+ * Um `kind` desconhecido continua caindo pra `{kind:"all"}` (permissivo de propósito: o param é o
+ * atalho pra cliente burro, e entregar demais é recuperável). Já um kind CONHECIDO com valor vazio
+ * (`?filter=cell:`, `?filter=event:`) não: ele produz um filtro que não casa NADA, e uma conexão que
+ * fica muda para sempre é indistinguível de um servidor sem eventos — mesma falha silenciosa do
+ * `?since=abc`. `null` = inválido, o caller devolve 400. */
+function parseFilterParam(raw: string | null): Filter[] | null {
   if (!raw || raw === "all") return [{ kind: "all" }]
   const cut = raw.indexOf(":")
   const kind = cut < 0 ? raw : raw.slice(0, cut)
   const val = cut < 0 ? "" : raw.slice(cut + 1)
   switch (kind) {
     case "cell":
-      return [{ kind: "cell", cell: val }]
+      return val ? [{ kind: "cell", cell: val }] : null
     case "domain":
-      return [{ kind: "domain", domain: val }]
+      return val ? [{ kind: "domain", domain: val }] : null
     case "changeset":
-      return [{ kind: "changeset", id: val }]
-    case "event":
-      return [{ kind: "event", events: val.split(",").filter(Boolean) }]
+      return val ? [{ kind: "changeset", id: val }] : null
+    case "event": {
+      const events = val.split(",").filter(Boolean)
+      return events.length ? [{ kind: "event", events }] : null
+    }
     default:
       return [{ kind: "all" }]
   }
@@ -37,9 +46,35 @@ function tenantOf(state: ServerState, token: string | null): string {
   return state.tokens.get(token)?.tenantId ?? DEFAULT_TENANT
 }
 
+/** `?since=` parsing (SB-0 pre-classificado, Tier 1): `Number("abc")` → `NaN` → `seq > NaN` casa nada
+ *  → backlog silenciosamente vazio. Um cliente que perde o backlog em silêncio parece um cliente
+ *  funcionando com estado velho — pior que um erro alto. Só um inteiro não-negativo em notação simples
+ *  (sem sinal, sem notação científica, sem casas decimais) é aceito; ausência do param continua = 0.
+ *  `null` de retorno = inválido, tratado pelo caller como 400 explícito em vez de clamp silencioso. */
+function parseSince(raw: string | null): number | null {
+  if (raw === null) return 0
+  if (!/^\d+$/.test(raw)) return null
+  const n = Number(raw)
+  return Number.isSafeInteger(n) ? n : null
+}
+
 export function handleEvents(state: ServerState, url: URL): Response {
-  const since = Number(url.searchParams.get("since") ?? 0)
-  const filters = parseFilterParam(url.searchParams.get("filter"))
+  const sinceRaw = url.searchParams.get("since")
+  const since = parseSince(sinceRaw)
+  if (since === null) {
+    return new Response(JSON.stringify({ error: `invalid since query param: ${JSON.stringify(sinceRaw)} — expected a non-negative integer, or omitted` }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    })
+  }
+  const filterRaw = url.searchParams.get("filter")
+  const filters = parseFilterParam(filterRaw)
+  if (filters === null) {
+    return new Response(JSON.stringify({ error: `invalid filter query param: ${JSON.stringify(filterRaw)} — a known filter kind requires a non-empty value (ex.: cell:ui:4, event:lock.acquired)` }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    })
+  }
   const token = url.searchParams.get("token")
   const tenant = tenantOf(state, token)
   // Fase 3 §6.1: identidade do token (se houver) fica presa à Session p/ o router de afinidade rotear

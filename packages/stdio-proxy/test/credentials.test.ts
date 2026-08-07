@@ -106,13 +106,14 @@ test("--name present but the called tool doesn't declare token: no injection, no
   try {
     await proxy.readStderrLine() // startup log
 
-    // `graph.subscribe` é a tool aberta usada aqui. Era `graph.bootstrap` até ele passar a exigir
-    // token (publica um grafo no tenant do chamador — não podia seguir anônimo); o que este teste
-    // cobre é o COMPORTAMENTO do proxy diante de uma tool sem `token` no inputSchema, então basta
-    // apontar para outra tool que ainda seja assim.
-    proxy.send({ jsonrpc: "2.0", id: 13, method: "tools/call", params: { name: "graph.subscribe", arguments: { sessionId: "s-inexistente", filters: [] } } })
+    // `graph.query` é a tool aberta usada aqui. Foi `graph.bootstrap` até ele passar a exigir token
+    // (publica um grafo no tenant do chamador), e depois `graph.subscribe` até SB-0 §5 lhe dar um
+    // `token` OPCIONAL no inputSchema (binding sessionId→token). O que este teste cobre é o
+    // COMPORTAMENTO do proxy diante de uma tool sem `token` no inputSchema, então basta apontar
+    // para uma que ainda seja assim — `graph.query` é read-only e não tem para onde crescer um token.
+    proxy.send({ jsonrpc: "2.0", id: 13, method: "tools/call", params: { name: "graph.query", arguments: { terms: ["nada"] } } })
 
-    // graph.subscribe has no `token` in its inputSchema — no injection line should ever appear.
+    // graph.query has no `token` in its inputSchema — no injection line should ever appear.
     const maybeInject = await proxy.readStderrLine(500)
     expect(maybeInject).toBeNull()
 
@@ -121,7 +122,7 @@ test("--name present but the called tool doesn't declare token: no injection, no
     expect(parsed.id).toBe(13)
 
     // O proxy nunca chamou resolveCredentials — é isto que o teste prova. O veredito da tool em si
-    // (sessão inexistente) é irrelevante aqui: o que importa é que a chamada passou direto, sem
+    // (grafo não publicado) é irrelevante aqui: o que importa é que a chamada passou direto, sem
     // injeção de token e sem materializar credentials.json.
     expect(fs.existsSync(credentialsPathFor(home))).toBe(false)
   } finally {

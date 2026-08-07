@@ -62,7 +62,10 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       required: ["sessionId", "filters"],
-      properties: { sessionId: { type: "string" }, filters: { type: "array" } },
+      // `token` OPCIONAL de propósito (SB-0 §5): quando vem, subscribe() valida o binding
+      // sessionId→token e recusa quem não é dono da sessão; quando não vem, o comportamento antigo é
+      // preservado — packages/client `subscribe()` chama sem token e não pode quebrar nesta campanha.
+      properties: { sessionId: { type: "string" }, filters: { type: "array" }, token: { type: "string" } },
     },
   },
   {
@@ -155,7 +158,7 @@ function callTool(state: ServerState, name: string, args: any): unknown {
       // Sem default de filters aqui: inputSchema já marca `filters` required, e subscribe() valida
       // Array.isArray explicitamente — um `?? []` aqui mascararia um caller que manda `filters`
       // ausente/malformado atrás de um "sucesso" silencioso em vez do erro que ele devia ver.
-      return subscribe(state, args.sessionId, args.filters)
+      return subscribe(state, args.sessionId, args.filters, args.token)
     case "graph.rebuild":
       return graphRebuild(state, args)
     case "session.register":
