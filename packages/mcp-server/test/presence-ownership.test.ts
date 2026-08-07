@@ -42,9 +42,15 @@ test("presence.beat/focus with someone else's sessionId is rejected and leaves t
     expect(p.invisible).toBe(false)
     expect(p.lastSeen).toBe(aliceLastSeen)
 
-    // No broadcast was emitted for the hijack attempts (give any stray debounce time to fire).
-    await new Promise((r) => setTimeout(r, 50))
-    expect(bobSse.events.length).toBe(broadcastsBefore)
+    // Sentinel instead of a sleep: Bob registers his OWN (legitimate) presence and focus right after the
+    // rejected hijack attempts. His genuine debounced user.focused settling is deterministic proof that
+    // any debounce the hijack attempts might have scheduled — they schedule none, `touch()` returns null
+    // before ever reaching the debounce logic (presence.ts) — has already had its window pass.
+    const bobSessionId = bobSse.events[0].sessionId
+    await callTool(s.url, "presence.focus", { token: bob.token, sessionId: bobSessionId, cell: "bobcell:1" })
+    await bobSse.waitFor((e) => e.kind === "user.focused" && e.payload.sessionId === bobSessionId)
+    const hijackBroadcasts = bobSse.events.slice(broadcastsBefore).filter((e) => e.kind === "user.focused" && e.payload.sessionId === aliceSessionId)
+    expect(hijackBroadcasts).toEqual([])
     expect(bobSse.events.some((e) => e.kind === "user.focused" && e.payload.cell?.startsWith?.("evil"))).toBe(false)
 
     // presence.who still shows Alice exactly as she was.

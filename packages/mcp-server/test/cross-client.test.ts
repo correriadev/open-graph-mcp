@@ -37,7 +37,11 @@ test("changeset.committed: non-web gets envelope + system.message, web gets enve
     expect(sysMsg.payload.text).toContain(csId)
     expect(sysMsg.payload.text).toContain("commitcell:4")
 
-    await new Promise((r) => setTimeout(r, 50))
+    // Sentinel instead of a sleep: wait for Carol's OWN copy of the commit envelope (she's cell-filtered
+    // like Bob). pushEnvelope's per-recipient loop is synchronous, and frames on one SSE connection
+    // arrive in write order — once her changeset.committed lands, the (skipped, she's web) system.message
+    // decision for this same envelope has already been made, provably, with no clock dependency.
+    await carolSse.waitFor((e) => e.kind === "changeset.committed")
     expect(carolSse.events.some((e) => e.kind === "system.message")).toBe(false)
     expect(carolSse.events.some((e) => e.kind === "changeset.committed")).toBe(true)
 
@@ -69,7 +73,11 @@ test("authority.flipped: non-web gets envelope + system.message, web gets envelo
     expect(sysMsg.payload.text).toContain(cell)
     expect(sysMsg.payload.text).toContain("graph")
 
-    await new Promise((r) => setTimeout(r, 50))
+    // Sentinel instead of a sleep: authority.flipped is ALWAYS_BROADCAST (state.ts), so Carol's stream
+    // (unfiltered SSE) also receives it from the very same envelope. Waiting for her copy proves the
+    // (skipped, she's web) system.message decision for it has already resolved — same connection, same
+    // write-ordered delivery.
+    await carolSse.waitFor((e) => e.kind === "authority.flipped")
     expect(carolSse.events.some((e) => e.kind === "system.message")).toBe(false)
     expect(carolSse.events.some((e) => e.kind === "authority.flipped")).toBe(true)
 
@@ -94,8 +102,11 @@ test("TTL abort while a non-web holder and a web observer both watch: opencode g
 
     const { csId } = await callTool(s.url, "changeset.open", { token: alice.token, cells: ["ttlcell:4"], intent: "opencode turn" })
 
-    await new Promise((r) => setTimeout(r, 20))
-    s.sweep() // deterministic sweep (prod runs this on an interval) — same knob as ttl-expire.test.ts
+    // No sleep needed: sweepTtl compares against a REAL wall clock (`expires_at < now()`, sweeper.ts),
+    // and ttlMs:1 has already elapsed by the time the several awaited RPC round-trips above (register,
+    // openSse x2, presence.beat x2, changeset.open) return — s.sweep() is the deterministic knob (prod
+    // runs this on an interval, same pattern as ttl-expire.test.ts), the sleep before it was redundant.
+    s.sweep()
 
     const sysMsg = await aliceSse.waitFor((e) => e.kind === "system.message")
     expect(sysMsg.payload.text).toContain("[open-graph]")
@@ -131,7 +142,10 @@ test("a session with NO declared agentKind (never called presence.beat/focus) ne
     const envelope = await bobSse.waitFor((e) => e.kind === "changeset.opened")
     expect(envelope.payload.cells).toEqual(["unknownkind:4"])
 
-    await new Promise((r) => setTimeout(r, 50))
+    // No sleep needed: waiting for bob's changeset.opened frame above already proves the (synchronous,
+    // same-envelope) maybeSystemMessage decision for him — no presence yet — has resolved and, if a
+    // system.message had been queued for him, it would already be in his event list (write-ordered
+    // delivery on the same connection).
     expect(bobSse.events.some((e) => e.kind === "system.message")).toBe(false)
 
     bobSse.close()

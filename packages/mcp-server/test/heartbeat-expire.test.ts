@@ -16,7 +16,9 @@ test("a session that stops beating expires after presenceTtlMs and broadcasts us
     // let the focus broadcast settle so we don't confuse it with the expiry event below
     await bobSse.waitFor((e) => e.kind === "user.focused" && e.payload.sessionId === aliceSessionId)
 
-    await new Promise((r) => setTimeout(r, 20))
+    // No extra sleep needed: sweepPresence compares against a REAL wall clock (`p.lastSeen > cutoff`,
+    // presence.ts), and presenceTtlMs:1 has already elapsed by the time the debounced user.focused above
+    // (focusDebounceMs:10) settled and arrived — s.sweepPresenceNow() is the deterministic knob.
     s.sweepPresenceNow() // deterministic sweep (prod runs this on an interval)
 
     const left = await bobSse.waitFor((e) => e.kind === "user.left" && e.payload.sessionId === aliceSessionId)
