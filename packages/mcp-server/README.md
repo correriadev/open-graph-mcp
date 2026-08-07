@@ -12,7 +12,9 @@ bun test                                     # 7 testes de aceite (spec §9)
 | Var | Default | Efeito |
 |---|---|---|
 | `PORT` | `8787` | Porta do `Bun.serve`. Validada no boot: um valor não-inteiro ou fora de 1–65535 falha alto, em vez de virar `NaN` e subir numa porta efêmera aleatória. |
+| `HOST` | `127.0.0.1` | Interface de bind do `Bun.serve`. Default é loopback-only: sem isto, o default do próprio Bun é `0.0.0.0` (todas as interfaces) — rodar um beta local num café expõe o grafo do repo do usuário pra rede inteira, sem auth de transporte nenhuma. `0.0.0.0` continua disponível como opt-in explícito. Validado no boot: string vazia ou com caracteres inválidos falha alto, mesma disciplina de `PORT`/`DOMAINS`. |
 | `STATE_DIR` | `.graph-server` | Diretório do estado durável (SQLite + JSONL). |
+| `LOG_FILE` | `<STATE_DIR>/server.log` | Caminho do log estruturado JSONL (`log.ts`). Uma linha por evento: boot, cada `tools/call`, cada `resources/read`, erros não tratados e shutdown. Nunca contém token, conteúdo de claim, conteúdo de arquivo, caminho absoluto do repo do usuário ou os `arguments` crus de uma tool — só nome/URI, `tenantId`, duração e ok/erro. Rotaciona sozinho (sem lib externa): ao passar de 10MB, o arquivo vira `.1` e recomeça. |
 | `WATCH` | `true` | `WATCH=false` desliga o loop de watch. |
 | `WATCH_TENANT` | `default` | Tenant que o watch acompanha. |
 | `ALLOWED_ORIGINS` | (unset → `*`) | Lista separada por vírgula de Origins permitidas (CORS + guard anti-rebinding). Unset ≠ `""` — `""` fecha tudo. |

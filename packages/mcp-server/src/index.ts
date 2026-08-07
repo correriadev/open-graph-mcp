@@ -24,6 +24,8 @@ import { startWatchLoop, tick } from "./watch-bridge"
 import { startSweeper, sweepTtl, flushDeltas } from "./sweeper"
 import { sweepPresence } from "./tools/presence"
 import { sweepTyping } from "./tools/typing"
+import { lookupToken } from "./tokens"
+import { createLogger, noopLogger, stripUriQuery, toErrorInfo, type Logger } from "./log"
 
 /** Exact-match only — no wildcard/subdomain matching (that would be too permissive for the check below).
  * A literal empty `Origin: ""` header is folded into the same "treat as absent" path as no header at
@@ -131,6 +133,31 @@ export function parsePortEnv(raw: string | undefined): number {
   return value
 }
 
+/**
+ * Parseia `HOST` (env) para o `hostname` que `Bun.serve` recebe. Mesma disciplina de
+ * `parsePortEnv`/`parseDomainsEnv`: função pura, testável sem spawnar processo, falha alto em vez de
+ * degradar em silêncio. Motivo de existir: `Bun.serve` sem `hostname` explícito faz bind em
+ * `0.0.0.0` — todas as interfaces. Rodar isto num café expõe o grafo do repo do usuário pra rede
+ * inteira, sem nenhuma auth de transporte (`session.register` não pede segredo). O default seguro é
+ * `127.0.0.1` (só loopback); `0.0.0.0` continua disponível, mas como opt-in EXPLÍCITO — quem seta a
+ * env sabe o que está fazendo. Unset devolve o default seguro (comportamento novo, não o antigo — o
+ * antigo era o bug que isto corrige). String vazia/só-espaço é inválida e falha o boot, mesmo padrão
+ * de `ALLOWED_ORIGINS=""` fechando tudo em vez de virar "sem filtro" por acidente.
+ */
+export function parseHostEnv(raw: string | undefined): string {
+  if (raw === undefined) return "127.0.0.1"
+  const trimmed = raw.trim()
+  if (trimmed.length === 0) {
+    throw new Error(`HOST inválido: string vazia. Omita a env var para o default (127.0.0.1) ou passe um host válido.`)
+  }
+  // Permissivo o bastante para IPv4, IPv6 (com colchetes), hostnames e "localhost"/"0.0.0.0" — mas
+  // recusa espaços e caracteres claramente inválidos em vez de repassar qualquer string pro Bun.serve.
+  if (!/^[a-zA-Z0-9.:_[\]-]+$/.test(trimmed)) {
+    throw new Error(`HOST inválido: ${JSON.stringify(raw)} não parece um hostname/IP válido.`)
+  }
+  return trimmed
+}
+
 export type StartOptions = {
   repoPath?: string
   stateDir?: string
@@ -157,6 +184,17 @@ export type StartOptions = {
   /** Regras de posse de domínio (`{ pattern, domain }`). CONFIG DO SERVIDOR: vinham de
    *  `.graph/domains.json` no repo-alvo, mas o repo não hospeda mais nada de grafo. */
   domains?: readonly { pattern: string; domain: string }[]
+  /** Interface de bind do `Bun.serve`. Default `"127.0.0.1"` (loopback only) — ver `parseHostEnv`
+   *  acima para o porquê. `"0.0.0.0"` é opt-in explícito. */
+  host?: string
+  /** Liga o log estruturado em arquivo (`log.ts`). Default `false`: ~290 testes chamam `startServer`
+   *  e um default ligado encheria o disco de `server.log` por teste e sujaria stdout com falhas de
+   *  escrita silenciosas de mais. Testes que QUEREM cobrir o log passam `log: true` + `logFile`
+   *  explícito (ver test/server-log.test.ts). O entrypoint de CLI (`import.meta.main` abaixo) passa
+   *  `log: true` sempre — é o único caminho de produção real. */
+  log?: boolean
+  /** Caminho do arquivo de log. Default (quando `log: true` e isto não é passado): `<stateDir>/server.log`. */
+  logFile?: string
 }
 export type RunningServer = {
   state: ServerState
@@ -185,11 +223,16 @@ export function startServer(opts: StartOptions = {}): RunningServer {
   })
   const watchTenant = opts.watchTenant ?? DEFAULT_TENANT
   const allowedOrigins = opts.allowedOrigins ?? ["*"]
+  const host = opts.host ?? "127.0.0.1"
+
+  // Log estruturado (log.ts) — desligado por default (ver StartOptions.log). `noopLogger` faz cada
+  // call site abaixo custar uma chamada de função vazia em vez de um `if (logger)` espalhado.
+  const logger: Logger = opts.log ? createLogger(opts.logFile ?? path.join(stateDir, "server.log")) : noopLogger
 
   // Hidrata os grafos do BANCO antes de qualquer coisa: com o grafo persistido por tenant, subir o
   // servidor sobre um stateDir existente já devolve o grafo. Antes disto o estado era 100% em
   // memória e um restart respondia "not bootstrapped" até alguém reindexar na mão.
-  hydrateFromDb(state)
+  const tenantsHydrated = hydrateFromDb(state)
 
   if (opts.autoBootstrap && opts.repoPath) {
     try {
@@ -199,65 +242,127 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     }
   }
 
+  // `tenantOf`-like lookup, mas SÓ para o log: nunca lança (token ausente/inválido vira `null`/
+  // DEFAULT_TENANT no log em vez de derrubar a requisição), e nunca grava o token em si — só o
+  // `tenantId` que ele resolve (já opaco). Espelha a lógica de `transport.ts` `tenantOf` sem
+  // duplicar comportamento — aqui é só observabilidade, a decisão de autorização real continua
+  // 100% em transport.ts.
+  function tenantForLog(token: unknown): string | null {
+    if (typeof token !== "string" || !token) return DEFAULT_TENANT
+    const info = lookupToken(state, token)
+    return info ? info.tenantId : null
+  }
+
+  function rpcErrorInfo(res: { error?: { message: string }; result?: unknown } | null): { message: string } | undefined {
+    if (!res) return undefined
+    if (res.error) return { message: res.error.message }
+    const result = res.result as { isError?: boolean; content?: { type: string; text?: string }[] } | undefined
+    if (result?.isError === true) {
+      const text = result.content?.[0]?.text
+      return { message: typeof text === "string" ? text : "tool error" }
+    }
+    return undefined
+  }
+
+  async function handleFetch(req: Request): Promise<Response> {
+    const url = new URL(req.url)
+    const origin = req.headers.get("origin")
+
+    // Active DNS-rebinding guard (spec: "MUST validate the Origin header on all incoming
+    // connections"). CORS headers alone only stop a browser from READING a cross-origin response —
+    // they don't stop the request from reaching here and running. Reject before any route logic.
+    // No Origin header at all (curl, the MCP SDK over Node, CLI clients) → not a browser, proceed.
+    if (!isOriginAllowed(origin, allowedOrigins)) {
+      return new Response("origin not allowed", { status: 403 })
+    }
+
+    const headers = corsHeaders(origin, allowedOrigins)
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers })
+
+    if (url.pathname === "/events" && req.method === "GET") {
+      // sse.ts hardcodes its own access-control-allow-origin: "*" on the Response it builds;
+      // override it here (rather than touching that file — scope containment) so /events gets the
+      // same computed, allowlist-aware CORS headers as every other route.
+      const res = handleEvents(state, url)
+      for (const [k, v] of Object.entries(headers)) res.headers.set(k, v)
+      if (!("access-control-allow-origin" in headers)) res.headers.delete("access-control-allow-origin")
+      return res
+    }
+
+    if (url.pathname === "/mcp" && req.method === "GET") {
+      return new Response("method not allowed", { status: 405, headers: { ...headers, allow: "POST" } })
+    }
+
+    if (url.pathname === "/mcp" && req.method === "POST") {
+      let body: any
+      try {
+        body = await req.json()
+      } catch {
+        return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }, { headers })
+      }
+      const method = typeof body?.method === "string" ? body.method : null
+      const start = Date.now()
+      const res = handleRpc(state, body)
+      const durationMs = Date.now() - start
+
+      // Log só o que interessa pro beta: chamada de tool e leitura de resource. NUNCA os `arguments`/
+      // `params` crus (podem carregar token, subject, anchor, caminho de arquivo) — só nome/URI +
+      // tenant resolvido + duração + ok/erro. `res === null` é notification (sem resposta, transport
+      // engole qualquer erro interno) — nada de útil pra logar sobre ok/erro nesse caso.
+      if (method === "tools/call" && body?.params?.name) {
+        logger.toolCall({
+          target: String(body.params.name),
+          tenant: tenantForLog(body.params?.arguments?.token),
+          durationMs,
+          ok: res !== null && !rpcErrorInfo(res),
+          error: res !== null ? rpcErrorInfo(res) : undefined,
+        })
+      } else if (method === "resources/read" && typeof body?.params?.uri === "string") {
+        logger.resourceRead({
+          target: stripUriQuery(body.params.uri),
+          tenant: tenantForLog(body.params?.token),
+          durationMs,
+          ok: res !== null && !rpcErrorInfo(res),
+          error: res !== null ? rpcErrorInfo(res) : undefined,
+        })
+      }
+
+      if (res === null) return new Response(null, { status: 204, headers })
+
+      // Stateless server (no Mcp-Session-Id — token lives in tool args, per D2): echo the
+      // negotiated protocol version rather than tracking it per-session. A well-behaved client
+      // sends MCP-Protocol-Version on every request after its initial `initialize` call, so echo
+      // that back. The `initialize` call itself has no such header yet (that's what it's
+      // negotiating) — for that one response, use the protocolVersion just negotiated in the
+      // result body. Otherwise omit the header rather than send a garbage/empty value.
+      const incomingVersion = req.headers.get("mcp-protocol-version")
+      const negotiatedVersion = (res?.result as { protocolVersion?: string } | undefined)?.protocolVersion
+      const protocolVersion = incomingVersion ?? negotiatedVersion
+      const rpcHeaders = protocolVersion ? { ...headers, "mcp-protocol-version": protocolVersion } : headers
+      return Response.json(res, { headers: rpcHeaders })
+    }
+
+    if (url.pathname === "/") {
+      return Response.json({ name: "open-graph-mcp", stateDir, sessions: state.sessions.size, tenants: state.graphs.size }, { headers })
+    }
+    return new Response("not found", { status: 404, headers })
+  }
+
   const server = Bun.serve({
     port: opts.port ?? 0,
+    hostname: host,
     idleTimeout: 0,
     async fetch(req) {
-      const url = new URL(req.url)
-      const origin = req.headers.get("origin")
-
-      // Active DNS-rebinding guard (spec: "MUST validate the Origin header on all incoming
-      // connections"). CORS headers alone only stop a browser from READING a cross-origin response —
-      // they don't stop the request from reaching here and running. Reject before any route logic.
-      // No Origin header at all (curl, the MCP SDK over Node, CLI clients) → not a browser, proceed.
-      if (!isOriginAllowed(origin, allowedOrigins)) {
-        return new Response("origin not allowed", { status: 403 })
+      try {
+        return await handleFetch(req)
+      } catch (err) {
+        // Rede de segurança: handleRpc já captura tudo que é erro de negócio (tool/resource) e devolve
+        // como JSON-RPC error, não como throw. Chegar aqui é um bug real não previsto — registra com
+        // stack (isto SIM tem stack: é um Error de verdade, não uma mensagem já achatada por
+        // transport.ts) e devolve 500 em vez de deixar o Bun estourar sem log nenhum.
+        logger.fetchError({ path: new URL(req.url).pathname, error: toErrorInfo(err) })
+        return new Response("internal server error", { status: 500 })
       }
-
-      const headers = corsHeaders(origin, allowedOrigins)
-      if (req.method === "OPTIONS") return new Response(null, { status: 204, headers })
-
-      if (url.pathname === "/events" && req.method === "GET") {
-        // sse.ts hardcodes its own access-control-allow-origin: "*" on the Response it builds;
-        // override it here (rather than touching that file — scope containment) so /events gets the
-        // same computed, allowlist-aware CORS headers as every other route.
-        const res = handleEvents(state, url)
-        for (const [k, v] of Object.entries(headers)) res.headers.set(k, v)
-        if (!("access-control-allow-origin" in headers)) res.headers.delete("access-control-allow-origin")
-        return res
-      }
-
-      if (url.pathname === "/mcp" && req.method === "GET") {
-        return new Response("method not allowed", { status: 405, headers: { ...headers, allow: "POST" } })
-      }
-
-      if (url.pathname === "/mcp" && req.method === "POST") {
-        let body: any
-        try {
-          body = await req.json()
-        } catch {
-          return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } }, { headers })
-        }
-        const res = handleRpc(state, body)
-        if (res === null) return new Response(null, { status: 204, headers })
-
-        // Stateless server (no Mcp-Session-Id — token lives in tool args, per D2): echo the
-        // negotiated protocol version rather than tracking it per-session. A well-behaved client
-        // sends MCP-Protocol-Version on every request after its initial `initialize` call, so echo
-        // that back. The `initialize` call itself has no such header yet (that's what it's
-        // negotiating) — for that one response, use the protocolVersion just negotiated in the
-        // result body. Otherwise omit the header rather than send a garbage/empty value.
-        const incomingVersion = req.headers.get("mcp-protocol-version")
-        const negotiatedVersion = (res?.result as { protocolVersion?: string } | undefined)?.protocolVersion
-        const protocolVersion = incomingVersion ?? negotiatedVersion
-        const rpcHeaders = protocolVersion ? { ...headers, "mcp-protocol-version": protocolVersion } : headers
-        return Response.json(res, { headers: rpcHeaders })
-      }
-
-      if (url.pathname === "/") {
-        return Response.json({ name: "open-graph-mcp", stateDir, sessions: state.sessions.size, tenants: state.graphs.size }, { headers })
-      }
-      return new Response("not found", { status: 404, headers })
     },
   })
 
@@ -271,6 +376,8 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     typingIntervalMs: opts.typingIntervalMs,
   })
 
+  logger.boot({ port: server.port, host, stateDir, version: "0.1.0", tenantsHydrated })
+
   return {
     state,
     server,
@@ -281,6 +388,7 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     sweepPresenceNow: () => sweepPresence(state),
     tickTypingNow: () => sweepTyping(state),
     stop: () => {
+      logger.shutdown()
       stopWatch()
       stopSweeper()
       for (const t of state.focusDebounce.values()) clearTimeout(t)
@@ -311,14 +419,25 @@ if (import.meta.main) {
   // Mesma disciplina do DOMAINS acima: falha alto ANTES de startServer() em vez de deixar um PORT
   // malformado virar NaN silencioso (ver comentário de parsePortEnv).
   const port = parsePortEnv(process.env.PORT)
+  // Mesma disciplina: HOST malformado trava o boot (ver parseHostEnv acima) — o default seguro,
+  // 127.0.0.1, evita o servidor de um beta local ficar exposto na rede inteira (bug corrigido aqui:
+  // Bun.serve sem hostname faz bind em 0.0.0.0).
+  const host = parseHostEnv(process.env.HOST)
+  const logFile = process.env.LOG_FILE ?? path.join(stateDir, "server.log")
   const running = startServer({
     stateDir,
     port,
+    host,
     watch: process.env.WATCH !== "false",
     watchTenant: process.env.WATCH_TENANT ?? DEFAULT_TENANT,
     allowedOrigins,
     domains,
+    log: true,
+    logFile,
   })
   const tenants = running.state.graphs.size
-  console.log(`open-graph MCP server on ${running.url} (state: ${stateDir}, ${tenants} tenant(s) hidratado(s) do banco)`)
+  // Comportamento de stdout preservado (não removido, só complementado pelo arquivo em log.ts).
+  console.log(
+    `open-graph MCP server on ${running.url} (host: ${host}, state: ${stateDir}, ${tenants} tenant(s) hidratado(s) do banco, log: ${logFile})`,
+  )
 }
