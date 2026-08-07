@@ -14,7 +14,7 @@ import { abortedPayload, appendEvent, pushEnvelope, tenantGraph, type EventEnvel
 import { requireToken } from "./session"
 import { touchDelta } from "./typing"
 import { readClaims, readNodes, authorityOf, makeReadFile, writeClaim, writeAuthority, maxClaimSeq, holderNameOf } from "../store"
-import { incrementalGate, finalGate, cellOfClaim, blastRadius, nodesOfCell, type Delta } from "../gates"
+import { incrementalGate, finalGate, cellOfClaim, blastRadius, nodesOfCell, type Delta, type ClaimSnapshot, canonicalCell } from "../gates"
 import { normalizeClaimLevel } from "../claim-level"
 
 const now = () => new Date().toISOString()
@@ -42,6 +42,25 @@ function releaseLocks(state: ServerState, tenant: string, csId: string): string[
   const cells = lockedCells(state, tenant, csId)
   state.db.query("DELETE FROM locks WHERE tenant_id = ? AND cs_id = ?").run(tenant, csId)
   return cells
+}
+
+/**
+ * F3 — as claims `claim.add` já ENCENADAS neste changeset (ainda não commitadas), na mesma leitura
+ * que `changesetCommit` usa para montar `deltas` p/ o `finalGate` (linha ~213 abaixo): mesma tabela
+ * `cs_deltas`, mesmo filtro por tenant+csId, mesma ordem por `seq`. Existe só esta fonte de verdade —
+ * não uma segunda cópia do que está encenado.
+ *
+ * Por que isto importa (achado F3): o gate incremental fazia o roundtrip advisory contra
+ * (claims commitadas + a nova), sem o que já foi encenado NO MESMO turno. Uma claim-chão encenada e,
+ * na chamada seguinte, uma claim de nível acima referenciando-a — ambas no mesmo changeset aberto —
+ * disparava `dangling-ref` num ref que o commit ia aceitar segundos depois: o gate final monta o
+ * conjunto completo (`existingClaims` + todos os deltas do turno) e não reclama de nada. O aviso
+ * incremental precisa enxergar o MESMO conjunto que o final vai enxergar, no momento em que roda.
+ */
+function stagedClaims(state: ServerState, tenant: string, csId: string): ClaimSnapshot[] {
+  return (state.db.query("SELECT kind, payload FROM cs_deltas WHERE tenant_id = ? AND cs_id = ? ORDER BY seq").all(tenant, csId) as { kind: string; payload: string }[])
+    .filter((d) => d.kind === "claim.add")
+    .map((d) => JSON.parse(d.payload) as ClaimSnapshot)
 }
 
 /** Executa uma mutação numa transação síncrona e difunde os eventos coletados DEPOIS de commitar. */
@@ -92,7 +111,19 @@ function emitNodeIdle(state: ServerState, tenant: string, envs: EventEnvelope[],
  * `changeset.open` continua chamando isto também — é o caminho explícito p/ agente que quer turno
  * multi-célula deliberado (decisão 3 do plano F1: o changeset não some).
  */
-export function claimOrOpenCs(state: ServerState, tenant: string, userId: string, name: string, cells: string[], intent: string, envs: EventEnvelope[]): OpenResult {
+export function claimOrOpenCs(state: ServerState, tenant: string, userId: string, name: string, rawCells: string[], intent: string, envs: EventEnvelope[]): OpenResult {
+  /**
+   * F7 — a trava é a garantia central de concorrência do produto, e era adquirida por igualdade de
+   * STRING CRUA sobre a chave de célula. Como `auth:P4` e `auth:4` são a mesma célula lógica mas duas
+   * strings, viravam duas linhas em `locks`: Alice trancava numa grafia, Bob na outra, e os dois
+   * recebiam `ok: true` sobre a MESMA célula — exatamente o que a trava pessimista existe para impedir.
+   *
+   * Canonicaliza na BORDA, de uma vez: daqui pra baixo (lookup, INSERT, `blast_cells`, payload de
+   * `lock.acquired`/`node.editing`) só circula chave canônica. O dedup por `Set` acontece DEPOIS da
+   * canonicalização — senão `["auth:P4","auth:4"]` na mesma chamada passaria como duas células e a
+   * segunda bateria na trava recém-criada pela primeira, do próprio chamador.
+   */
+  const cells = [...new Set(rawCells.map(canonicalCell))]
   // Particiona: blocked (alheio) / mine (meu) / free.
   let mineCs: string | null = null
   for (const cell of cells) {
@@ -178,7 +209,18 @@ export function changesetClaim(state: ServerState, args: { token: string; csId?:
     if (!cs || cs.status !== "open") return { ok: false, reasons: [`changeset ${csId} not open`], __tenant: tenant }
     if (cs.opened_by !== userId) return { ok: false, reasons: ["not the holder of this changeset"], __tenant: tenant }
 
-    const { reasons, warnings } = incrementalGate(delta, { lockedCells: lockedCells(state, tenant, csId), existingClaims: readClaims(state, tenant), readFile: makeReadFile(state) })
+    // F3: o conjunto de roundtrip precisa ser (claims commitadas + claim.add já encenados neste
+    // changeset), não só o commitado — senão o advisory acusa dangling-ref de refs que só ainda não
+    // existiam FORA do turno corrente. `stagedClaims` é a MESMA leitura de `cs_deltas` que
+    // `changesetCommit` usa pra montar `deltas`; `incrementalGate` acrescenta a claim nova (`c`) por
+    // último em `toRoundtrip`, então se este delta for um re-claim com o MESMO id de um já encenado
+    // (atualização no mesmo turno), o Map de `roundtripScoped` fica com a versão nova por último —
+    // igual o gate final, cuja lista de deltas também termina na versão mais recente daquele id.
+    const { reasons, warnings } = incrementalGate(delta, {
+      lockedCells: lockedCells(state, tenant, csId),
+      existingClaims: [...readClaims(state, tenant), ...stagedClaims(state, tenant, csId)],
+      readFile: makeReadFile(state),
+    })
     if (reasons.length) return { ok: false, reasons, __tenant: tenant }
 
     const seq = (state.db.query("SELECT COALESCE(MAX(seq),0) AS m FROM cs_deltas WHERE tenant_id = ? AND cs_id = ?").get(tenant, csId) as { m: number }).m + 1

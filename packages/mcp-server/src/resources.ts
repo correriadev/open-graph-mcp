@@ -10,25 +10,49 @@
 import { DEFAULT_TENANT, tenantGraph, type EventEnvelope, type ServerState } from "./state"
 import { normalizeClaimLevel } from "./claim-level"
 import { authorityOf } from "./store"
+import { canonicalCell } from "./gates"
 
-function driftGradeOf(nodes: { stale?: unknown }[]): "fresh" | "stale" | "gone" {
-  let worst: "fresh" | "stale" | "gone" = "fresh"
-  for (const n of nodes) {
-    if (n.stale === "gone") return "gone"
-    if (n.stale === "stale") worst = "stale"
-  }
-  return worst
+/**
+ * F2 fix (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md §F2): before this, drift grade was
+ * read off `n.stale`, a field NOBODY ever wrote — every cell/domain read reported "fresh" forever, even
+ * seconds after `watch-bridge.ts` had emitted `drift.node` + `authority.demoted` for that exact cell.
+ *
+ * The real, live drift index is `state.driftStale: Map<tenant, Set<nodeId>>` (populated by
+ * `watch-bridge.ts::tick`). A node id present in the tenant's set is stale; everything else is fresh.
+ *
+ * "gone" is NOT reproduced here on purpose. `tick()` computes a finer-grained cause per node at drift
+ * time — "gone" (file missing) vs "structural" (file present, anchor missing) — but only the coarse
+ * boolean "is this node id in the set" survives into `state.driftStale`; the cause is not persisted
+ * anywhere queryable by node id after the fact. Reporting "gone" here would mean fabricating a grade the
+ * server does not actually know, for nodes that are really just "structural". The `"gone"` member stays
+ * in the return type (response-shape contract, same field/type for every consumer) but is never produced
+ * until `state.driftStale` (or an equivalent index) starts carrying the cause per node — reported upstream
+ * rather than invented.
+ */
+function driftGradeOf(nodes: { id: string }[], staleIds: ReadonlySet<string>): "fresh" | "stale" | "gone" {
+  for (const n of nodes) if (staleIds.has(n.id)) return "stale"
+  return "fresh"
 }
 
 function cellState(state: ServerState, tenant: string, cellKey: string) {
   const graph = tenantGraph(state, tenant).graph
-  const cut = cellKey.lastIndexOf(":")
-  const domain = cut > 0 ? cellKey.slice(0, cut) : cellKey
-  const level = cut > 0 ? cellKey.slice(cut + 1) : ""
+  // F1 (integração): este arquivo tinha a TERCEIRA cópia da comparação célula↔nó, com a convenção
+  // INVERTIDA em relação a `gates.nodesOfCell` — aqui o nível vinha cru e o `P` era prefixado na
+  // comparação, então `graph://cell/auth:P4` virava `"P4" === "PP4"` e devolvia `nodeCount: 0`.
+  // Corrigir só `nodesOfCell` (que este caminho nem usa) não consertaria o recurso. Agora tudo passa
+  // pela canonicalização única de gates.ts.
+  const canon = canonicalCell(cellKey)
+  const cut = canon.lastIndexOf(":")
+  const domain = cut > 0 ? canon.slice(0, cut) : canon
+  const level = cut > 0 ? canon.slice(cut + 1) : ""
   const nodes = (graph?.nodes ?? []).filter((n) => n.domain === domain && (level === "" || String(n.level) === `P${level}`))
   const claims = new Set<string>()
   for (const n of nodes) for (const c of n.claims) claims.add(c)
-  const lock = state.db.query("SELECT cs_id, holder, expires_at FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, cellKey) as
+  const staleIds = state.driftStale.get(tenant) ?? new Set<string>()
+  // Lookup por chave CANÔNICA (F7): a tabela `locks` é escrita canonicalizada por changeset.ts, então
+  // consultá-la com a string crua faria `graph://cell/auth:P4` reportar `lock: null` sobre uma célula
+  // de fato trancada — "está livre" é a resposta errada mais perigosa que este recurso pode dar.
+  const lock = state.db.query("SELECT cs_id, holder, expires_at FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, canon) as
     | { cs_id: string; holder: string; expires_at: string }
     | null
   return {
@@ -43,12 +67,12 @@ function cellState(state: ServerState, tenant: string, cellKey: string) {
     // gate, via store.authorityOf) still say "graph"/"suspended". Reading through SQLite directly closes
     // that gap without touching the resource's shape (same field name/type) and without needing any
     // change outside this file.
-    authority: authorityOf(state, tenant, cellKey),
+    authority: authorityOf(state, tenant, canon),
     nodeCount: nodes.length,
     claimCount: claims.size,
-    driftGrade: driftGradeOf(nodes),
+    driftGrade: driftGradeOf(nodes, staleIds),
     lock: lock ? { csId: lock.cs_id, holder: lock.holder, expiresAt: lock.expires_at } : null,
-    nodes: nodes.map((n) => ({ id: n.id, file: n.file, anchor: n.anchor, stale: n.stale ?? "fresh" })),
+    nodes: nodes.map((n) => ({ id: n.id, file: n.file, anchor: n.anchor, stale: staleIds.has(n.id) ? "stale" as const : "fresh" as const })),
   }
 }
 

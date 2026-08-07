@@ -53,7 +53,19 @@ export function blastRadius(deltas: readonly Delta[], declaredCells: readonly st
   }
   return { cells: [...cells].sort(), claimCount }
 }
-const canonicalCell = (cell: string): string => {
+/**
+ * Forma canônica de uma chave de célula: `domain:<nível numérico>`. `auth:P4` e `auth:4` são a MESMA
+ * célula e têm que virar a mesma string antes de qualquer comparação, lookup ou escrita.
+ *
+ * EXPORTADA (integração dos achados F1/F7): a ausência de uma canonicalização única aplicada nas
+ * BORDAS foi a causa raiz de duas falhas independentes — o gate de autoridade aprovando sem cobertura
+ * (F1) e a trava pessimista podendo ser adquirida duas vezes para a mesma célula sob grafias
+ * diferentes (F7). Havia três implementações paralelas da mesma comparação (`nodesOfCell` aqui,
+ * o filtro próprio de `cellState` em resources.ts, e a igualdade crua no lookup de `locks`), cada uma
+ * com uma convenção. Quem receber chave de célula de fora — tool, URI de recurso ou linha do banco —
+ * passa por aqui primeiro. Não escreva uma quarta cópia.
+ */
+export const canonicalCell = (cell: string): string => {
   const cut = cell.lastIndexOf(":")
   return cut < 0 ? cell : `${cell.slice(0, cut)}:${cell.slice(cut + 1).replace(/^P/, "")}`
 }
@@ -63,13 +75,24 @@ const toRoundtrip = (c: ClaimSnapshot): RoundtripClaim => ({ id: c.id, level: c.
  *  Exportado: node.editing/node.idle (changeset.ts/sweeper.ts) precisam listar os nós de uma
  *  célula trancada/destrancada pra projeção "em edição por X" no nível do nó (F1). */
 export function nodesOfCell(nodes: readonly NodeSnapshot[], cell: string): NodeSnapshot[] {
-  const cut = cell.lastIndexOf(":")
-  const domain = cell.slice(0, cut)
-  const level = cell.slice(cut + 1)
+  // Canonicaliza a CÉLULA (aceita "domain:P4" e "domain:4") antes de comparar — reusa o mesmo
+  // canonicalCell usado por blastRadius/finalGate, pra não divergir de grafia. Sem isso, uma célula
+  // escrita como "domain:P4" nunca batia com o nível do nó (já sem o "P") e devolvia [] em silêncio
+  // (F1 no relatório de evidências: authority.flip aprovado sem cobertura nenhuma).
+  const canon = canonicalCell(cell)
+  const cut = canon.lastIndexOf(":")
+  const domain = canon.slice(0, cut)
+  const level = canon.slice(cut + 1)
   return nodes.filter((n) => n.domain === domain && String(n.level).replace(/^P/, "") === level)
 }
+/** Mesma canonicalização de `nodesOfCell`: `cellOfClaim` sempre produz "domain:<number>" (claims têm
+ *  level numérico normalizado — normalizeClaimLevel), então um `cell` chamador escrito "domain:P4"
+ *  (ex.: literal de authority.flip) nunca batia aqui por comparação de string crua. Sem isto, mesmo
+ *  com o nó certo achado por `nodesOfCell`, a cobertura de um flip "domain:P4" via claims genuínas
+ *  em "domain:4" ficava invisível (claimed=0), quebrando o caminho feliz na grafia com "P". */
 function claimsOfCell(claims: readonly ClaimSnapshot[], cell: string): ClaimSnapshot[] {
-  return claims.filter((c) => cellOfClaim(c) === cell)
+  const canon = canonicalCell(cell)
+  return claims.filter((c) => cellOfClaim(c) === canon)
 }
 
 export type IncrementalCtx = {
@@ -91,7 +114,12 @@ export function incrementalGate(delta: Delta, ctx: IncrementalCtx): IncrementalR
   if (delta.kind === "authority.flip") {
     const cell = delta.payload?.cell
     if (typeof cell !== "string" || !cell.includes(":")) reasons.push("authority.flip: invalid cell")
-    else if (!ctx.lockedCells.includes(cell)) reasons.push(`authority.flip out of turn scope: ${cell} not locked by this changeset`)
+    // Comparação CANÔNICA dos dois lados, igual o caminho de `claim.add` logo abaixo já fazia. Era o
+    // único ponto do gate que ainda usava `includes` cru: com as travas agora canonicalizadas na
+    // borda (F7), um flip pedido como "auth:P4" sobre um lock guardado como "auth:4" era recusado
+    // como "out of turn scope" — o caller tinha a trava e ouvia que não tinha.
+    else if (!ctx.lockedCells.some((locked) => canonicalCell(locked) === canonicalCell(cell)))
+      reasons.push(`authority.flip out of turn scope: ${cell} not locked by this changeset`)
     return { reasons, warnings }
   }
   // claim.add — refs pode ser vazio (claim-raiz no extremo da escada); o roundtrip valida a integridade.

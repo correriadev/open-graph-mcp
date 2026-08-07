@@ -8,6 +8,7 @@ import path from "node:path"
 import { write } from "./db"
 import type { ServerState } from "./state"
 import type { ClaimSnapshot, NodeSnapshot } from "./gates"
+import { canonicalCell } from "./gates"
 import { normalizeClaimLevel } from "./claim-level"
 
 /**
@@ -60,8 +61,13 @@ export function invalidateClaimsCache(state: ServerState, tenant: string): void 
   state.claimsCache.delete(tenant)
 }
 
+/**
+ * F1/F7 (integração): chave canônica na LEITURA e na ESCRITA da tabela `authority`. Sem isto,
+ * `auth:P4` e `auth:4` viram duas linhas para a mesma célula — uma célula podia estar `graph` numa
+ * grafia e `source` na outra ao mesmo tempo, e o gate final leria a que estivesse mais conveniente.
+ */
 export function authorityOf(state: ServerState, tenant: string, cell: string): "source" | "graph" | "suspended" {
-  const row = state.db.query("SELECT value FROM authority WHERE tenant_id = ? AND cell = ?").get(tenant, cell) as { value: string } | null
+  const row = state.db.query("SELECT value FROM authority WHERE tenant_id = ? AND cell = ?").get(tenant, canonicalCell(cell)) as { value: string } | null
   return (row?.value as any) ?? "source"
 }
 
@@ -136,7 +142,7 @@ export function writeClaim(state: ServerState, tenant: string, seq: number, c: C
 }
 
 export function writeAuthority(state: ServerState, tenant: string, cell: string, value: string, seq: number, by: string): void {
-  write(state.db, state.stateDir, tenant, "authority", { tenant_id: tenant, cell, value, last_flip_seq: seq, last_flip_by: by })
+  write(state.db, state.stateDir, tenant, "authority", { tenant_id: tenant, cell: canonicalCell(cell), value, last_flip_seq: seq, last_flip_by: by })
 }
 
 /** Maior seq de claim do tenant (base do contador monotônico de claims). */

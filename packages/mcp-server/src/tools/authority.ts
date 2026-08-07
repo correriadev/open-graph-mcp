@@ -10,11 +10,15 @@
 import { changesetOpen, changesetClaim, changesetCommit, changesetAbort } from "./changeset"
 import { requireToken } from "./session"
 import type { ServerState } from "../state"
+import { canonicalCell } from "../gates"
 
 export type FlipResult = { ok: true; admitSeq: number; cell: string; to: "source" | "graph" } | { ok: false; reasons: string[] }
 
 export function authorityFlip(state: ServerState, args: { token: string; cell: string; to: "source" | "graph" }): FlipResult {
-  const cell = args.cell
+  // F7: canonicaliza na borda da tool. Esta função consulta `locks` DIRETO (guarda de reuse abaixo)
+  // antes de delegar pro changesetOpen, então precisa da mesma chave que a tabela guarda — senão a
+  // guarda não enxerga a trava do próprio caller quando ele a abriu na outra grafia.
+  const cell = typeof args.cell === "string" ? canonicalCell(args.cell) : args.cell
   const to = args.to
   if (typeof cell !== "string" || !cell.includes(":")) return { ok: false, reasons: ["authority.flip: invalid cell"] }
   if (to !== "source" && to !== "graph") return { ok: false, reasons: [`authority.flip: invalid target "${to}" (must be "source" or "graph")`] }
