@@ -236,3 +236,74 @@ TTL expirar, tentar commit) confirmando recusa limpa.
 | Fase 1 (6 streams em paralelo) | 1 sessão |
 | Fase 2 (revisão + integração serial) | 0.5 sessão |
 | Fase 3 (Tier 3 + dedup + flake gate) | 0.5 sessão |
+
+---
+
+## 11. Resultado (fechado em 2026-08-07)
+
+Baseline: **370 verdes**. Final: **468 verdes, 0 falhas, 1 `test.todo`**, com o
+gate de flake de 10 rodadas consecutivas limpo.
+
+### Defeitos corrigidos
+
+| # | Onde | O que estava errado | Por que importava num beta |
+|---|---|---|---|
+| 1 | `store.ts::makeReadFile` | Lia só `state.repoPath`, que no caminho de produção é sempre `""` (o repo é argumento de `graph.bootstrap`, não config de processo — D1). | O gate de âncora recusava **toda** claim com âncora+arquivo, mesmo genuína. Invisível de fora. Era o item de maior valor da campanha. |
+| 2 | `graph.subscribe` | Sem nenhuma checagem de dono: quem soubesse um `sessionId` reescrevia os filtros SSE de outra sessão. | Um usuário de beta consegue silenciar a conexão de outro. |
+| 3 | `/events?since=abc` | `Number("abc")` → `NaN` → `seq > NaN` não casa nada → backlog vazio **em silêncio**. | Todo reconnect de produção é `since=N`. Um cliente que perde o backlog em silêncio parece um cliente saudável com estado velho. |
+| 4 | `/events?filter=cell:` | Kind conhecido com valor vazio produzia um filtro que não casa nada — conexão muda para sempre. | Mesma classe do anterior. Agora 400 explícito; kind **desconhecido** continua caindo pra `all`, permissivo de propósito. |
+| 5 | `resources.ts::cellState` | `authority` vinha do grafo quente, que `bootstrap`/`rebuild` substituem sem carregar as linhas já existentes na tabela `authority`. | Uma célula flipada antes de um bootstrap lia `"source"` no recurso enquanto o SQLite e o gate final diziam `"graph"`/`"suspended"`. |
+| 6 | `index.ts` — `PORT` | `Number("abc")` → `NaN` → `Bun.serve` sobe numa porta efêmera aleatória. | Erro de configuração escondido atrás de "o servidor subiu em algum lugar". |
+| 7 | `changeset.extend` | Devolvia um `{ok:false}` pelado nos três modos de falha. | O cliente não distingue "seu turno expirou, reabra" de "isso não é seu". Achado do teste manual ponta a ponta. |
+| 8 | `state.lastTickHadEvents` (F1) | Boolean **global** do processo, enquanto `tick(state, tenant)` é por tenant. | Com dois tenants sob watch, o `watch.converged` de um ia parar no log do outro — e o do tenant que convergiu era engolido. |
+| 9 | `system.pending` (D3) | `SELECT`+`DELETE` sem transação. | Não entregava errado hoje (statements síncronas, tabela não-durável), mas a garantia de entrega-uma-vez dependia de ninguém nunca introduzir um `await` no meio. Agora é estrutural. |
+| 10 | `changeset-extend.test.ts` | Com `ttlMs:1` o próprio `extend` só empurra a expiração 1ms — qualquer atraso até o `sweep()` fazia o sweep abortar **corretamente**. | Flake de ~1 em 20. O teste media agendamento, não comportamento. |
+
+### Sequência do `graph.subscribe` (§5), como ficou
+
+Os três passos foram cumpridos, com uma diferença em relação ao previsto: o
+passo 2 **não exigiu mudança nenhuma em `packages/client`**. O `call()` do
+client já injeta o token resolvido em `args.token` de todo `tools/call`, então
+assim que `transport.ts` passou a encaminhar `args.token` para `subscribe()`,
+o caminho de produção passou a ser o validado. Verificado ao vivo contra o
+`harness-kit` (186 nós): token próprio → `{ok:true}`; token de outro usuário →
+`session not owned by caller`.
+
+O passo 3 continua valendo: chamada **sem token nenhum** segue aceita. É o
+residual consciente — torná-lo obrigatório é decisão do dono, não desta
+campanha.
+
+### Residuais aceitos (known-issues do beta)
+
+1. **REPORT-A1** — `changeset.extend` não emite evento nenhum. Um segundo
+   observador (ou a outra aba do próprio holder) não fica sabendo que o TTL de
+   um turno andou pra frente sem consultar `changeset.list_mine`. Corrigir é
+   `kind` de evento novo = mudança de contrato. Único `test.todo` que sobra.
+2. **REPORT-A2** — `changeset.open` aceita uma cell key sem `:` (sem forma
+   `domain:level`) sem validar. `nodesOfCell` simplesmente não casa nada, então
+   o turno tranca uma célula fantasma. Não corrigido de propósito: **a suíte
+   inteira usa chaves assim** (`cellX`, `decoy`) — apertar isso é um refactor
+   transversal, não um fix mecânico.
+3. **`makeReadFile` entre tenants** — a resolução tenta cada raiz candidata até
+   uma leitura bater, porque o call site (`changeset.ts`) não passa tenant.
+   Dois tenants com o mesmo caminho relativo em repos diferentes continuam
+   ambíguos. É ambiguidade **pré-existente** (o campo único `state.repoPath` já
+   não distinguia tenants), agora documentada em vez de silenciosa.
+4. **Sleeps remanescentes** em `ghost-render`, `join-and-leave`,
+   `lock-denied-private` e `typing-network-aggregation`. Todos são do padrão
+   seguro "esperar até que algo expire" (monótono: dormir mais nunca quebra), ao
+   contrário do flake corrigido, que esperava e afirmava **sobrevivência**. O
+   gate de 10 rodadas é a evidência empírica.
+5. **Postura D2 na rede** — inalterada e fora deste escopo (ver riscos
+   transversais do README desta pasta).
+
+### Critério de "beta ready" — situação
+
+- ✅ Toda tool com ao menos um teste feliz e um negativo/authz.
+- ✅ Todo recurso `graph://` exercitado no CI sem repo externo (fixture
+  `test/fixtures/multi-domain/`).
+- ✅ Os quatro `"not the holder of this changeset"` afirmados.
+- ✅ Zero `setTimeout` **como prova de ausência** em `packages/mcp-server/test/`.
+- ✅ A questão do `makeReadFile`/`repoPath` respondida — corrigida, com o
+  residual entre tenants escrito acima.
+- ✅ Lista de known-issues escrita (acima).
