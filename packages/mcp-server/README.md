@@ -11,7 +11,7 @@ bun test                                     # 7 testes de aceite (spec §9)
 
 | Var | Default | Efeito |
 |---|---|---|
-| `PORT` | `8787` | Porta do `Bun.serve`. |
+| `PORT` | `8787` | Porta do `Bun.serve`. Validada no boot: um valor não-inteiro ou fora de 1–65535 falha alto, em vez de virar `NaN` e subir numa porta efêmera aleatória. |
 | `STATE_DIR` | `.graph-server` | Diretório do estado durável (SQLite + JSONL). |
 | `WATCH` | `true` | `WATCH=false` desliga o loop de watch. |
 | `WATCH_TENANT` | `default` | Tenant que o watch acompanha. |
@@ -44,9 +44,21 @@ bun test                                     # 7 testes de aceite (spec §9)
   snapshot and cell continuation queries aligned with their cursor predicates;
   claim levels are canonicalized to `P<n>` so cell reads use indexed equality.
 - `GET /events?since=N&filter=...` — SSE. Primeiro frame `session.created
-  { sessionId, graphId }`; depois tail do log + eventos ao vivo, filtrados
-  server-side. Envelope: `{ schemaVersion: 1, seq, ts, kind, target, payload,
-  graphId }`.
+  { sessionId, graphId }` (o nome do evento vai no campo `event:` do SSE; o
+  `data:` é o objeto cru, **sem** campo `kind`); depois tail do log + eventos ao
+  vivo, filtrados server-side. Envelope: `{ schemaVersion: 1, seq, ts, kind,
+  target, payload, graphId }`.
+  `since` aceita só inteiro não-negativo (ou omitido = 0) e `filter` de kind
+  conhecido exige valor não-vazio — os dois devolvem **400** em vez de entregar
+  um backlog vazio/uma conexão muda em silêncio. Kind de filtro *desconhecido*
+  continua caindo pra `{kind:"all"}`, permissivo de propósito.
+- **`graph.subscribe` e o dono da sessão.** `token` é propriedade **opcional** do
+  `inputSchema`. Quando vem, o servidor valida o binding `sessionId → token`
+  (mesmo critério do `presence.ts touch()`) e recusa quem não é dono da sessão
+  com `session not owned by caller`. `packages/client` já injeta o token
+  resolvido em todo `tools/call`, então o caminho de produção é o validado.
+  Chamada sem token segue aceita (compat Fase 1) — residual consciente,
+  registrado em `docs/roadmap-server-beta/00-scope-sb-0-hardening-servidor.md`.
 
 ## Decisões de implementação
 
