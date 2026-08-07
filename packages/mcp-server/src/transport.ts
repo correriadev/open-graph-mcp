@@ -88,7 +88,9 @@ const TOOLS = [
   {
     name: "changeset.claim",
     description:
-      "Add a delta (claim.add | authority.flip) to an open changeset. Runs the incremental gate. csId is OPTIONAL (F1): without a turn already open on the delta's cell, opens one implicitly (intent \"\") and returns its csId.",
+      "Add a delta (claim.add | authority.flip) to an open changeset. Runs the incremental gate. csId is OPTIONAL (F1): without a turn already open on the delta's cell, opens one implicitly (intent \"\") and returns its csId. " +
+      "claim.add payload: id, subject, domain, level (0-5, 5=code…0=ideation), refs (ids of OTHER CLAIMS exactly 1 level away — never a bare node id), file, anchor (verbatim substring of file's source, or blocked). refs:[] only valid at level 0 or 5, else orphan-midladder. " +
+      "refs double as node coverage for authority.flip's gate, but that gate reads node ids while this one requires claim ids — reconcile by adding a floor claim per node (id = the node's id, level 5, refs: [], anchor verbatim) and pointing level-4 claims at that floor claim's id, not at the raw node id. Skipping the floor claim is accepted here (warns roundtrip dangling-ref) but changeset.commit then hard-blocks with the same dangling-ref.",
     inputSchema: { type: "object", required: ["token", "delta"], properties: { token: { type: "string" }, csId: { type: "string" }, delta: { type: "object" } } },
   },
   {
@@ -107,7 +109,9 @@ const TOOLS = [
   },
   {
     name: "authority.flip",
-    description: "Flip a cell's authority (source ↔ graph) via an ephemeral changeset. Runs the full gate pipeline; emits authority.flipped (always broadcast to all connected sessions).",
+    description:
+      "Flip a cell's authority (source ↔ graph) via an ephemeral changeset. Runs the full gate pipeline; emits authority.flipped (always broadcast to all connected sessions). " +
+      "source→graph (β) requires CLOSED coverage: every node in the cell must appear in some committed claim's refs (see changeset.claim for the floor-claim pattern that makes this reachable) — otherwise rejected as \"cell coverage not closed\". cell is \"domain:level\" — both spellings are equivalent and interchangeable (\"auth:4\" and \"auth:P4\" are the same cell; the server canonicalizes).",
     inputSchema: {
       type: "object",
       required: ["token", "cell", "to"],

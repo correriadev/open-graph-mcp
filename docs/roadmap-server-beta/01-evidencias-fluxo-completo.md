@@ -203,6 +203,37 @@ células atingidas: ["billing:P4"]
 `cell-dag.ts` (ordem de cascata de regeneração, com SCC e topológica) existe no
 `graph-core` e **não é importado pelo servidor**.
 
+### F7 (CRÍTICO) — a trava pessimista pode ser burlada mudando a grafia da célula
+
+Irmão do F1, encontrado ao auditar o raio de alcance da correção — e **o fix do
+`nodesOfCell` NÃO alcança este**. A trava é gravada e consultada por igualdade
+de string crua, sem nenhuma canonicalização (`tools/changeset.ts`,
+`claimOrOpenCs`):
+
+```ts
+const lock = state.db.query("SELECT cs_id, holder FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, cell)
+...
+write(state.db, state.stateDir, tenant, "locks", { tenant_id: tenant, cell, cs_id: csId, ... })
+```
+
+Como `auth:P4` e `auth:4` são a MESMA célula lógica (provado no F1: as duas
+grafias resolvem para o mesmo conjunto de nós assim que a comparação é
+corrigida) mas duas strings diferentes, elas viram **duas linhas distintas na
+tabela `locks`**. Alice tranca `auth:P4`, Bob tranca `auth:4`, e os dois
+recebem `ok: true` sobre a mesma célula.
+
+Isso é mais grave que o F1: o F1 concede autoridade não merecida; este permite
+**duas pessoas editando a mesma célula ao mesmo tempo**, que é exatamente o que
+o produto existe para impedir. O `blast_cells` do changeset e o escopo do gate
+(`claim out of turn scope`) herdam o mesmo problema, porque comparam contra as
+mesmas strings cruas.
+
+Status: **confirmado no código**; prova empírica pendente (a árvore está sendo
+editada por agentes de correção no momento da auditoria — a prova entra na
+integração). A correção pertence a `tools/changeset.ts`: canonicalizar a chave
+de célula na ESCRITA e na LEITURA da tabela `locks`, e decidir o que fazer com
+linhas legadas gravadas na outra grafia.
+
 ### F6 — os motores da escada não estão expostos (e isso é decisão, não bug)
 
 O servidor importa de `graph-core`: `authority`, `boot-gate`, `build`,
@@ -220,13 +251,22 @@ como.
 
 ## 3. Consequência para o beta
 
-F1 e F2 são **read/decide surfaces que falham em silêncio na direção segura**,
+F1, F7 e F2 são **superfícies que falham em silêncio na direção insegura**,
 a mesma família dos defeitos que a campanha SB-0 corrigiu (`?since=abc`,
 `makeReadFile`, `cellState.authority`). F1 é mais grave que qualquer um deles:
 não é ruído nem indisponibilidade, é **o gate de integridade aprovando sem
 prova**, na grafia que a documentação recomenda.
 
-Recomendo não empacotar release antes de F1 e F2. F3 e F4 são baratos e valem
+A raiz comum de F1 e F7 é a mesma: **a chave de célula (`domain:level`) não tem
+uma forma canônica única aplicada nas fronteiras**. Ela entra pelo cliente em
+duas grafias, é gravada crua na tabela `locks`, canonicalizada em alguns pontos
+(`cellOfClaim`, `canonicalCell` no escopo do gate) e não canonicalizada em
+outros (`nodesOfCell`, lookup de lock). Corrigir os sintomas um a um deixa a
+causa de pé; a correção que fecha a família é canonicalizar na borda — toda
+chave de célula que entra por tool ou por URI de recurso vira forma canônica
+antes de qualquer comparação ou escrita.
+
+Recomendo não empacotar release antes de F1, F7 e F2. F3 e F4 são baratos e valem
 junto: F4 é documentação + provavelmente uma claim-chão emitida pelo próprio
 `graph.bootstrap` (o servidor já sabe os ids dos nós e as âncoras — nada de LLM
 aí, continua determinístico e continua não sendo o servidor propondo
