@@ -102,10 +102,13 @@ export async function tick(state: ServerState, tenant = DEFAULT_TENANT): Promise
     })
   }
 
-  if (events.length) state.lastTickHadEvents = true
-  else if (state.lastTickHadEvents) {
+  // Por tenant (SB-0/REPORT-F1): o flag global fazia o tick de um tenant zerar o do outro, engolindo
+  // ou desatribuindo o `watch.converged`. `watch.converged` e um evento DO tenant — o estado que
+  // decide se ele sai tem que ser do tenant tambem.
+  if (events.length) state.lastTickHadEvents.set(tenant, true)
+  else if (state.lastTickHadEvents.get(tenant)) {
     appendEvent(state, tenant, { kind: "watch.converged", targetId: null, payload: {} })
-    state.lastTickHadEvents = false
+    state.lastTickHadEvents.set(tenant, false)
   }
   return events
 }

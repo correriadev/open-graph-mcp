@@ -111,7 +111,13 @@ export type ServerState = {
   sessions: Map<string, Session>
   /** Contador de deltas por changeset p/ o agregador de 100ms (payload só count, spec §6). */
   deltaCounts: Map<string, { count: number; tenant: string; byUser: string }>
-  lastTickHadEvents: boolean
+  /**
+   * "o tick anterior DESTE tenant teve eventos?" — o que decide se o proximo tick silencioso emite
+   * `watch.converged`. Era um `boolean` unico do processo (SB-0/REPORT-F1): com dois tenants sob
+   * watch, o tick de A zerava o flag e o `watch.converged` de B era engolido, ou pior, atribuido ao
+   * tenant errado. A chave e o tenantId.
+   */
+  lastTickHadEvents: Map<string, boolean>
   /** Presença viva por sessionId (Fase 3 §3) — em memória, some no restart. */
   presence: Map<string, Presence>
   /** Ephemeral collision-safe tenant → actor → live session IDs index for the typing hot path. */
@@ -159,7 +165,7 @@ export function createState(opts: {
     subscriptions: new Map(),
     sessions: new Map(),
     deltaCounts: new Map(),
-    lastTickHadEvents: false,
+    lastTickHadEvents: new Map(),
     presence: new Map(),
     actorSessions: new Map(),
     focusDebounce: new Map(),

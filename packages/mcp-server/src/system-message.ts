@@ -85,17 +85,28 @@ export function pushSystemMessage(state: ServerState, tenant: string, session: S
 }
 
 /** `system.pending { token }` — stateless poll-based drain (INT-3). Returns every persisted
- *  system.message for the caller's user, oldest first, and deletes them: a message is returned once. */
+ *  system.message for the caller's user, oldest first, and deletes them: a message is returned once.
+ *
+ *  SELECT+DELETE numa ÚNICA transação (SB-0/REPORT-D3). Não era, e hoje isso ainda não entrega
+ *  errado — as duas statements são síncronas, sem `await` entre elas, e o loop de eventos do Bun não
+ *  intercala outra chamada no meio; `system_messages` também não é durável (não está em
+ *  DURABLE_TABLES, db.ts), então não há espelho JSONL pra divergir. A transação existe pra que a
+ *  invariante seja ESTRUTURAL em vez de depender de ninguém nunca introduzir um `await` aqui: sem
+ *  ela, uma leitura assíncrona no meio faria dois drenos concorrentes devolverem a MESMA mensagem
+ *  duas vezes, quebrando a garantia de entrega-uma-vez que é a razão de ser desta tool. */
 export function systemPending(state: ServerState, args: { token: string }): { messages: { text: string; createdAt: string }[] } {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
-  const rows = state.db.query("SELECT id, text, created_at FROM system_messages WHERE tenant_id = ? AND user_id = ? ORDER BY id").all(tenant, userId) as {
-    id: number
-    text: string
-    created_at: string
-  }[]
-  if (rows.length) {
-    const ids = rows.map((r) => r.id)
-    state.db.query(`DELETE FROM system_messages WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`).run(tenant, ...ids)
-  }
+  const rows = state.db.transaction(() => {
+    const found = state.db.query("SELECT id, text, created_at FROM system_messages WHERE tenant_id = ? AND user_id = ? ORDER BY id").all(tenant, userId) as {
+      id: number
+      text: string
+      created_at: string
+    }[]
+    if (found.length) {
+      const ids = found.map((r) => r.id)
+      state.db.query(`DELETE FROM system_messages WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`).run(tenant, ...ids)
+    }
+    return found
+  })()
   return { messages: rows.map((r) => ({ text: r.text, createdAt: r.created_at })) }
 }

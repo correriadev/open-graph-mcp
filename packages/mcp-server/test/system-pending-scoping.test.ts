@@ -125,8 +125,31 @@ test("múltiplas mensagens pendentes: ordem oldest-first e drenagem única (segu
   }
 })
 
-// REPORT-D3 (Tier 3, pre-classified — do not fix, escalate): system.pending's read-then-delete against
-// SQLite (system-message.ts systemPending) is two separate statements with no transaction around them.
-// This test documents the DESIRED behavior (atomic drain) as a todo rather than attempting a fix — the
-// fix is `db.ts` transaction-helper territory, owned by WS-F.
-test.todo("REPORT-D3: system.pending drena atomicamente (SELECT+DELETE numa única transação, sem janela de perda entre as duas)")
+// REPORT-D3 (RESOLVIDO na integração): o SELECT+DELETE de `systemPending` roda numa única transação.
+// Ver o doc comment de `systemPending` (src/system-message.ts) para por que isto ainda não entregava
+// errado hoje e por que a transação existe mesmo assim.
+test("system.pending drena numa unica transacao — entrega-uma-vez sob dreno repetido", async () => {
+  const s = startServer()
+  try {
+    const alice = await register(s.url, "alice")
+    const bob = await register(s.url, "bob")
+    const sse = await openSse(s.url, 0, alice.token)
+    await callTool(s.url, "presence.beat", { token: alice.token, sessionId: sse.events[0].sessionId, agentKind: "cli" })
+    await callTool(s.url, "changeset.open", { token: bob.token, cells: ["ui:21"], intent: "notify" })
+    await sse.waitFor((e) => e.kind === "system.message")
+
+    const drains = await Promise.all([
+      callTool(s.url, "system.pending", { token: alice.token }),
+      callTool(s.url, "system.pending", { token: alice.token }),
+      callTool(s.url, "system.pending", { token: alice.token }),
+    ])
+    // Exatamente um dreno leva a mensagem; nenhuma duplicata entre eles.
+    const all = drains.flatMap((d: any) => d.messages.map((m: any) => m.text))
+    expect(all).toHaveLength(1)
+    expect((s.state.db.query("SELECT COUNT(*) AS c FROM system_messages").get() as { c: number }).c).toBe(0)
+
+    sse.close()
+  } finally {
+    s.stop()
+  }
+})
