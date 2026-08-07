@@ -17,7 +17,13 @@ test("changeset.extend strictly advances expiresAt", async () => {
 })
 
 test("an extended changeset SURVIVES a sweep that would otherwise TTL-abort it", async () => {
-  const s = startServer({ ttlMs: 1 }) // 1ms TTL — would expire almost immediately
+  // TTL padrao (60s) + backdate explicito de `expires_at`, em vez de `ttlMs: 1` + sleep real: com um
+  // TTL de 1ms o proprio `extend` so empurra a expiracao 1ms pra frente, entao qualquer atraso entre
+  // o retorno da tool e o `sweep()` fazia o sweep abortar CORRETAMENTE — o teste media agendamento,
+  // nao comportamento (flake observado 1 em ~20 rodadas). Aqui nao ha nenhuma dependencia de relogio.
+  const s = startServer()
+  const backdate = (csId: string) =>
+    s.state.db.query("UPDATE locks SET expires_at = ? WHERE tenant_id = ? AND cs_id = ?").run("1970-01-01T00:00:00.000Z", "default", csId)
   try {
     const a = await register(s.url, "alice")
     const { csId } = await callTool(s.url, "changeset.open", { token: a.token, cells: ["ui:0"], intent: "turn" })
@@ -29,16 +35,21 @@ test("an extended changeset SURVIVES a sweep that would otherwise TTL-abort it",
     })
     expect(claim.ok).toBe(true)
 
-    // move real wall clock past the 1ms TTL before extending, so extend's own expires_at write is
-    // itself the thing under test (not an artifact of "no time passed yet")
-    await new Promise((r) => setTimeout(r, 5))
+    // Controle: um segundo turno igualmente vencido e que NAO chama extend. E ele quem prova que o
+    // sweep desta rodada de fato varre — sem esse sentinela, "sobreviveu" seria indistinguivel de
+    // "o sweep nao rodou".
+    const control = await callTool(s.url, "changeset.open", { token: a.token, cells: ["ui:9"], intent: "control" })
+    backdate(control.csId)
+
+    backdate(csId)
     const ext = await callTool(s.url, "changeset.extend", { token: a.token, csId })
     expect(ext.ok).toBe(true)
 
-    s.sweep() // deterministic — would have aborted the cs if extend hadn't pushed expires_at forward
+    s.sweep()
 
-    const csRow = s.state.db.query("SELECT status FROM changesets WHERE tenant_id = ? AND id = ?").get("default", csId) as { status: string }
-    expect(csRow.status).toBe("open")
+    const statusOf = (id: string) => (s.state.db.query("SELECT status FROM changesets WHERE tenant_id = ? AND id = ?").get("default", id) as { status: string }).status
+    expect(statusOf(control.csId)).toBe("aborted") // o sweep rodou
+    expect(statusOf(csId)).toBe("open") // e o extend salvou este
     const lockCount = (s.state.db.query("SELECT COUNT(*) AS c FROM locks WHERE tenant_id = ? AND cs_id = ?").get("default", csId) as { c: number }).c
     expect(lockCount).toBe(1)
 
