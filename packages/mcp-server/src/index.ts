@@ -57,6 +57,58 @@ function corsHeaders(origin: string | null, allowedOrigins: string[]): Record<st
   return headers
 }
 
+/**
+ * Parseia `DOMAINS` (env) para o mesmo shape tipado que `StartOptions.domains` espera. Formato: um
+ * array JSON num único var, ex. `DOMAINS='[{"pattern":"sdk/**","domain":"sdk"}]'` — é o mais fiel ao
+ * shape tipado (`readonly { pattern; domain }[]`) sem inventar uma sintaxe própria (tipo
+ * `sdk/**=sdk,web/**=web`) que precisaria de escaping manual pra patterns com vírgula.
+ *
+ * Extraída como função pura (em vez de inline no bloco `import.meta.main`) por dois motivos: dá pra
+ * testar sem spawnar processo, e mantém a MESMA garantia dura que motivou este fix — nunca ignorar
+ * silenciosamente. Unset (`undefined`) devolve `undefined` (mantém o comportamento de hoje: sem
+ * regras, tudo cai em `(unassigned)`). QUALQUER valor setado que não parseie como JSON, ou que não seja
+ * um array de `{ pattern: string não-vazia, domain: string não-vazia }`, é um erro fatal no boot — é
+ * exatamente a classe de bug que motivou este fix: `startServer()` aceita `domains` desde sempre, mas
+ * o entrypoint de CLI nunca lia do ambiente, então configurar regras de domínio rodando `bun run dev`
+ * era impossível e sem nenhum aviso (186 nós indexados caíram todos em uma única célula
+ * `(unassigned)`). Falhar alto aqui é melhor que repetir esse silêncio.
+ */
+export function parseDomainsEnv(raw: string | undefined): readonly { pattern: string; domain: string }[] | undefined {
+  if (raw === undefined) return undefined // não setado: sem regras, comportamento de hoje preservado
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (err) {
+    throw new Error(
+      `DOMAINS inválido: não é JSON válido (${(err as Error).message}). Esperado um array como ` +
+        `'[{"pattern":"sdk/**","domain":"sdk"}]'.`,
+    )
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(`DOMAINS inválido: esperado um array de { pattern, domain }, recebeu ${typeof parsed}.`)
+  }
+
+  parsed.forEach((entry, i) => {
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      typeof (entry as { pattern?: unknown }).pattern !== "string" ||
+      (entry as { pattern: string }).pattern.length === 0 ||
+      typeof (entry as { domain?: unknown }).domain !== "string" ||
+      (entry as { domain: string }).domain.length === 0
+    ) {
+      throw new Error(
+        `DOMAINS inválido: item [${i}] deve ser { pattern: string não-vazia, domain: string não-vazia }, ` +
+          `recebeu ${JSON.stringify(entry)}.`,
+      )
+    }
+  })
+
+  return parsed as readonly { pattern: string; domain: string }[]
+}
+
 export type StartOptions = {
   repoPath?: string
   stateDir?: string
@@ -228,12 +280,17 @@ if (import.meta.main) {
     .map((s) => s.trim())
     .filter(Boolean)
   const stateDir = process.env.STATE_DIR ?? ".graph-server"
+  // Falha alto aqui, ANTES de startServer(): DOMAINS malformado tem que travar o boot com uma
+  // mensagem apontando a env var, nunca cair silenciosamente pra "sem regras" (essa era a falha —
+  // ver o comentário de parseDomainsEnv acima).
+  const domains = parseDomainsEnv(process.env.DOMAINS)
   const running = startServer({
     stateDir,
     port: Number(process.env.PORT ?? 8787),
     watch: process.env.WATCH !== "false",
     watchTenant: process.env.WATCH_TENANT ?? DEFAULT_TENANT,
     allowedOrigins,
+    domains,
   })
   const tenants = running.state.graphs.size
   console.log(`open-graph MCP server on ${running.url} (state: ${stateDir}, ${tenants} tenant(s) hidratado(s) do banco)`)

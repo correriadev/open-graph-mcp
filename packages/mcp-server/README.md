@@ -7,6 +7,29 @@ GRAPH_REPO_PATH=/path/to/repo bun run dev   # porta 8787 (PORT p/ mudar)
 bun test                                     # 7 testes de aceite (spec §9)
 ```
 
+### Variáveis de ambiente
+
+| Var | Default | Efeito |
+|---|---|---|
+| `PORT` | `8787` | Porta do `Bun.serve`. |
+| `STATE_DIR` | `.graph-server` | Diretório do estado durável (SQLite + JSONL). |
+| `WATCH` | `true` | `WATCH=false` desliga o loop de watch. |
+| `WATCH_TENANT` | `default` | Tenant que o watch acompanha. |
+| `ALLOWED_ORIGINS` | (unset → `*`) | Lista separada por vírgula de Origins permitidas (CORS + guard anti-rebinding). Unset ≠ `""` — `""` fecha tudo. |
+| `DOMAINS` | (unset → sem regras) | Regras de posse de domínio como array JSON: `DOMAINS='[{"pattern":"sdk/*","domain":"sdk"}]'`. Sem isto, todo nó indexado cai na célula `(unassigned)`. JSON malformado ou itens sem `pattern`/`domain` (string não-vazia) falham o boot com erro nomeando `DOMAINS` — nunca é ignorado silenciosamente. |
+
+> **`pattern` NÃO é glob.** `matchesPattern` (`graph-core/src/domains.ts`) suporta só quatro formas:
+> exato (`src/app.ts`), `prefixo*` (`sdk/*` → todo id que começa com `sdk/`), `*sufixo`
+> (`*.test.ts`) e `*meio*` (`*runner*`). Um `**` não tem significado especial: `sdk/**` vira
+> `startsWith("sdk/*")` e **não casa nada** — silenciosamente, porque uma regra que não casa é
+> indistinguível de não ter regra. Use `sdk/*` para pegar a subárvore inteira (o match é sobre o id
+> POSIX completo, então `sdk/*` já cobre `sdk/src/agent-runner/X.ts`).
+>
+> Verificado em 2026-08-06 indexando um repo real de 186 nós: com
+> `[{"pattern":"sdk/*","domain":"sdk"},{"pattern":"agents/*","domain":"agents"},{"pattern":"skills/*","domain":"skills"},{"pattern":"docs/*","domain":"docs"}]`
+> a distribuição saiu `sdk:149, skills:21, agents:10, docs:4, (unassigned):2` (os 2 são arquivos da
+> raiz, que nenhuma regra cobre). Com `sdk/**` no lugar de `sdk/*`, os 186 ficam `(unassigned)`.
+
 ## Endpoints
 
 - `POST /mcp` — JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`,

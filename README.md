@@ -26,6 +26,11 @@ bun run dev:web                              # cliente web (vite; ?server= p/ ap
 bun test                                     # testes de aceite do servidor
 ```
 
+Regras de posse de domínio (usadas pra agrupar nós em células no grafo/UI) vêm da env var
+`DOMAINS`, um array JSON — ex. `DOMAINS='[{"pattern":"sdk/*","domain":"sdk"}]'`. Sem ela, todo nó
+indexado cai em `(unassigned)`. `pattern` não é glob (`sdk/**` não casa nada) — as quatro formas
+suportadas estão em `packages/mcp-server/README.md`.
+
 ## Princípios herdados (non-negotiable)
 
 Núcleo determinístico, LLM na borda · porta única (gate) · verdade no grafo ·
