@@ -109,6 +109,28 @@ export function parseDomainsEnv(raw: string | undefined): readonly { pattern: st
   return parsed as readonly { pattern: string; domain: string }[]
 }
 
+/**
+ * Parseia `PORT` (env) para o inteiro que `Bun.serve({ port })` espera. Extraída como função pura (mesmo
+ * padrão de `parseDomainsEnv` acima) por dois motivos: testável sem spawnar processo, e falha alto em vez
+ * de deixar `Number(process.env.PORT ?? 8787)` produzir `NaN` silencioso pra `Bun.serve` num valor
+ * inválido (`PORT=abc`, `PORT="  "`, `PORT=8080.5`, `PORT=-1`, `PORT=99999`) — `Bun.serve({ port: NaN })`
+ * cai pra uma porta efêmera aleatória em vez de recusar, escondendo um erro de configuração atrás de "o
+ * servidor subiu em algum lugar". Unset (`undefined`) devolve o default 8787 (comportamento de hoje
+ * preservado). Só chamada dentro do bloco `import.meta.main` — NÃO muda a assinatura de `startServer`,
+ * que continua aceitando `port` como veio (outros streams e todo teste existente dependem dela).
+ */
+export function parsePortEnv(raw: string | undefined): number {
+  if (raw === undefined) return 8787
+  if (!/^\d+$/.test(raw.trim())) {
+    throw new Error(`PORT inválido: esperado um inteiro positivo, recebeu ${JSON.stringify(raw)}.`)
+  }
+  const value = Number(raw.trim())
+  if (!Number.isSafeInteger(value) || value < 1 || value > 65535) {
+    throw new Error(`PORT inválido: fora do range de portas válidas (1-65535), recebeu ${JSON.stringify(raw)}.`)
+  }
+  return value
+}
+
 export type StartOptions = {
   repoPath?: string
   stateDir?: string
@@ -284,9 +306,12 @@ if (import.meta.main) {
   // mensagem apontando a env var, nunca cair silenciosamente pra "sem regras" (essa era a falha —
   // ver o comentário de parseDomainsEnv acima).
   const domains = parseDomainsEnv(process.env.DOMAINS)
+  // Mesma disciplina do DOMAINS acima: falha alto ANTES de startServer() em vez de deixar um PORT
+  // malformado virar NaN silencioso (ver comentário de parsePortEnv).
+  const port = parsePortEnv(process.env.PORT)
   const running = startServer({
     stateDir,
-    port: Number(process.env.PORT ?? 8787),
+    port,
     watch: process.env.WATCH !== "false",
     watchTenant: process.env.WATCH_TENANT ?? DEFAULT_TENANT,
     allowedOrigins,

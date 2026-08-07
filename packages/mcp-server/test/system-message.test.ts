@@ -22,15 +22,22 @@ test("non-web session gets a pt-BR system.message for a relevant event; web sess
     await callTool(s.url, "presence.beat", { token: bob.token, sessionId: bobSessionId, agentKind: "opencode" })
     await callTool(s.url, "presence.beat", { token: carol.token, sessionId: carolSessionId, agentKind: "web" })
 
-    await callTool(s.url, "changeset.open", { token: alice.token, cells: ["ui:4"], intent: "notify test" })
+    const opened = await callTool(s.url, "changeset.open", { token: alice.token, cells: ["ui:4"], intent: "notify test" })
 
     const sysMsg = await bobSse.waitFor((e) => e.kind === "system.message")
     expect(sysMsg.payload.text).toContain("[open-graph]")
     expect(sysMsg.payload.text).toContain("ui:4")
     expect(sysMsg.ephemeral).toBe(true)
 
-    // Give Carol's (web) stream the same settle time — she must never receive this kind.
-    await new Promise((r) => setTimeout(r, 50))
+    // Sentinel instead of a sleep: commit the same changeset — Carol (cell-filtered, web) receives
+    // changeset.committed over the SAME connection. pushEnvelope's per-recipient loop (state.ts) is
+    // synchronous — her push and the (skipped, she's web) system.message decision for THIS commit
+    // envelope both happen before the RPC call below even returns. Frames on one SSE connection arrive
+    // in write order, so once her committed frame lands client-side, absence of system.message from the
+    // changeset.open above is provable without waiting on a clock.
+    const commit = await callTool(s.url, "changeset.commit", { token: alice.token, csId: opened.csId, intent: "notify test" })
+    expect(commit.ok).toBe(true)
+    await carolSse.waitFor((e) => e.kind === "changeset.committed")
     expect(carolSse.events.some((e) => e.kind === "system.message")).toBe(false)
     // ...but she still gets the raw event (toasts consume it, Task 4).
     expect(carolSse.events.some((e) => e.kind === "changeset.opened")).toBe(true)
