@@ -228,11 +228,31 @@ o produto existe para impedir. O `blast_cells` do changeset e o escopo do gate
 (`claim out of turn scope`) herdam o mesmo problema, porque comparam contra as
 mesmas strings cruas.
 
-Status: **confirmado no código**; prova empírica pendente (a árvore está sendo
-editada por agentes de correção no momento da auditoria — a prova entra na
-integração). A correção pertence a `tools/changeset.ts`: canonicalizar a chave
-de célula na ESCRITA e na LEITURA da tabela `locks`, e decidir o que fazer com
-linhas legadas gravadas na outra grafia.
+**CORRIGIDO em 2026-08-07** (commit `aa33248`, junto com o F1 — mesma causa
+raiz). Verificação ao vivo contra servidor real, depois da correção:
+
+```
+alice tranca auth:P4 → {"ok":true,"csId":"cs_4e4e4c9c95561d21"}
+bob tenta   auth:4   → {"ok":false,"reason":"cell_locked","holder":"u_27a337...","csId":"cs_4e4e4c9c95561d21"}
+```
+
+E o F1, na mesma rodada, nas duas grafias:
+
+```
+authority.flip billing:P4 → {"ok":false,"reasons":["coverage not balanced in β cell billing:4: 1 node(s) without claims", ...]}
+authority.flip billing:4  → {"ok":false,"reasons":["coverage not balanced in β cell billing:4: 1 node(s) without claims", ...]}
+graph://cell/billing:P4   → {"nodeCount":1,"authority":"source"}
+graph://cell/billing:4    → {"nodeCount":1,"authority":"source"}
+```
+
+Os testes de regressão do F7 (`test/lock-cell-key-canonicalization.test.ts`)
+foram verificados contra a versão sem a correção: **3 dos 4 falham**.
+
+Resíduo conhecido: linhas de `locks`/`authority` gravadas na grafia antiga por
+um servidor anterior ficam órfãs (a chave canônica não as encontra). Travas são
+índice vivo e expiram por TTL, então se resolvem sozinhas; uma linha de
+`authority` legada exigiria re-flip. Aceitável num beta que ainda não tem base
+instalada — registrado para não virar surpresa.
 
 ### F6 — os motores da escada não estão expostos (e isso é decisão, não bug)
 
@@ -274,3 +294,36 @@ conhecimento).
 
 F5 e F6 são de produto, não de correção: decidir se `graph.impact` e a
 distribuição da skill via `prompts/` entram no escopo do beta.
+
+---
+
+## 4. Situação depois das correções (2026-08-07)
+
+| Achado | Status | Onde |
+|---|---|---|
+| **F1** — gate de autoridade aprovava sem cobertura | **corrigido** | `aa33248` |
+| **F7** — trava pessimista burlável pela grafia | **corrigido** | `aa33248` |
+| **F2** — `driftGrade`/`stale` sempre `"fresh"` | **corrigido** | `7e5a4a9` |
+| **F3** — `dangling-ref` falso no gate incremental | **corrigido** | `5dd7b8c` |
+| **F4a** — padrão da claim-chão indescobrível | **documentado** | `f45882a` |
+| **F4b** — `bootstrap` emitir claims-chão | **em aberto — decisão do dono** | — |
+| **F5** — sem tool de análise de impacto | **em aberto — produto** | — |
+| **F6** — motores da escada não expostos | **em aberto — produto** (ADR §3.1) | — |
+
+Suíte: **497 verdes, 0 falhas, 1 `test.todo`** (era 468 antes desta rodada),
+com o gate de flake de 8 rodadas consecutivas limpo.
+
+### Resíduos técnicos registrados
+
+1. **`"gone"` nunca é produzido.** O `tick()` distingue "arquivo sumiu" de
+   "âncora sumiu", mas só o id do nó sobrevive em `state.driftStale` — a causa
+   não fica consultável depois. O grau permanece no tipo (contrato de resposta)
+   e nunca é emitido. Fechar exige o índice carregar a causa por nó.
+2. **Linhas legadas na grafia antiga** (`locks`, `authority`) ficam órfãs após
+   a canonicalização. Travas expiram por TTL sozinhas; uma autoridade legada
+   exigiria re-flip. Sem base instalada, é aceitável.
+3. **F4b é o que ainda deixa o produto mudo na primeira impressão.** Um
+   bootstrap devolve `claims: 0` e nenhuma célula pode ser β até alguém montar
+   a escada à mão. Emitir as claims-chão no bootstrap continua determinístico
+   (o servidor já conhece ids e âncoras) e não viola a ADR — mas muda o dado
+   que o produto gera e o que muitos testes afirmam. É decisão de produto.
