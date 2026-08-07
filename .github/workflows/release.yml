@@ -71,4 +71,5 @@ jobs:
             --notes "$notes" \
             "dist-beta/open-graph-proxy-$tag.tar.gz" \
             "dist-beta/open-graph-plugin-$tag.tar.gz" \
+            "dist-beta/open-graph-server-$tag.tar.gz" \
             "dist-beta/INSTALL.md"
