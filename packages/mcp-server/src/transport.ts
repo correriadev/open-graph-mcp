@@ -7,7 +7,7 @@
  * (ADR nota 2025). Métodos: initialize, tools/list, tools/call, resources/list, resources/read.
  */
 import { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from "@modelcontextprotocol/sdk/types.js"
-import { DEFAULT_TENANT, type Filter, type ServerState } from "./state"
+import { DEFAULT_TENANT, type ServerState } from "./state"
 import { graphBootstrap, graphRebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
 import { subscribe } from "./tools/graph-subscribe"
@@ -20,8 +20,16 @@ import { presenceTyping } from "./tools/typing"
 import { resolveResource, RESOURCE_LIST } from "./resources"
 
 function tenantOf(state: ServerState, token: unknown): string {
+  // Ausência de token é INTENCIONAL e load-bearing (D13): o web client lê graph://snapshot no
+  // tenant default ANTES do usuário se registrar uma identidade — isso não pode virar erro.
   if (typeof token !== "string" || !token) return DEFAULT_TENANT
-  return state.tokens.get(token)?.tenantId ?? DEFAULT_TENANT
+  // Mas token PRESENTE e desconhecido é um caso diferente: era engolido no mesmo `?? DEFAULT_TENANT`
+  // de cima, então um token errado/expirado caía silenciosamente no tenant default e devolvia "not
+  // bootstrapped" — parecendo repo errado quando na verdade é auth errada. Explicitar aqui (mesma
+  // mensagem de requireToken, session.ts) em vez de conflatar os dois casos.
+  const info = state.tokens.get(token)
+  if (!info) throw new Error("invalid or expired token — call session.register")
+  return info.tenantId
 }
 
 type RpcRequest = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: any }
@@ -144,7 +152,10 @@ function callTool(state: ServerState, name: string, args: any): unknown {
     case "graph.query":
       return query(state, { terms: args.terms, domain: args.domain, layer: args.layer, limit: args.limit }, tenantOf(state, args.token))
     case "graph.subscribe":
-      return subscribe(state, args.sessionId, (args.filters ?? []) as Filter[])
+      // Sem default de filters aqui: inputSchema já marca `filters` required, e subscribe() valida
+      // Array.isArray explicitamente — um `?? []` aqui mascararia um caller que manda `filters`
+      // ausente/malformado atrás de um "sucesso" silencioso em vez do erro que ele devia ver.
+      return subscribe(state, args.sessionId, args.filters)
     case "graph.rebuild":
       return graphRebuild(state, args)
     case "session.register":
@@ -219,19 +230,34 @@ function dispatch(state: ServerState, method: string, params: any): unknown {
   }
 }
 
-export function handleRpc(state: ServerState, req: RpcRequest): RpcResponse | null {
-  const id = req.id ?? null
-  if (req.id === undefined) {
+export function handleRpc(state: ServerState, req: unknown): RpcResponse | null {
+  // Envelope malformado → -32600 Invalid Request, NUNCA deixar passar pra baixo. index.ts já cobre
+  // JSON não-parseável (-32700) antes de chamar isto; aqui é sobre o valor que SURVIVE ao JSON.parse
+  // mas não é um request JSON-RPC conforme. Dois casos reais achados em probe ao vivo:
+  //  - body `null` (`curl -d 'null'`): `req.id` num `null` bruto explode em TypeError, que escapava
+  //    do handler do Bun.serve e virava um 500 cru sem corpo JSON-RPC nenhum — cliente sem como parsear o erro.
+  //  - body `[{...}]` (batch array): batching foi removido na rev 2025-06-18 do MCP, mas antes disto
+  //    `req.id` num array dava `undefined`, o request era tratado como "notification" (silenciosa por
+  //    design), o dispatch por baixo explodia e o catch de notification engolia tudo → 204 silencioso.
+  //    Rejeitar array é correto; fazer isso em silêncio não é — tem que ser um -32600 explícito.
+  if (typeof req !== "object" || req === null || Array.isArray(req) || typeof (req as { method?: unknown }).method !== "string") {
+    const maybeId = (req as { id?: unknown } | null)?.id
+    const id = typeof maybeId === "string" || typeof maybeId === "number" ? maybeId : null
+    return { jsonrpc: "2.0", id, error: { code: -32600, message: "Invalid Request" } }
+  }
+  const validReq = req as RpcRequest
+  const id = validReq.id ?? null
+  if (validReq.id === undefined) {
     // notification — sem resposta
     try {
-      dispatch(state, req.method, req.params ?? {})
+      dispatch(state, validReq.method, validReq.params ?? {})
     } catch {
       /* notifications não retornam erro */
     }
     return null
   }
   try {
-    return { jsonrpc: "2.0", id, result: dispatch(state, req.method, req.params ?? {}) }
+    return { jsonrpc: "2.0", id, result: dispatch(state, validReq.method, validReq.params ?? {}) }
   } catch (err) {
     const msg = (err as Error).message
     const code = /^method not found:/.test(msg) ? -32601 : /^unknown tool:/.test(msg) ? -32602 : -32603
