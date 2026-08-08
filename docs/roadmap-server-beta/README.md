@@ -38,7 +38,9 @@ que a demo feliz.
 | # | Arquivo | Função | Status |
 |---|---|---|---|
 | 0 | `00-scope-sb-0-hardening-servidor.md` | Campanha de teste-e-correção de toda a superfície do servidor. **Primeiro.** | fechado (2026-08-07) |
-| 1 | `01-evidencias-fluxo-completo.md` | Exercício do fluxo completo via MCP (escada, autoridade, impacto, drift, concorrência) contra servidor real. Achados **F1–F6**. | fechado (2026-08-07) |
+| 1 | `01-evidencias-fluxo-completo.md` | Exercício do fluxo completo via MCP (escada, autoridade, impacto, drift, concorrência) contra servidor real, mais um exercício multiplayer (dois agentes, mesmo servidor, contenção real) interrompido por um `taskkill` externo. Achados **F1–F7 + MP-1–MP-3**. | atualizado (2026-08-08) — F1–F8 fechados; F6 aguarda validação do dono |
+
+| 2 | `02-scope-alpha-v0-reproducao-controlada.md` | **Alpha v0, ANTES do beta.** O dono reverte uma feature do `harness-kit` e a reconstrói com o servidor conectado, comparando contra o gabarito do histórico. Braço de controle + braço de tratamento. | escrito (2026-08-08), a executar |
 
 Escopos previstos (a escrever, ordem provável):
 

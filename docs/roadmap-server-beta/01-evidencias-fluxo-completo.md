@@ -313,7 +313,7 @@ distribuição da skill via `prompts/` entram no escopo do beta.
 Suíte: **497 verdes, 0 falhas, 1 `test.todo`** (era 468 antes desta rodada),
 com o gate de flake de 8 rodadas consecutivas limpo.
 
-### Resíduos técnicos registrados
+### Resíduos técnicos registrados (nesta rodada)
 
 1. **`"gone"` nunca é produzido.** O `tick()` distingue "arquivo sumiu" de
    "âncora sumiu", mas só o id do nó sobrevive em `state.driftStale` — a causa
@@ -327,3 +327,201 @@ com o gate de flake de 8 rodadas consecutivas limpo.
    a escada à mão. Emitir as claims-chão no bootstrap continua determinístico
    (o servidor já conhece ids e âncoras) e não viola a ADR — mas muda o dado
    que o produto gera e o que muitos testes afirmam. É decisão de produto.
+
+> Os itens 1 e o par F5/F6 desta lista são revisitados abaixo (§5, §6): o
+> item 1 foi fechado no exercício multiplayer; F5 ganhou tool própria; F6
+> segue em aberto.
+
+---
+
+## 5. Exercício multiplayer (2026-08-08)
+
+### Montagem
+
+Dois agentes de código, cada um sem saber da existência do outro, apontados
+para o **mesmo servidor local** já rodando, contra o **mesmo repo real**
+(`harness-kit`, indexado com domínios — não o repo de 3 arquivos de §0). Os
+dois receberam a mesma tarefa no domínio `docs`, de propósito: forçar
+contenção real na mesma célula em vez de dois agentes trabalhando em paralelo
+sem nunca se cruzar.
+
+### Corte
+
+O exercício **não terminou**. Um agente de outra tarefa, na mesma máquina,
+rodou `taskkill /F /IM bun.exe` — matou todo processo `bun` do sistema,
+inclusive o servidor que os dois agentes multiplayer estavam usando, no meio
+da sessão. Os achados abaixo são o que deu tempo de observar até esse ponto,
+não uma varredura completa do desenho original. Célula única + colisão
+imediata também significou que, quando a primeira trava azedou, um dos dois
+agentes nunca chegou a produzir nada — registrado como resíduo em §7.
+
+### MP-1 (CRÍTICO) — presença exigia SSE que um cliente `POST /mcp` puro nunca tem
+
+Um agente recebeu `cell_locked` e, no mesmo instante, `presence.who` devolveu
+`{"users":[]}` — um lock com dono vivo e ninguém presente. Nas palavras do
+próprio agente que reportou: *"um lock pessoal sem ninguém presente é uma
+inconsistência que a documentação não antecipa"*.
+
+Causa: `presence.beat`/`presence.focus` exigiam um `sessionId`, e esse id só
+nasce de `GET /events` (SSE). Um cliente que fala só `POST /mcp` — o caso de
+`claude mcp add --transport http`, a instalação padrão e o público do beta —
+nunca abre SSE, logo nunca declara presença, nunca aparece em `presence.who` e
+nunca recebe `system.message`.
+
+**Corrigido** (`387de2c`). `sessionId` vira opcional em `beat`/`focus`; sem
+ele, o servidor resolve uma Session sintética sem canal de push, derivada
+deterministicamente de `(tenant, userId)` e inserida no mesmo mapa que
+`sse.ts` popula — `affinity.ts` e `pushEnvelope` passam a tratá-la como
+destinatária de primeira classe, sem caso especial. Ganho colateral
+confirmado: com presença, `system.pending` passa a entregar a notificação de
+`lock.denied` para um cliente que só usou `POST /mcp`. Regressão em
+`test/presence-without-sse.test.ts` (233 linhas): cliente sem SSE aparece em
+`presence.who`, beats repetidos caem na mesma entrada sintética, o holder de
+uma trava é visível como presente mesmo sem nenhum lado ter aberto SSE,
+tentativa de sequestrar o `sessionId` sintético alheio é recusada, e o
+caminho SSE original permanece intacto.
+
+Ressalva do próprio agente, que fica como característica conhecida (§7): é
+preciso bater presença **antes** do evento acontecer — quem só chama tools
+reativamente não tem sessão para rotear.
+
+### MP-2 — recusa por trava dava só um hash opaco; o agente bloqueado ficou girando até desistir
+
+`cell_locked` e a recusa equivalente em `node.edit` devolviam só um `holder`
+opaco (hash de usuário). O agente bloqueado não tinha o que fazer com isso —
+ficou em polling até desistir.
+
+**Corrigido** (`164d8e3`), no mesmo commit do MP-3. Campos aditivos
+(`holderName`, `retryAfterMs`, `hint`) em `OpenResult` e `NodeEditResult` —
+sem fila nem espera bloqueante, só tornando legível e acionável o que o
+servidor já calculava. Saída ao vivo citada no commit:
+
+```
+held by alice (u_27a337...) — expires at ... (~1800s); retry after it
+expires, or ask alice to commit/abort to release it sooner
+```
+
+### MP-3 — o turno declarava uma célula enquanto segurava duas travas
+
+Capturado ao vivo: um turno com `blast_cells: ["docs:4"]` segurando travas em
+`docs:4` **e** `docs:1`. `blast_cells` era gravado uma única vez, na criação
+do turno, e nunca reescrito; um turno **expandido** (reusa o `csId` e tranca
+uma célula nova) ficava subdeclarado no registro de auditoria.
+
+**Corrigido** (`164d8e3`) — mas não do jeito óbvio. O comentário existente em
+`gates.ts` sugeria recalcular `blast_cells` no commit; a auditoria mostrou que
+isso não fecha a família: o **sweeper de TTL** lê `blast_cells` para montar o
+payload de `changeset.aborted` a partir da tabela `locks`, e um turno
+expandido que morre por TTL **nunca passa pelo commit** — o sweeper se
+contradiria dentro da própria transação, do mesmo jeito que o commit
+corrigido não mais faria. A correção reescreve `blast_cells` a partir de
+`locks` (fonte de verdade real) na **mesma transação que grava a trava nova**,
+em `claimOrOpenCs` — fecha os dois caminhos (commit e TTL) com uma única
+fonte, sem tocar `sweeper.ts`.
+
+O teste `blast-radius.test.ts` afirmava literalmente o bug ("blast_cells
+segue congelado", esperando só `["ui:5"]`); a asserção foi corrigida para
+exigir as duas células. Regressão nova em
+`test/changeset-scope-and-contention.test.ts` cobre o turno expandido tanto
+no caminho de commit (registro reflete as duas células já enquanto aberto,
+não só depois do commit) quanto no caminho de TTL (o `changeset.aborted`
+declara as duas células, coerente com os `lock.released` emitidos).
+
+`intent: ""` num turno implícito foi deixado como está, de propósito: é
+decisão deliberada (F1 moveu `intent` para o commit, que passa a exigi-lo);
+inventar um `intent` sintético seria declarar uma intenção que o usuário não
+teve.
+
+### Dois achados de instrumentação
+
+**Log registrava recusa do gate como sucesso.** Duas sessões do exercício
+produziram 59 chamadas de `changeset.claim` registradas como `ok:true` no
+log — e **zero** claims commitadas. As duas coisas eram verdade ao mesmo
+tempo: uma claim recusada pelo gate devolve `{ok:false, reasons}` como
+`structuredContent`, não como `isError`, então para o transporte a chamada
+foi sucesso. Só que o log existe para o dono diagnosticar "por que nada
+entrou", e `ok:true` 59 vezes responde o contrário da verdade — a mesma
+classe de falha silenciosa que este servidor já havia corrigido quatro vezes
+antes (`?since=abc`, `nodesOfCell`, `driftGrade`, filtro vazio), desta vez
+dentro do próprio instrumento de diagnóstico. **Corrigido** (`403240c`): `ok`
+mantém o significado de transporte e ganha `verdict: "refused"` + `reasons`
+ao lado. As `reasons` viajam para o log porque são o dado que responde à
+pergunta; exposição consciente e documentada no commit — contêm ids de claim
+e caminhos **relativos** de arquivo, nunca subject/anchor. Regressão:
+`test/server-log.test.ts`, teste "VEREDITO: recusa do gate é registrada como
+refused + reasons, não como sucesso".
+
+**`graph://guide` afirmava algo falso sobre `presence.who`.** O guia dizia
+que `presence.who {cell}` mostra quem segura a trava. Verificado ao vivo
+contra servidor real: **falso**. Aquele filtro é por foco **declarado**
+(`presence.focus`), não por trava — a holder aparecia em `presence.who` sem
+filtro, com `openCount: 1`, e sumia ao filtrar pela célula que ela tinha
+travado (porque nunca tinha focado ali via `presence.focus`). **Corrigido**
+(`65ff0d5`): o guia foi reescrito para apontar o `holderName` que a resposta
+de `cell_locked` já traz (ganho do MP-2) e para avisar da diferença entre
+foco declarado e trava. Regressão: `test/resources-guide.test.ts` — cobre que
+`graph://guide` está listado, é lido por `resources/list`/`resources/read`, e
+o texto cobre o fluxo central (`session.register`, `graph.query`,
+`graph.impact`, `changeset.open/claim/commit`, `cell_locked`,
+`system.pending`).
+
+---
+
+## 6. Situação atual (2026-08-08)
+
+| Achado | Status | Onde |
+|---|---|---|
+| **F1** — gate de autoridade aprovava sem cobertura | corrigido | `aa33248` |
+| **F7** — trava pessimista burlável pela grafia | corrigido | `aa33248` |
+| **F2** — `driftGrade`/`stale` sempre `"fresh"` | corrigido | `7e5a4a9` |
+| **F3** — `dangling-ref` falso no gate incremental | corrigido | `5dd7b8c` |
+| **F4a** — padrão da claim-chão indescobrível | documentado | `f45882a` |
+| **F4b** — `bootstrap` emitir claims-chão | **em execução — outro agente, agora** (resultado não verificado por este documento) | — |
+| **F5** — sem tool de análise de impacto | corrigido — `graph.impact` | `74b9b0f` (tool), `7bf5227` (limite) |
+| **F6** — motores da escada não expostos | em aberto — produto (ADR §3.1); falta validar Caminho B com sessão real do Claude Code (dono) | — |
+| **`"gone"` nunca era produzido** (resíduo §4.1) | corrigido | `65ff0d5` |
+| **MP-1** — presença exigia SSE, ausente em cliente `POST /mcp` puro | corrigido | `387de2c` |
+| **MP-2** — recusa por trava sem holder legível/acionável | corrigido | `164d8e3` |
+| **MP-3** — `blast_cells` subdeclarado em turno expandido | corrigido | `164d8e3` |
+| Log registrava recusa do gate como `ok:true` | corrigido | `403240c` |
+| `graph://guide` afirmava filtro errado em `presence.who` | corrigido | `65ff0d5` |
+
+Suíte: **539 verdes, 0 falhas, 1 `test.todo`**.
+
+### 7. Resíduos em aberto (2026-08-08)
+
+Registrados com o cuidado de não inflar nem minimizar — cada um é o que as
+fontes acima sustentam, nada além:
+
+1. **F4b — separação de `refs`/`covers`.** Em execução por outro agente no
+   momento em que este documento foi escrito. Não é resíduo fechado nem
+   achado novo: é trabalho em andamento cujo resultado este documento não
+   conhece.
+2. **F6 — validação do Caminho B com sessão real.** `graph://guide` e as
+   descrições de tool cobrem `claude mcp add --transport http`, mas ninguém
+   ainda conectou uma sessão real do Claude Code contra o servidor para
+   confirmar. É a tarefa do dono descrita em `README.md` (SB-2).
+3. **Refazer o exercício multiplayer com o desenho corrigido.** O corte por
+   `taskkill` interrompeu antes do desenho original rodar por completo, e a
+   escolha de forçar colisão na mesma célula desde o primeiro turno significa
+   que a primeira trava azedou o resto da sessão — um dos dois agentes nunca
+   chegou a produzir nada. Repetir com células **diferentes primeiro**,
+   colisão **depois**, dá sinal sobre o caminho feliz de dois agentes
+   independentes antes de testar contenção.
+4. **`presence.beat` precisa vir antes do evento.** Quem só chama tools
+   reativamente nunca abre uma sessão para o servidor rotear notificação, e
+   não recebe `system.message`. Não é bug — está documentado em
+   `graph://guide` — mas é característica que vale manter registrada: um
+   agente que não bate presença cedo fica, na prática, sem os avisos em
+   texto da §1.6.
+5. **`graph.impact` sem paginação de continuação.** Tem `limit` (default 100,
+   máx. 500) e totais reais (`totalDependents`/`totalDependencies`/
+   `totalCells`) contados antes do corte, então "este arquivo tem 847
+   dependentes" é dado confiável mesmo truncado — mas não tem cursor para
+   pedir a próxima página. Mesma classe do F005 (paginação de
+   claims/history), fora de escala de beta.
+6. **Linhas legadas de `locks`/`authority` na grafia antiga.** Órfãs após a
+   canonicalização do F1/F7 — travas expiram por TTL sozinhas e se resolvem
+   sem intervenção; uma linha de `authority` legada exigiria re-flip manual.
+   Sem base instalada, segue aceitável — registrado para não virar surpresa
+   depois que houver.
