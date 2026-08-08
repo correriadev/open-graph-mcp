@@ -138,17 +138,20 @@ const TOOLS = [
   {
     name: "presence.focus",
     description:
-      "Declare (or clear, if cell omitted/null) the focus cell for this session. Broadcasts user.focused after a short settle debounce (spec §6.3). invisible:true hides the session from presence.who and suppresses its broadcasts.",
+      "Declare (or clear, if cell omitted/null) the focus cell for this session. Broadcasts user.focused after a short settle debounce (spec §6.3). invisible:true hides the session from presence.who and suppresses its broadcasts. " +
+      "sessionId is OPTIONAL: a client that never opened GET /events (no SSE — e.g. `claude mcp add --transport http`) has none to pass. Omit it and the server derives one from your token and returns it in `sessionId`; pass that back on later calls to keep updating the SAME presence entry instead of registering a new one each time. This session has no push channel (there is nothing to stream to), but it IS visible in presence.who and IS a valid recipient for lock.denied/etc — pair with a non-\"web\" agentKind to also start receiving text via system.pending.",
     inputSchema: {
       type: "object",
-      required: ["token", "sessionId"],
+      required: ["token"],
       properties: { token: { type: "string" }, sessionId: { type: "string" }, cell: { type: ["string", "null"] }, invisible: { type: "boolean" }, agentKind: { type: "string" } },
     },
   },
   {
     name: "presence.beat",
-    description: "Heartbeat for this session's presence. No beat for 60s expires the presence (user.left, reason heartbeat_expired).",
-    inputSchema: { type: "object", required: ["token", "sessionId"], properties: { token: { type: "string" }, sessionId: { type: "string" }, agentKind: { type: "string" } } },
+    description:
+      "Heartbeat for this session's presence. No beat for 60s expires the presence (user.left, reason heartbeat_expired). " +
+      "sessionId is OPTIONAL: omit it if you never opened GET /events (no SSE) — the server derives a stable id from your token and returns it in `sessionId`; reuse that id on later beats.",
+    inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" }, sessionId: { type: "string" }, agentKind: { type: "string" } } },
   },
   {
     name: "presence.typing",

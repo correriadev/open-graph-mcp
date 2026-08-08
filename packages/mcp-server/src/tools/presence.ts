@@ -1,8 +1,8 @@
 /**
  * presence.ts — Fase 3 §3/§4: presença viva EM MEMÓRIA (não persistida — restart esquece tudo).
  * Uma Presence por sessionId (SSE session = 1 janela, spec §3.3). Tools:
- *  - `presence.beat {token, sessionId, agentKind?}` → heartbeat, atualiza lastSeen.
- *  - `presence.focus {token, sessionId, cell?, invisible?, agentKind?}` → declara focus; broadcast
+ *  - `presence.beat {token, sessionId?, agentKind?}` → heartbeat, atualiza lastSeen.
+ *  - `presence.focus {token, sessionId?, cell?, invisible?, agentKind?}` → declara focus; broadcast
  *    `user.focused` debounced (§6.3: só o settle > focusDebounceMs conta, trocas rápidas são engolidas).
  *  - `presence.who {token, cell?, cs_id?}` → lista presentes visíveis (invisible excluído), filtrável.
  *
@@ -12,8 +12,18 @@
  *
  * `openCsIds` é derivado do SQLite (changesets abertos pelo user) a cada touch/consulta — "cached in-mem"
  * só no sentido de viver no objeto Presence entre chamadas; a fonte da verdade continua sendo o SQLite.
+ *
+ * MP-1 (achado: presença é invisível pra um cliente que nunca abre SSE — `POST /mcp` puro, o caso
+ * `claude mcp add --transport http`): `sessionId` agora é OPCIONAL em beat/focus. Quando ausente,
+ * `touch()` resolve/cria uma Session SINTÉTICA sem canal de push (`ensureNoSseSession` abaixo), keyed
+ * deterministicamente por (tenant, userId) — não aleatória como a SSE (sse.ts), porque não há stream
+ * nenhum cujo dono precise provar posse por capability opaca; a identidade já vem do token
+ * (`requireToken`), e `touch()` (inalterado nesta parte) seguе gating todo acesso por ela. Ver
+ * `ensureNoSseSession` pra a análise completa de por que um id PREVISÍVEL continua seguro aqui.
+ * O caminho SSE (sessionId fornecido) é bit-a-bit o mesmo de antes.
  */
-import { broadcastEphemeral, type Presence, type ServerState } from "../state"
+import { createHash } from "node:crypto"
+import { broadcastEphemeral, type Presence, type ServerState, type Session } from "../state"
 import { requireToken } from "./session"
 import { forceQuiet } from "./typing"
 import { pushSystemMessage } from "../system-message"
@@ -67,6 +77,47 @@ function clearDebounce(state: ServerState, sessionId: string): void {
 
 const NOT_OWNED = { ok: false as const, reasons: ["session not owned by caller"] }
 
+/** MP-1: sessão sintética sem SSE — nada a empurrar. Restrição #2: o resto do servidor (affinity.ts,
+ *  state.ts::pushEnvelope, sweeper) itera `state.sessions` sem saber que algumas não têm canal nenhum;
+ *  este no-op é o que torna essa suposição segura em vez de assumida. */
+const NO_PUSH: Session["push"] = () => {}
+
+/**
+ * Deriva um sessionId ESTÁVEL (não aleatório) pra um caller sem stream SSE nenhum a que amarrar um id —
+ * MP-1. Determinístico em (tenant, userId): beats repetidos sem sessionId caem na MESMA Presence, em vez
+ * de um `user.joined` novo por chamada.
+ *
+ * Restrição #4 (segurança): o sessionId de uma sessão SSE (sse.ts) é aleatório porque sua SECRECY é a
+ * única coisa entre ele e um sequestro — é uma capability opaca. Aqui não: `touch()` (abaixo, inalterado
+ * nesta parte) sempre reconfirma `session.userId === identidade derivada do token via requireToken`
+ * antes de tocar qualquer estado. Um atacante que CALCULE o id sintético de outro user e o apresente
+ * junto do PRÓPRIO token cai no mesmo `NOT_OWNED` que hoje protege um sessionId SSE vazado
+ * (presence-ownership.test.ts) — sem o token da vítima (infalsificável, session.ts), saber o id não abre
+ * porta nenhuma. Previsibilidade aqui é uma escolha, não uma fraqueza: sem ela, todo POST /mcp sem
+ * sessionId criaria uma Presence nova (spam de user.joined/left a cada beat).
+ */
+function noSseSessionId(tenant: string, userId: string): string {
+  const h = createHash("sha256").update(`${tenant}:${userId}`).digest("hex").slice(0, 12)
+  return `s_${h}`
+}
+
+/**
+ * Acha ou cria (lazy) a Session sintética por trás da presença de um caller sem SSE. Inserida direto em
+ * `state.sessions` — o MESMO mapa que sse.ts popula — pra que affinity.ts/pushEnvelope a tratem como
+ * uma Session de primeira classe sem nenhum caso especial: um caller sem SSE passa a ser destinatário
+ * válido de `lock.denied` etc. (route()/sessionsOfUser, affinity.ts, olha só `s.userId`) e, com um
+ * `agentKind` não-"web", começa a acumular `system.message` que `system.pending` drena depois (INT-3).
+ * `restartPending:false` — não houve reconexão nenhuma pra sinalizar; `filters:[]` — mesmo default de
+ * "all" do SSE (sse.ts `parseFilterParam`/`matches()`: filters vazio = tudo).
+ */
+function ensureNoSseSession(state: ServerState, tenant: string, userId: string): string {
+  const sid = noSseSessionId(tenant, userId)
+  if (!state.sessions.has(sid)) {
+    state.sessions.set(sid, { id: sid, tenant, filters: [], push: NO_PUSH, userId, restartPending: false })
+  }
+  return sid
+}
+
 export function registerActorSession(state: ServerState, p: Presence): void {
   let tenant = state.actorSessions.get(p.tenant)
   if (!tenant) state.actorSessions.set(p.tenant, tenant = new Map())
@@ -91,8 +142,16 @@ export function unregisterActorSession(state: ServerState, p: Presence): void {
  * (ID vazado/compartilhado): chamada posterior com identidade divergente (outro user OU outro
  * tenant) retorna null e o caller rejeita, sem tocar o estado da vítima nem emitir broadcast.
  */
-function touch(state: ServerState, sessionId: string, tenant: string, userId: string, agentKind?: string): { presence: Presence; isNew: boolean } | null {
-  if (!/^s_[0-9a-f-]{12}$/i.test(sessionId)) return null
+function touch(state: ServerState, sessionIdArg: string | undefined, tenant: string, userId: string, agentKind?: string): { presence: Presence; isNew: boolean } | null {
+  let sessionId: string
+  if (sessionIdArg === undefined) {
+    // MP-1: sem SSE, sem sessionId a oferecer — resolve/cria a Session sintética (ver noSseSessionId
+    // acima pra a análise de segurança do id previsível).
+    sessionId = ensureNoSseSession(state, tenant, userId)
+  } else {
+    if (!/^s_[0-9a-f-]{12}$/i.test(sessionIdArg)) return null
+    sessionId = sessionIdArg
+  }
   const session = state.sessions.get(sessionId)
   if (!session || session.tenant !== tenant || (session.userId !== null && session.userId !== userId)) return null
   // A post-restart SSE may begin with an unknown old token; once the client re-registers, bind its
@@ -134,28 +193,37 @@ function touch(state: ServerState, sessionId: string, tenant: string, userId: st
   return { presence: p, isNew }
 }
 
+/** `sessionId`, quando fornecido, precisa ser uma string não-vazia — omitido (MP-1, sem SSE) é
+ *  diferente de "vazio por engano" e não deve ser confundido com um erro silencioso. */
+function validateOptionalSessionId(sessionId: unknown, toolName: string): asserts sessionId is string | undefined {
+  if (sessionId !== undefined && (typeof sessionId !== "string" || sessionId === "")) {
+    throw new Error(`${toolName}: sessionId, when provided, must be a non-empty string`)
+  }
+}
+
 export function presenceBeat(
   state: ServerState,
-  args: { token: string; sessionId: string; agentKind?: string },
-): { ok: true; serverTs: number } | { ok: false; reasons: string[] } {
+  args: { token: string; sessionId?: string; agentKind?: string },
+): { ok: true; serverTs: number; sessionId: string } | { ok: false; reasons: string[] } {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
-  if (!args.sessionId || typeof args.sessionId !== "string") throw new Error("presence.beat: sessionId required")
+  validateOptionalSessionId(args.sessionId, "presence.beat")
   const touched = touch(state, args.sessionId, tenant, userId, args.agentKind)
   if (!touched) return NOT_OWNED
   const { presence, isNew } = touched
   if (isNew && !presence.invisible) emitJoined(state, presence)
-  return { ok: true, serverTs: now() }
+  return { ok: true, serverTs: now(), sessionId: presence.sessionId }
 }
 
 export function presenceFocus(
   state: ServerState,
-  args: { token: string; sessionId: string; cell?: string | null; invisible?: boolean; agentKind?: string },
-): { ok: true } | { ok: false; reasons: string[] } {
+  args: { token: string; sessionId?: string; cell?: string | null; invisible?: boolean; agentKind?: string },
+): { ok: true; sessionId: string } | { ok: false; reasons: string[] } {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
-  if (!args.sessionId || typeof args.sessionId !== "string") throw new Error("presence.focus: sessionId required")
+  validateOptionalSessionId(args.sessionId, "presence.focus")
   const touched = touch(state, args.sessionId, tenant, userId, args.agentKind)
   if (!touched) return NOT_OWNED
   const { presence, isNew } = touched
+  const sessionId = presence.sessionId
   if (typeof args.invisible === "boolean") {
     // Transição visível→invisível ENQUANTO typing/idle: sweepTyping pula invisíveis, então sem uma
     // transição final → quiet o indicador "digitando" congelaria pra sempre nos observadores da cell
@@ -169,10 +237,9 @@ export function presenceFocus(
   // debounced (§6.3: só conta se ficar > focusDebounceMs — trocas rápidas intermediárias são engolidas).
   presence.focusCell = args.cell === undefined ? null : args.cell
 
-  clearDebounce(state, args.sessionId)
-  if (presence.invisible) return { ok: true }
+  clearDebounce(state, sessionId)
+  if (presence.invisible) return { ok: true, sessionId }
 
-  const sessionId = args.sessionId
   const timer = setTimeout(() => {
     state.focusDebounce.delete(sessionId)
     const cur = state.presence.get(sessionId)
@@ -186,7 +253,7 @@ export function presenceFocus(
     })
   }, state.focusDebounceMs)
   state.focusDebounce.set(sessionId, timer)
-  return { ok: true }
+  return { ok: true, sessionId }
 }
 
 export function presenceWho(
