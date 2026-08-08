@@ -10,7 +10,7 @@ import { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from "@modelcont
 import { DEFAULT_TENANT, type ServerState } from "./state"
 import { graphBootstrap, graphRebuild } from "./tools/graph-bootstrap"
 import { query } from "./tools/graph-query"
-import { impact, DEFAULT_IMPACT_DEPTH, MAX_IMPACT_DEPTH } from "./tools/graph-impact"
+import { impact, DEFAULT_IMPACT_DEPTH, MAX_IMPACT_DEPTH, DEFAULT_IMPACT_LIMIT, MAX_IMPACT_LIMIT } from "./tools/graph-impact"
 import { subscribe } from "./tools/graph-subscribe"
 import { sessionRegister, requireToken } from "./tools/session"
 import { lookupToken } from "./tokens"
@@ -61,11 +61,12 @@ const TOOLS = [
   {
     name: "graph.impact",
     description:
-      `What breaks if I change this file? Traverses the published graph's depends-on edges from a node id (repo-relative POSIX file path, e.g. "auth/login.ts"). Returns dependents (nodes that depend on id — the blast radius) and dependencies (nodes id depends on), up to depth hops (default ${DEFAULT_IMPACT_DEPTH}, max ${MAX_IMPACT_DEPTH}), plus the authority/lock state of every cell touched — so an agent can tell if the impact lands on a cell someone else is editing right now. Unknown id returns an explicit gap, never a silent empty result.`,
+      `What breaks if I change this file? Traverses the published graph's depends-on edges from a node id (repo-relative POSIX file path, e.g. "auth/login.ts"). Returns dependents (nodes that depend on id — the blast radius) and dependencies (nodes id depends on), up to depth hops (default ${DEFAULT_IMPACT_DEPTH}, max ${MAX_IMPACT_DEPTH}, silently clamped), plus the authority/lock state of every cell touched — so an agent can tell if the impact lands on a cell someone else is editing right now. Unknown id returns an explicit gap, never a silent empty result. ` +
+      `dependents/dependencies/cells are each capped at limit (default ${DEFAULT_IMPACT_LIMIT}, max ${MAX_IMPACT_LIMIT}; a value above the max is a named error, NOT clamped — unlike depth). A hub file in a large repo can have thousands of dependents; the returned lists are sorted by depth ascending then id (deterministic, stable across calls) and cut to limit, but totalDependents/totalDependencies/totalCells always report the REAL count computed before any cut, and dependentsTruncated/dependenciesTruncated/cellsTruncated say explicitly when the returned list is smaller than the total — truncation is never silent, and the total is never approximated.`,
     inputSchema: {
       type: "object",
       required: ["id"],
-      properties: { id: { type: "string" }, depth: { type: "number" }, token: { type: "string" } },
+      properties: { id: { type: "string" }, depth: { type: "number" }, limit: { type: "number" }, token: { type: "string" } },
     },
   },
   {

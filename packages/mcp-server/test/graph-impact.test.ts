@@ -9,6 +9,7 @@
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
 import { callTool, tempRepo, bootstrapAs, register } from "./helpers"
+import { MAX_IMPACT_LIMIT } from "../src/tools/graph-impact"
 
 const IMPACT_CHAIN_DOMAINS = [
   { pattern: "auth/*", domain: "auth" },
@@ -151,5 +152,140 @@ test("teto de depth: um valor acima do máximo é clampado, não recusado", asyn
   } finally {
     s.stop()
     cleanup()
+  }
+})
+
+// ---------------------------------------------------------------------------
+// `limit` — corte da resposta, não do trabalho de contar. Um hub com N dependentes precisa de mais nós
+// que os testes por-fixture do topo do arquivo (impact-chain tem só 3 nós). Em vez de uma fixture de
+// disco gigante, semeamos o grafo QUENTE direto em `s.state.graphs` — mesmo padrão de
+// resources-cell-domain.test.ts::seedGraph — porque `impact()` só lê `tenantGraph(state, tenant).graph`,
+// nunca toca disco.
+//
+// Topologia: HUB_LEAVES nós "leafNN" cada um numa célula PRÓPRIA (domain leafNN, level P5) e uma edge
+// depends-on leafNN → hub (leafNN importa hub). Logo hub tem HUB_LEAVES dependentes E HUB_LEAVES células
+// distintas atingidas — dá para testar corte de dependents/dependencies e de cells na mesma fixture.
+// ---------------------------------------------------------------------------
+
+const HUB_LEAVES = 10
+
+function seedHubGraph(state: any) {
+  const nodes = [
+    { id: "hub", file: "hub.ts", domain: "hub", level: "P5", kind: "File", responsibility: "hub", exposed: false, confidence: null, overclaim: false, claims: [], anchor: "" },
+    ...Array.from({ length: HUB_LEAVES }, (_, i) => {
+      const n = String(i).padStart(2, "0")
+      return {
+        id: `leaf${n}`,
+        file: `leaf${n}.ts`,
+        domain: `leaf${n}`,
+        level: "P5",
+        kind: "File",
+        responsibility: `leaf${n}`,
+        exposed: false,
+        confidence: null,
+        overclaim: false,
+        claims: [],
+        anchor: "",
+      }
+    }),
+  ]
+  const edges = Array.from({ length: HUB_LEAVES }, (_, i) => ({ from: `leaf${String(i).padStart(2, "0")}`, to: "hub", type: "depends-on" as const }))
+  state.graphs.set("default", {
+    graph: {
+      schemaVersion: 1 as const,
+      repo: "fake",
+      generatedAt: new Date().toISOString(),
+      stats: { nodes: nodes.length, edges: edges.length, claims: 0, domains: nodes.length },
+      nodes,
+      edges,
+    },
+    graphId: "fake-hub-graph-id",
+    pipeline: "indexed" as const,
+    bootstrappedAt: new Date().toISOString(),
+    repoPath: null,
+  })
+}
+
+test("limit: corta dependents em N, mas totalDependents preserva a contagem real (maior que a lista)", async () => {
+  const s = startServer()
+  try {
+    seedHubGraph(s.state)
+    const r = await callTool(s.url, "graph.impact", { id: "hub", limit: 3 })
+    expect(r.dependents.length).toBe(3)
+    expect(r.totalDependents).toBe(HUB_LEAVES)
+    expect(r.totalDependents).toBeGreaterThan(r.dependents.length)
+    expect(r.dependentsTruncated).toBe(true)
+  } finally {
+    s.stop()
+  }
+})
+
+test("limit: cells também é cortado, mas totalCells preserva a contagem real e o indicador de corte aparece", async () => {
+  const s = startServer()
+  try {
+    seedHubGraph(s.state)
+    const r = await callTool(s.url, "graph.impact", { id: "hub", limit: 3 })
+    // hub:5 + HUB_LEAVES células leafNN:5 = HUB_LEAVES + 1 células atingidas ao todo.
+    expect(r.totalCells).toBe(HUB_LEAVES + 1)
+    expect(r.cells.length).toBe(3)
+    expect(r.totalCells).toBeGreaterThan(r.cells.length)
+    expect(r.cellsTruncated).toBe(true)
+  } finally {
+    s.stop()
+  }
+})
+
+test("sem corte: quando total <= limit, truncated é false e a lista não muda de comportamento", async () => {
+  const s = startServer()
+  try {
+    seedHubGraph(s.state)
+    const r = await callTool(s.url, "graph.impact", { id: "hub", limit: HUB_LEAVES + 5 })
+    expect(r.dependents.length).toBe(HUB_LEAVES)
+    expect(r.totalDependents).toBe(HUB_LEAVES)
+    expect(r.dependentsTruncated).toBe(false)
+    expect(r.cellsTruncated).toBe(false)
+  } finally {
+    s.stop()
+  }
+})
+
+test("ordem determinística: depth crescente primeiro, desempate por id — estável entre chamadas", async () => {
+  const s = startServer()
+  try {
+    seedHubGraph(s.state)
+    const r1 = await callTool(s.url, "graph.impact", { id: "hub", limit: 5 })
+    const r2 = await callTool(s.url, "graph.impact", { id: "hub", limit: 5 })
+    expect(r1.dependents.map((h: any) => h.id)).toEqual(r2.dependents.map((h: any) => h.id))
+    // todos depth 1 aqui — desempate por id ascendente: leaf00..leaf04.
+    expect(r1.dependents.map((h: any) => h.id)).toEqual(["leaf00", "leaf01", "leaf02", "leaf03", "leaf04"])
+    expect(r1.dependents.every((h: any) => h.depth === 1)).toBe(true)
+  } finally {
+    s.stop()
+  }
+})
+
+test("limit padrão (default 100) devolve a lista inteira sem corte quando total <= default", async () => {
+  const s = startServer()
+  try {
+    seedHubGraph(s.state)
+    const r = await callTool(s.url, "graph.impact", { id: "hub" })
+    expect(r.limit).toBe(100)
+    expect(r.dependents.length).toBe(HUB_LEAVES)
+    expect(r.dependentsTruncated).toBe(false)
+  } finally {
+    s.stop()
+  }
+})
+
+test("limit inválido: não-inteiro, < 1, ou acima do teto dá erro nomeado (erro, não clamp — diverge de depth de propósito)", async () => {
+  const s = startServer()
+  try {
+    seedHubGraph(s.state)
+    await expect(callTool(s.url, "graph.impact", { id: "hub", limit: 0 })).rejects.toThrow(`graph.impact: limit deve ser um inteiro entre 1 e ${MAX_IMPACT_LIMIT}`)
+    await expect(callTool(s.url, "graph.impact", { id: "hub", limit: 1.5 })).rejects.toThrow(`graph.impact: limit deve ser um inteiro entre 1 e ${MAX_IMPACT_LIMIT}`)
+    await expect(callTool(s.url, "graph.impact", { id: "hub", limit: "10" })).rejects.toThrow(`graph.impact: limit deve ser um inteiro entre 1 e ${MAX_IMPACT_LIMIT}`)
+    await expect(callTool(s.url, "graph.impact", { id: "hub", limit: MAX_IMPACT_LIMIT + 1 })).rejects.toThrow(`graph.impact: limit deve ser um inteiro entre 1 e ${MAX_IMPACT_LIMIT}`)
+  } finally {
+    s.stop()
   }
 })
