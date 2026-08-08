@@ -28,16 +28,17 @@ import { tenantRepoPath } from "./tools/graph-bootstrap"
 export type WatchEvent = { kind: "node" | "cell"; id: string; type: string; cause: string; ts: string }
 
 /**
- * Nós em drift por tenant. Índice vivo — some no restart, recomputado no primeiro tick.
+ * Nós em drift por tenant, com a causa ("gone" | "structural"). Índice vivo — some no restart,
+ * recomputado no primeiro tick.
  *
  * Vive no ServerState, NÃO num Map de módulo: dois servidores no mesmo processo (o que todo teste
  * faz, e o que um host multi-instância faria) compartilhariam o conjunto, e o segundo já nasceria
  * achando que os nós estão em drift — logo não emitiria `drift.node` nenhum.
  */
-function staleSet(state: ServerState, tenant: string): Set<string> {
-  let set = state.driftStale.get(tenant)
-  if (!set) state.driftStale.set(tenant, (set = new Set()))
-  return set
+function staleMap(state: ServerState, tenant: string): Map<string, "gone" | "structural"> {
+  let map = state.driftStale.get(tenant)
+  if (!map) state.driftStale.set(tenant, (map = new Map()))
+  return map
 }
 
 const cellOf = (domain: string | null, level: unknown): string => `${domain ?? "(unassigned)"}:${String(level).replace(/^P/, "")}`
@@ -49,7 +50,7 @@ export async function tick(state: ServerState, tenant = DEFAULT_TENANT): Promise
   if (!graph || !root) return []
 
   const ts = new Date().toISOString()
-  const stale = staleSet(state, tenant)
+  const stale = staleMap(state, tenant)
   const events: WatchEvent[] = []
   /** célula β → pior grade de drift nela neste tick */
   const demote = new Map<string, "gone" | "structural">()
@@ -66,19 +67,24 @@ export async function tick(state: ServerState, tenant = DEFAULT_TENANT): Promise
     const grade = content === null ? "gone" : excerptCheck(content, node.anchor) ? null : "structural"
     const wasStale = stale.has(node.id)
 
-    if (grade && !wasStale) {
-      stale.add(node.id)
-      const cell = cellOf(node.domain, node.level)
-      events.push({ kind: "node", id: node.id, type: "stale", cause: grade, ts })
-      appendEvent(state, tenant, {
-        kind: "drift.node",
-        targetId: node.id,
-        payload: { ts, cause: grade, status: "stale", refKind: "anchor", domain: node.domain ?? "(unassigned)", cell },
-      })
-      if ((graph.authority?.[cell] ?? "source") === "graph") {
-        demote.set(cell, demote.get(cell) === "gone" ? "gone" : grade)
+    if (grade) {
+      // A causa é gravada (ou re-gravada, se mudou de "structural" p/ "gone" num tick posterior) SEMPRE
+      // que o nó está em drift — é isso que faz `resources.ts::driftGradeOf` conseguir produzir "gone"
+      // de verdade, em vez do "stale" genérico que era o único grau possível quando só o id sobrevivia.
+      stale.set(node.id, grade)
+      if (!wasStale) {
+        const cell = cellOf(node.domain, node.level)
+        events.push({ kind: "node", id: node.id, type: "stale", cause: grade, ts })
+        appendEvent(state, tenant, {
+          kind: "drift.node",
+          targetId: node.id,
+          payload: { ts, cause: grade, status: "stale", refKind: "anchor", domain: node.domain ?? "(unassigned)", cell },
+        })
+        if ((graph.authority?.[cell] ?? "source") === "graph") {
+          demote.set(cell, demote.get(cell) === "gone" ? "gone" : grade)
+        }
       }
-    } else if (!grade && wasStale) {
+    } else if (wasStale) {
       stale.delete(node.id)
       events.push({ kind: "node", id: node.id, type: "recovered", cause: "anchor", ts })
       appendEvent(state, tenant, {

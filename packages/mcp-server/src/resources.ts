@@ -1,5 +1,6 @@
 /**
  * resources.ts — leitura MCP (spec §4.3 + Fase 2). Escopadas por tenant (param opcional `token`).
+ *   graph://guide                   → guia de fluxo curto p/ agente recém-conectado (Entrega 2)
  *   graph://snapshot                → grafo publicado do tenant + graphId/pipeline
  *   graph://history?since=N         → tail do log de eventos do tenant (SQLite)
  *   graph://cell/{domain:level}     → autoridade, nós, claim count, drift grade da célula
@@ -17,21 +18,25 @@ import { canonicalCell } from "./gates"
  * read off `n.stale`, a field NOBODY ever wrote — every cell/domain read reported "fresh" forever, even
  * seconds after `watch-bridge.ts` had emitted `drift.node` + `authority.demoted` for that exact cell.
  *
- * The real, live drift index is `state.driftStale: Map<tenant, Set<nodeId>>` (populated by
- * `watch-bridge.ts::tick`). A node id present in the tenant's set is stale; everything else is fresh.
+ * The real, live drift index is `state.driftStale: Map<tenant, Map<nodeId, cause>>` (populated by
+ * `watch-bridge.ts::tick`). A node id present in the tenant's map is stale, tagged with the cause `tick`
+ * computed at drift time: "gone" (file missing/unreadable) or "structural" (file present, anchor gone).
  *
- * "gone" is NOT reproduced here on purpose. `tick()` computes a finer-grained cause per node at drift
- * time — "gone" (file missing) vs "structural" (file present, anchor missing) — but only the coarse
- * boolean "is this node id in the set" survives into `state.driftStale`; the cause is not persisted
- * anywhere queryable by node id after the fact. Reporting "gone" here would mean fabricating a grade the
- * server does not actually know, for nodes that are really just "structural". The `"gone"` member stays
- * in the return type (response-shape contract, same field/type for every consumer) but is never produced
- * until `state.driftStale` (or an equivalent index) starts carrying the cause per node — reported upstream
- * rather than invented.
+ * Aggregation is worst-of: any "gone" node in the cell makes the CELL "gone" — the file disappeared out
+ * from under at least one of its nodes, which is a stronger claim than "the code moved" — even if other
+ * nodes in the same cell are merely "structural". Absent any "gone" node, any "structural" node makes the
+ * cell "stale". No node in drift at all → "fresh". This is honest, not fabricated: the cause traveled all
+ * the way from `tick`'s own `readFileSync` catch (gone) vs. `excerptCheck` failure (structural), through
+ * `state.driftStale`, into this aggregation — nothing here is inferred or guessed.
  */
-function driftGradeOf(nodes: { id: string }[], staleIds: ReadonlySet<string>): "fresh" | "stale" | "gone" {
-  for (const n of nodes) if (staleIds.has(n.id)) return "stale"
-  return "fresh"
+function driftGradeOf(nodes: { id: string }[], causesById: ReadonlyMap<string, "gone" | "structural">): "fresh" | "stale" | "gone" {
+  let worst: "fresh" | "stale" | "gone" = "fresh"
+  for (const n of nodes) {
+    const cause = causesById.get(n.id)
+    if (cause === "gone") return "gone" // worst possible for the cell — short-circuit
+    if (cause === "structural") worst = "stale"
+  }
+  return worst
 }
 
 function cellState(state: ServerState, tenant: string, cellKey: string) {
@@ -48,7 +53,7 @@ function cellState(state: ServerState, tenant: string, cellKey: string) {
   const nodes = (graph?.nodes ?? []).filter((n) => n.domain === domain && (level === "" || String(n.level) === `P${level}`))
   const claims = new Set<string>()
   for (const n of nodes) for (const c of n.claims) claims.add(c)
-  const staleIds = state.driftStale.get(tenant) ?? new Set<string>()
+  const driftCauses = state.driftStale.get(tenant) ?? new Map<string, "gone" | "structural">()
   // Lookup por chave CANÔNICA (F7): a tabela `locks` é escrita canonicalizada por changeset.ts, então
   // consultá-la com a string crua faria `graph://cell/auth:P4` reportar `lock: null` sobre uma célula
   // de fato trancada — "está livre" é a resposta errada mais perigosa que este recurso pode dar.
@@ -70,9 +75,9 @@ function cellState(state: ServerState, tenant: string, cellKey: string) {
     authority: authorityOf(state, tenant, canon),
     nodeCount: nodes.length,
     claimCount: claims.size,
-    driftGrade: driftGradeOf(nodes, staleIds),
+    driftGrade: driftGradeOf(nodes, driftCauses),
     lock: lock ? { csId: lock.cs_id, holder: lock.holder, expiresAt: lock.expires_at } : null,
-    nodes: nodes.map((n) => ({ id: n.id, file: n.file, anchor: n.anchor, stale: staleIds.has(n.id) ? "stale" as const : "fresh" as const })),
+    nodes: nodes.map((n) => ({ id: n.id, file: n.file, anchor: n.anchor, stale: driftCauses.has(n.id) ? "stale" as const : "fresh" as const })),
   }
 }
 
@@ -256,6 +261,52 @@ function claimsOfSnapshot(state: ServerState, tenant: string, since: number, lim
   return { since, limit, claims: page.records, nextCursor: page.nextCursor, hasMore: page.hasMore }
 }
 
+/**
+ * `graph://guide` (Entrega 2): the `claude mcp add --transport http` install path gives an agent the
+ * tools and NOTHING else — no skill, no hook, no plugin. This is the one place a freshly-connected
+ * agent can read the workflow for itself. Kept short and dense — this lands in an agent's context
+ * window, so wasted prose is real cost. Derived from what the code actually does (transport.ts tool
+ * descriptions, tools/changeset.ts's OpenResult shape, README.md "O modelo de claims"), not invented.
+ */
+const GUIDE_TEXT = `open-graph-mcp workflow for agents
+
+1. Register first: session.register {name} -> {token, userId, tenantId}. Pass token on almost every
+   other call. If a call ever fails with "invalid or expired token", call session.register again with
+   the same name — identity and any open changeset are preserved.
+
+2. Look before you write: graph.query (search by terms) and graph.impact (blast radius of a file id)
+   are read-only, need no lock, and no changeset. Use them to orient before touching anything.
+
+3. Changing knowledge is a turn:
+   - changeset.open {token, cells, intent} locks the cells (pessimistic, atomic). Optional —
+     changeset.claim opens one implicitly (intent "") on its cell if none is open yet.
+   - changeset.claim {token, csId?, delta} adds one claim.add or authority.flip delta and runs the
+     incremental gate. Claims form a 6-level ladder, 5=code down to 0=ideation. Every non-root claim's
+     refs must point to OTHER CLAIM ids exactly 1 level away (adjacency) — never a raw node id.
+     refs: [] is only valid at level 0 or 5.
+   - Floor-claim pattern (required to ever reach authority "graph"/beta): node coverage is checked
+     against NODE ids, but refs adjacency needs CLAIM ids — two different id spaces. Reconcile with one
+     level-5 claim per node whose id IS the node's file id, refs: [], anchor a verbatim substring of
+     that file's source. Point level-4 claims at the floor claim's id, not at the bare node id.
+     Skipping it is accepted at changeset.claim time (warns "roundtrip dangling-ref") but
+     changeset.commit hard-blocks on it later — do it up front.
+   - changeset.commit {token, csId, intent} runs the final gate and admits, or aborts with reasons.
+
+4. cell_locked: changeset.open/claim can return {ok:false, reason:"cell_locked", cell, holder,
+   holderName, csId, expiresAt, retryAfterMs, hint} — another agent has a turn open on that cell. The
+   response itself names the holder and says when the lock expires; read the hint field. Do not force it: work
+   elsewhere (query, impact, a different cell) and retry after expiresAt. graph://cell/{domain:level}
+   also reports the current lock. Note presence.who {cell} filters by DECLARED FOCUS
+   (presence.focus), not by who holds the lock — a holder who never called presence.focus will not
+   appear there.
+
+5. Be visible to others: call presence.beat {token, agentKind} once early (no sessionId needed — you
+   do not need an SSE connection). Without it you are invisible in presence.who and you receive no
+   system.message text at all, including the notice that someone took a cell you were working near.
+
+6. No live SSE connection? system.pending {token} drains (returns and clears) any system.message text
+   queued for you since your last poll — stateless, safe to call from a fresh process.`
+
 function claimById(state: ServerState, tenant: string, id: string) {
   const startedAt = performance.now()
   const row = state.db.query(
@@ -278,6 +329,8 @@ export function resolveResource(state: ServerState, uri: string, tenant = DEFAUL
   const arg = tail.join("/")
 
   switch (head) {
+    case "guide":
+      return { text: GUIDE_TEXT }
     case "snapshot": {
       const tg = tenantGraph(state, tenant)
       if (!tg.graph) throw new Error("not bootstrapped")
@@ -330,6 +383,7 @@ export function resolveResource(state: ServerState, uri: string, tenant = DEFAUL
 }
 
 export const RESOURCE_LIST = [
+  { uri: "graph://guide", name: "guide", mimeType: "application/json", description: "Short workflow guide for an agent that just connected: register, query before writing, the claims/changeset flow, cell_locked, system.pending." },
   { uri: "graph://snapshot", name: "snapshot", mimeType: "application/json", description: "Published graph (nodes, edges, authority, stats)." },
   { uri: "graph://history", name: "history", mimeType: "application/json", description: "Bounded event log page (?since=N&limit=N; default 100, max 500)." },
   { uri: "graph://cell/{cellKey}", name: "cell", mimeType: "application/json", description: "Cell state: authority, nodes, claim count, drift grade, lock." },

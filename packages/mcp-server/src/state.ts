@@ -148,8 +148,11 @@ export type ServerState = {
   /** Aggregate point-lookup observability; deliberately contains no tenant or claim identifiers. */
   claimLookupMetrics: { hits: number; misses: number; totalLatencyMs: number; maxLatencyMs: number }
   claimFileProjectionMetrics: { repoRelative: number; basenameFallback: number; omitted: number }
-  /** Nós em drift por tenant (índice vivo do watch-bridge). Perdível: recomputado no 1o tick. */
-  driftStale: Map<string, Set<string>>
+  /** Nós em drift por tenant, COM a causa por nó (índice vivo do watch-bridge). Perdível: recomputado
+   *  no 1o tick. Valor "gone" = arquivo sumiu/ilegível; "structural" = arquivo existe mas a âncora
+   *  verbatim sumiu. A causa é o que permite `resources.ts::driftGradeOf` produzir "gone" de verdade
+   *  em vez de só "stale" para tudo (antes só o id do nó sobrevivia, num Set — a causa se perdia). */
+  driftStale: Map<string, Map<string, "gone" | "structural">>
   /** Regras de posse de domínio (`{ pattern, domain }`, first-match-wins). CONFIG DO SERVIDOR —
    *  vinham de `.graph/domains.json` no repo-alvo, mas o repo não hospeda mais nada de grafo. */
   domains: readonly { pattern: string; domain: string }[] | null

@@ -49,7 +49,8 @@ test("graph://cell/{k}: authority, nodeCount, claimCount, driftGrade, and lock p
     ]))
     // F2 fix: drift grade is read off `state.driftStale` (the live index watch-bridge.ts maintains),
     // not off a `stale` field on the node — nothing ever wrote that field. Seed the real index instead.
-    s.state.driftStale.set("default", new Set(["n2"]))
+    // Entrega 1: the map now carries the per-node CAUSE ("gone" | "structural"), not just presence.
+    s.state.driftStale.set("default", new Map([["n2", "structural"]]))
     const a = await register(s.url, "alice")
 
     const before = await readResource(s.url, "graph://cell/auth:5", a.token)
@@ -57,7 +58,7 @@ test("graph://cell/{k}: authority, nodeCount, claimCount, driftGrade, and lock p
     expect(before.authority).toBe("source") // never flipped
     expect(before.nodeCount).toBe(2)
     expect(before.claimCount).toBe(2) // distinct claim ids referenced by the cell's nodes: c1, c2
-    expect(before.driftGrade).toBe("stale") // worst of fresh/stale, no "gone"
+    expect(before.driftGrade).toBe("stale") // n2's cause is "structural", not "gone"
     expect(before.lock).toBeNull()
 
     const { csId } = await callTool(s.url, "changeset.open", { token: a.token, cells: ["auth:5"], intent: "probe" })
@@ -73,21 +74,40 @@ test("graph://cell/{k}: authority, nodeCount, claimCount, driftGrade, and lock p
   }
 })
 
-// F2 fix: `state.driftStale` (the live index `watch-bridge.ts::tick` maintains) only tracks node ids —
-// it does not persist, per node, whether the cause was "gone" (file missing) or "structural" (anchor
-// missing). So `driftGradeOf` cannot honestly distinguish "gone" from "stale" today; it reports "stale"
-// for any node id present in the set, and never fabricates "gone". This replaces the old test that
-// asserted "gone" via a synthetic `stale: "gone"` field nothing in the system ever wrote.
-test("graph://cell/{k}: driftGrade is 'stale' (not fabricated 'gone') for any node present in state.driftStale, even alongside untouched nodes", async () => {
+// Entrega 1 (drift cause survives per node): `state.driftStale` used to only track node ids in a
+// Set — the cause `tick()` computes ("gone" file missing vs. "structural" anchor missing) was
+// discarded, so `driftGradeOf` could never honestly report "gone" and always fell back to "stale" for
+// any node present in the set. Now the index is `Map<nodeId, "gone" | "structural">`, so the cause
+// travels through and the cell's grade is the WORST of its nodes' causes: "gone" beats "structural".
+test("graph://cell/{k}: driftGrade is 'stale' when every drifted node's cause is merely 'structural'", async () => {
   const s = startServer()
   try {
     s.state.graphs.set("default", seedGraph([
       { id: "n1", file: "a.ts", domain: "d", level: "P3", claims: [], anchor: "" },
       { id: "n2", file: "b.ts", domain: "d", level: "P3", claims: [], anchor: "" },
     ]))
-    s.state.driftStale.set("default", new Set(["n1", "n2"]))
+    s.state.driftStale.set("default", new Map([["n1", "structural"], ["n2", "structural"]]))
     const env = resolveResource(s.state, "graph://cell/d:3", "default") as any
     expect(env.driftGrade).toBe("stale")
+  } finally {
+    s.stop()
+  }
+})
+
+test("graph://cell/{k}: driftGrade is 'gone' (worst-of) when at least one drifted node's cause is 'gone', even alongside a merely 'structural' one", async () => {
+  const s = startServer()
+  try {
+    s.state.graphs.set("default", seedGraph([
+      { id: "n1", file: "a.ts", domain: "d", level: "P3", claims: [], anchor: "" },
+      { id: "n2", file: "b.ts", domain: "d", level: "P3", claims: [], anchor: "" },
+    ]))
+    s.state.driftStale.set("default", new Map([["n1", "gone"], ["n2", "structural"]]))
+    const env = resolveResource(s.state, "graph://cell/d:3", "default") as any
+    expect(env.driftGrade).toBe("gone")
+    // Per-node `stale` stays the coarse "stale"/"fresh" contract (unchanged shape) — only the
+    // cell-level driftGrade distinguishes the cause.
+    expect(env.nodes.find((n: any) => n.id === "n1").stale).toBe("stale")
+    expect(env.nodes.find((n: any) => n.id === "n2").stale).toBe("stale")
   } finally {
     s.stop()
   }

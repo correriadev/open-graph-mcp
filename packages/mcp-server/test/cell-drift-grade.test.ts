@@ -18,7 +18,7 @@
  * per-node scenario this fix needs to prove.
  */
 import { expect, test } from "bun:test"
-import { readFileSync, writeFileSync } from "node:fs"
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs"
 import path from "node:path"
 import { startServer } from "../src/index"
 import { tick } from "../src/watch-bridge"
@@ -75,6 +75,66 @@ test("graph://cell and graph://domain report real per-node drift from state.drif
     const buttonInDomain = domainCell.nodes.find((n: { id: string }) => n.id === buttonNode.id)
     expect(panelInDomain.stale).toBe("stale")
     expect(buttonInDomain.stale).toBe("fresh")
+  } finally {
+    s.stop()
+    cleanup()
+  }
+})
+
+/**
+ * Entrega 1 (drift cause survives per node): before this fix, `state.driftStale` was a
+ * `Map<tenant, Set<nodeId>>` — presence-only, cause discarded. `driftGradeOf` (resources.ts) could
+ * therefore never produce "gone", even for a node whose FILE was actually deleted from disk; every
+ * drifted node reported "stale" regardless of cause. Now `state.driftStale` is
+ * `Map<tenant, Map<nodeId, "gone" | "structural">>`, so the cause `tick()` computes travels all the
+ * way to the resource. This proves: a deleted file reports "gone"; an anchor-only break reports
+ * "stale"; the two together in one cell make the cell "gone" (worst-of); and an untouched node
+ * elsewhere in the SAME graph.bootstrap stays "fresh" in the same overall picture.
+ */
+test("graph://cell and graph://domain report 'gone' for a deleted file, distinct from 'stale' for a broken anchor, and 'gone' wins when both land in the same cell", async () => {
+  const { root, cleanup } = tempRepo("multi-domain")
+  const s = startServer({ repoPath: root, watch: false, domains: MULTI_DOMAIN_DOMAINS })
+  try {
+    const alice = await register(s.url, "alice")
+    await callTool(s.url, "graph.bootstrap", { token: alice.token, repoPath: root })
+
+    const graph = s.state.graphs.get("default")!.graph!
+    const panelNode = graph.nodes.find((n) => n.file.replace(/\\/g, "/").endsWith("src/ui/panel.ts"))!
+    const buttonNode = graph.nodes.find((n) => n.file.replace(/\\/g, "/").endsWith("src/ui/button.ts"))!
+    const routerNode = graph.nodes.find((n) => n.file.replace(/\\/g, "/").endsWith("src/api/router.ts"))!
+    const cellKey = `${panelNode.domain}:${String(panelNode.level).replace(/^P/, "")}`
+
+    // panel.ts is deleted outright (file gone); button.ts (same cell) keeps existing but its anchor
+    // rots; router.ts (different domain/cell) is left completely untouched — the control for "fresh".
+    unlinkSync(path.join(root, "src", "ui", "panel.ts"))
+    writeFileSync(path.join(root, "src", "ui", "button.ts"), "export const renamedButtonLabel = \"button\"\n")
+
+    const events = await tick(s.state, "default")
+    expect(events.some((e) => e.kind === "node" && e.id === panelNode.id && e.type === "stale" && e.cause === "gone")).toBe(true)
+    expect(events.some((e) => e.kind === "node" && e.id === buttonNode.id && e.type === "stale" && e.cause === "structural")).toBe(true)
+    expect(s.state.driftStale.get("default")?.get(panelNode.id)).toBe("gone")
+    expect(s.state.driftStale.get("default")?.get(buttonNode.id)).toBe("structural")
+
+    // Cell grade is the WORST of its nodes' causes: "gone" beats "structural".
+    const cell = await readResource(s.url, `graph://cell/${cellKey}`, alice.token)
+    expect(cell.driftGrade).toBe("gone")
+    // Per-node `stale` keeps its existing coarse contract (unchanged shape): both are "stale", the
+    // cause distinction only surfaces at the cell's `driftGrade`.
+    const panelInCell = cell.nodes.find((n: { id: string }) => n.id === panelNode.id)
+    const buttonInCell = cell.nodes.find((n: { id: string }) => n.id === buttonNode.id)
+    expect(panelInCell.stale).toBe("stale")
+    expect(buttonInCell.stale).toBe("stale")
+
+    // graph://domain/{ui}: same reality through the domain resource.
+    const domainView = await readResource(s.url, "graph://domain/ui", alice.token)
+    const domainCell = domainView.cells.find((c: { cell: string }) => c.cell === cellKey)
+    expect(domainCell.driftGrade).toBe("gone")
+
+    // An untouched node in a different cell/domain reports "fresh" in the same overall picture.
+    const apiCellKey = `${routerNode.domain}:${String(routerNode.level).replace(/^P/, "")}`
+    const apiCell = await readResource(s.url, `graph://cell/${apiCellKey}`, alice.token)
+    expect(apiCell.driftGrade).toBe("fresh")
+    expect(apiCell.nodes.find((n: { id: string }) => n.id === routerNode.id).stale).toBe("fresh")
   } finally {
     s.stop()
     cleanup()
