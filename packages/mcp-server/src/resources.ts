@@ -169,7 +169,7 @@ export function projectClaimFile(raw: string | null, repoPath: string): string |
 
 type ClaimRow = {
   id: string; seq: number; subject: string | null; domain: string | null; level: string | null
-  refs: string | null; anchor: string | null; file: string | null
+  refs: string | null; covers: string | null; anchor: string | null; file: string | null
   verdict_confidence: number | null; verdict_overclaim: number | null; supersedes: string | null
 }
 
@@ -179,6 +179,18 @@ function parseRefs(raw: string | null): string[] {
     return Array.isArray(parsed) ? parsed.filter((ref): ref is string => typeof ref === "string") : []
   } catch {
     return []
+  }
+}
+
+/** `covers` (F4) is stored NULL when absent (writeClaim only serializes it when non-empty) — undefined
+ *  here, not `[]`, so callers can tell "never set" apart from "explicitly empty" if that ever matters. */
+function parseCovers(raw: string | null): string[] | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((c): c is string => typeof c === "string") : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -194,6 +206,7 @@ function claimFromRow(row: ClaimRow, state: ServerState, fallbackDomain = "") {
     domain: row.domain ?? fallbackDomain,
     level: normalizedLevel.numeric,
     refs: parseRefs(row.refs),
+    covers: parseCovers(row.covers),
     anchor: row.anchor ?? "",
     file,
     seq: row.seq,
@@ -239,7 +252,7 @@ function claimsOfCell(state: ServerState, tenant: string, cell: string, since: n
   // the complete tenant/domain/level/sequence index without scanning sparse tenant ranges.
   const rows = state.db
     .query(
-      "SELECT id, seq, subject, domain, level, refs, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? AND domain = ? AND level = ? AND seq > ? ORDER BY seq ASC LIMIT ?",
+      "SELECT id, seq, subject, domain, level, refs, covers, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? AND domain = ? AND level = ? AND seq > ? ORDER BY seq ASC LIMIT ?",
     )
     .all(tenant, d, `P${lNorm}`, since, limit + 1) as ClaimRow[]
   const page = pageEnvelope(rows.map((row) => claimFromRow(row, state, d)).filter((row): row is NonNullable<typeof row> => row !== null), since, limit)
@@ -255,7 +268,7 @@ function claimsOfCell(state: ServerState, tenant: string, cell: string, since: n
 
 function claimsOfSnapshot(state: ServerState, tenant: string, since: number, limit: number) {
   const rows = state.db.query(
-    "SELECT id, seq, subject, domain, level, refs, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? AND level IN ('P0','P1','P2','P3','P4','P5') AND seq > ? ORDER BY seq ASC LIMIT ?",
+    "SELECT id, seq, subject, domain, level, refs, covers, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? AND level IN ('P0','P1','P2','P3','P4','P5') AND seq > ? ORDER BY seq ASC LIMIT ?",
   ).all(tenant, since, limit + 1) as ClaimRow[]
   const page = pageEnvelope(rows.map((row) => claimFromRow(row, state)).filter((row): row is NonNullable<typeof row> => row !== null), since, limit)
   return { since, limit, claims: page.records, nextCursor: page.nextCursor, hasMore: page.hasMore }
@@ -284,12 +297,12 @@ const GUIDE_TEXT = `open-graph-mcp workflow for agents
      incremental gate. Claims form a 6-level ladder, 5=code down to 0=ideation. Every non-root claim's
      refs must point to OTHER CLAIM ids exactly 1 level away (adjacency) — never a raw node id.
      refs: [] is only valid at level 0 or 5.
-   - Floor-claim pattern (required to ever reach authority "graph"/beta): node coverage is checked
-     against NODE ids, but refs adjacency needs CLAIM ids — two different id spaces. Reconcile with one
-     level-5 claim per node whose id IS the node's file id, refs: [], anchor a verbatim substring of
-     that file's source. Point level-4 claims at the floor claim's id, not at the bare node id.
-     Skipping it is accepted at changeset.claim time (warns "roundtrip dangling-ref") but
-     changeset.commit hard-blocks on it later — do it up front.
+   - Node coverage (required to ever reach authority "graph"/beta): set covers on a claim to the list
+     of NODE ids it covers — a separate field from refs, so the same claim can satisfy ladder adjacency
+     (refs, claim ids only) and node coverage (covers, node ids) at once, with no id-space collision.
+     Legacy compat: a level-5 claim whose id IS a node's file id, with that id also appearing in refs
+     (the old "floor-claim" pattern), still counts as coverage for that node — kept working for claims
+     written before covers existed, but covers is the path to use going forward.
    - changeset.commit {token, csId, intent} runs the final gate and admits, or aborts with reasons.
 
 4. cell_locked: changeset.open/claim can return {ok:false, reason:"cell_locked", cell, holder,
@@ -310,7 +323,7 @@ const GUIDE_TEXT = `open-graph-mcp workflow for agents
 function claimById(state: ServerState, tenant: string, id: string) {
   const startedAt = performance.now()
   const row = state.db.query(
-    "SELECT id, seq, subject, domain, level, refs, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? AND id = ? LIMIT 1",
+    "SELECT id, seq, subject, domain, level, refs, covers, anchor, file, verdict_confidence, verdict_overclaim, supersedes FROM claims WHERE tenant_id = ? AND id = ? LIMIT 1",
   ).get(tenant, id) as ClaimRow | null
   const claim = row ? claimFromRow(row, state) : null
   if (claim) state.claimLookupMetrics.hits++

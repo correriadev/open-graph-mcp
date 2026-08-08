@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS edges (
 CREATE TABLE IF NOT EXISTS claims (
   tenant_id TEXT NOT NULL, id TEXT NOT NULL, seq INTEGER NOT NULL, subject TEXT, domain TEXT, level TEXT,
   refs TEXT, anchor TEXT, file TEXT, verdict_confidence REAL, verdict_overclaim INTEGER, supersedes TEXT,
+  covers TEXT,
   PRIMARY KEY (tenant_id, id)
 );
 CREATE INDEX IF NOT EXISTS claims_tenant_seq ON claims (tenant_id, seq);
@@ -106,6 +107,14 @@ export function openDb(sqlitePath: string): Database {
   db.exec("PRAGMA journal_mode = WAL;")
   db.exec("PRAGMA busy_timeout = 5000;")
   db.exec(SCHEMA)
+  // F4: `CREATE TABLE IF NOT EXISTS` does NOT add a column to a table that already exists — a
+  // STATE_DIR from a server started before this change has a `claims` table without `covers`, and
+  // SCHEMA above silently no-ops on it. Migrate explicitly, idempotently: check PRAGMA table_info and
+  // ALTER TABLE only if the column is actually missing. Runs on every openDb call; safe to repeat.
+  const claimsCols = db.query("PRAGMA table_info(claims)").all() as { name: string }[]
+  if (!claimsCols.some((c) => c.name === "covers")) {
+    db.exec("ALTER TABLE claims ADD COLUMN covers TEXT")
+  }
   // Canonicalize legacy numeric levels once so cell pagination can use equality and the full
   // (tenant, domain, level, seq) index instead of an IN predicate plus a tenant-scale sort.
   try {

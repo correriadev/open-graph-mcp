@@ -180,16 +180,25 @@ export function graphFromDb(state: ServerState, tenant: string, repoPath: string
   }[]
   if (!nodeRows.length) return null
 
-  const claimRows = state.db.query("SELECT id, refs FROM claims WHERE tenant_id = ?").all(tenant) as { id: string; refs: string }[]
+  // F4: `n.claims` (surfaced as graph://cell's claimCount) reflects which claims "cover" a node —
+  // read both `covers` (explicit, recommended) and `refs` (legacy floor-claim: id of ref === id of
+  // node) so a claim written either way still counts toward the node's claim list here.
+  const claimRows = state.db.query("SELECT id, refs, covers FROM claims WHERE tenant_id = ?").all(tenant) as { id: string; refs: string; covers: string | null }[]
   const claimsByRef = new Map<string, string[]>()
   for (const row of claimRows) {
     let refs: string[] = []
+    let covers: string[] = []
     try {
       refs = JSON.parse(row.refs ?? "[]")
     } catch {
       refs = []
     }
-    for (const ref of refs) claimsByRef.set(ref, [...(claimsByRef.get(ref) ?? []), row.id])
+    try {
+      covers = JSON.parse(row.covers ?? "[]")
+    } catch {
+      covers = []
+    }
+    for (const nodeId of new Set([...covers, ...refs])) claimsByRef.set(nodeId, [...(claimsByRef.get(nodeId) ?? []), row.id])
   }
 
   const nodes: GraphNode[] = nodeRows.map((r) => ({

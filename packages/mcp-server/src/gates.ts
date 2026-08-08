@@ -15,7 +15,7 @@ import { canFlip } from "@open-graph-mcp/graph-core/authority"
 import { excerptCheck } from "@open-graph-mcp/graph-core/extract"
 import { normalizeClaimLevel, type CanonicalClaimLevel } from "./claim-level"
 
-export type ClaimSnapshot = { id: string; subject?: string; domain?: string; level?: CanonicalClaimLevel; refs: string[]; anchor?: string; file?: string }
+export type ClaimSnapshot = { id: string; subject?: string; domain?: string; level?: CanonicalClaimLevel; refs: string[]; covers?: string[]; anchor?: string; file?: string }
 export type NodeSnapshot = { id: string; domain: string | null; level: number; file: string; anchor: string }
 export type Delta = { kind: "claim.add" | "authority.flip"; payload: any }
 
@@ -189,7 +189,7 @@ export function finalGate(deltas: Delta[], ctx: FinalCtx): FinalResult {
   const flipCells = new Set(flips.map((f) => f.cell))
   for (const cell of affected) {
     const meta = nodesOfCell(ctx.nodes, cell).map((n) => ({ id: n.id, file: n.file, kind: "Node", responsibility: n.id, exposed: false, deps: [], anchor: n.anchor }))
-    const cellClaims = claimsOfCell(allClaims, cell).map((c) => ({ id: c.id, subject: c.subject ?? c.id, domain: c.domain ?? "", refs: c.refs, anchor: c.anchor ?? "" }))
+    const cellClaims = claimsOfCell(allClaims, cell).map((c) => ({ id: c.id, subject: c.subject ?? c.id, domain: c.domain ?? "", refs: c.refs, covers: c.covers, anchor: c.anchor ?? "" }))
     const coverage = claimCoverage(meta as any, cellClaims as any)
     const verify = verifyIntegrity(meta as any, cellClaims as any, ctx.readFile)
     const rootOk = cellClaims.every((c) => roundtripScoped(rtSet, c.id).ok)

@@ -20,12 +20,13 @@ import { normalizeClaimLevel } from "./claim-level"
 export function readClaims(state: ServerState, tenant: string): ClaimSnapshot[] {
   const cached = state.claimsCache.get(tenant)
   if (cached) return cached
-  const rows = state.db.query("SELECT id, subject, domain, level, refs, anchor, file FROM claims WHERE tenant_id = ?").all(tenant) as {
+  const rows = state.db.query("SELECT id, subject, domain, level, refs, covers, anchor, file FROM claims WHERE tenant_id = ?").all(tenant) as {
     id: string
     subject: string | null
     domain: string | null
     level: string | null
     refs: string | null
+    covers: string | null
     anchor: string | null
     file: string | null
   }[]
@@ -37,6 +38,7 @@ export function readClaims(state: ServerState, tenant: string): ClaimSnapshot[] 
     domain: r.domain ?? undefined,
     level: normalized.ok ? normalized.numeric : undefined,
     refs: JSON.parse(r.refs ?? "[]"),
+    covers: r.covers ? JSON.parse(r.covers) : undefined,
     anchor: r.anchor ?? undefined,
     file: r.file ?? undefined,
   })})
@@ -129,6 +131,7 @@ export function writeClaim(state: ServerState, tenant: string, seq: number, c: C
     domain: c.domain ?? null,
     level: normalized.stored,
     refs: JSON.stringify(c.refs ?? []),
+    covers: c.covers?.length ? JSON.stringify(c.covers) : null,
     anchor: c.anchor ?? null,
     file: c.file ?? null,
     verdict_confidence: null,

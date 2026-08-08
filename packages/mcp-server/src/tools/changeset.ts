@@ -359,7 +359,12 @@ export function changesetCommit(state: ServerState, args: { token: string; csId:
     for (const d of deltas) {
       if (d.kind === "claim.add") {
         writeClaim(state, tenant, ++claimSeq, d.payload)
-        if (tg.graph) for (const n of tg.graph.nodes) if (d.payload.refs?.includes(n.id) && !n.claims.includes(d.payload.id)) n.claims.push(d.payload.id)
+        // F4: a claim "cobre" um nó pelo campo explícito `covers` (recomendado) OU, por compatibilidade
+        // retroativa, por `refs` carregando o id do nó (claim-chão legada) — as duas formas contam pra
+        // `n.claims`, que alimenta o `claimCount` de graph://cell.
+        if (tg.graph)
+          for (const n of tg.graph.nodes)
+            if ((d.payload.covers?.includes(n.id) || d.payload.refs?.includes(n.id)) && !n.claims.includes(d.payload.id)) n.claims.push(d.payload.id)
       }
     }
     // `blastRadius` no payload passa a ser o raio REAL (antes era `cells.length`, só o declarado);

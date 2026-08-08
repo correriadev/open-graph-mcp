@@ -73,30 +73,44 @@ precisa estar a **exatamente 1 nível** de cada um dos seus `refs`
 Raízes (`refs: []`) só são válidas nos extremos — nível 0 ou 5; uma claim de
 nível intermediário sem `refs` é rejeitada como `orphan-midladder`.
 
-**`refs` carrega dois contratos ao mesmo tempo, e os dois têm que fechar:**
+**`refs` carregava dois contratos ao mesmo tempo (F4), e os dois têm que
+fechar. Desde a correção do F4, cada um tem seu próprio campo:**
 
-1. **Adjacência da escada** (`roundtrip.checkClaims`, bloqueante no
+1. **Adjacência da escada** — `refs` (`roundtrip.checkClaims`, bloqueante no
    `changeset.commit`): todo id em `refs` precisa existir **no conjunto de
    claims** sendo commitado, e estar a 1 nível de distância. Ref para um id
-   que não é claim → `dangling-ref`.
-2. **Cobertura de nós** (`claimCoverage`, `graph-core/src/claim-store.ts`,
-   avaliada pelo gate final de `authority.flip`): `claimed = new
-   Set(claims.flatMap(c => c.refs))`, e o gate mede o que falta contra os
-   **ids de nó** da célula. Uma célula só fecha cobertura (condição para virar
-   `graph`/β) se todo nó dela aparecer em algum `refs`.
+   que não é claim → `dangling-ref`. `refs` é **só** isso — nunca aponte para
+   id de nó nele.
+2. **Cobertura de nós** — `covers` (`claimCoverage`,
+   `graph-core/src/claim-store.ts`, avaliada pelo gate final de
+   `authority.flip`): lista de **ids de nó** que a claim cobre. Uma célula só
+   fecha cobertura (condição para virar `graph`/β) se todo nó dela aparecer em
+   algum `covers` (ou, legado, em algum `refs` — ver abaixo).
 
-Os dois contratos exigem formas diferentes de `refs` (ids de claim vs. ids de
-nó) — a única forma de satisfazer ambos é uma **claim-chão**: uma claim de
-nível 5 cujo `id` **é literalmente o id do nó** (`file`, ex. `"auth/login.ts"`),
-com `refs: []` e `anchor` verbatim do arquivo. Ela funciona como claim (então
-uma claim de nível 4 pode referenciá-la sem `dangling-ref`) e simultaneamente
-conta como cobertura do nó (porque seu `id` é o id que `claimCoverage`
-procura).
+Uma claim pode ter os dois campos preenchidos, um só, ou nenhum — `covers` não
+precisa espelhar `refs` nem vice-versa. O caminho recomendado é simples: put
+os ids de nó que a claim sustenta em `covers`, e use `refs` só para apontar
+para outras claims na escada.
 
-**Sem a claim-chão, todo caminho para autoridade β morre no commit.** Uma
-claim de nível 4 que referencia o id do nó diretamente é aceita pelo gate
-incremental (com um warning de `roundtrip dangling-ref`), mas o
-`changeset.commit` bloqueia:
+### Caminho legado: a claim-chão (compatibilidade, não recomendado)
+
+Antes de `covers` existir, a única forma de fechar cobertura era uma
+**claim-chão**: uma claim de nível 5 cujo `id` **é literalmente o id do nó**
+(`file`, ex. `"auth/login.ts"`), com `refs: []` e `anchor` verbatim do
+arquivo. Ela funciona como claim (então uma claim de nível 4 pode referenciá-la
+sem `dangling-ref`) e simultaneamente contava como cobertura do nó — porque
+`claimCoverage` também soma `refs`, por compatibilidade retroativa: claims já
+gravadas antes de `covers` existir (SQLite + espelho JSONL) não podem deixar
+de cobrir o que cobriam.
+
+Esse padrão **continua funcionando** — nada foi removido — mas é desencorajado
+daqui em diante. Prefira `covers` explícito: mais direto, e não força uma
+claim-por-nó artificial na escada.
+
+**Sem `covers` NEM a claim-chão, todo caminho para autoridade β morre no
+commit.** Uma claim de nível 4 que referencia o id do nó diretamente em `refs`
+(sem também estar em `covers`) é aceita pelo gate incremental (com um warning
+de `roundtrip dangling-ref`), mas o `changeset.commit` bloqueia:
 
 ```
 changeset.commit → {"ok":false,"reasons":[
@@ -104,7 +118,7 @@ changeset.commit → {"ok":false,"reasons":[
 ]}
 ```
 
-### Exemplo completo, verificado ao vivo (chão → β)
+### Exemplo completo, verificado ao vivo (covers → β)
 
 Repo de 2 arquivos, domínio `auth`: `auth/login.ts` (âncora
 `export function login(user, password) {`) e `auth/verify.ts` (âncora
@@ -112,13 +126,14 @@ Repo de 2 arquivos, domínio `auth`: `auth/login.ts` (âncora
 `changeset` aberto sobre `["auth:5", "auth:4"]`:
 
 ```jsonc
-// 1. claim-chão para cada nó — id = id do nó, level 5, refs: []
-{ kind: "claim.add", payload: { id: "auth/login.ts",  subject: "login entrypoint",  domain: "auth", level: 5, refs: [], file: "auth/login.ts",  anchor: "export function login(user, password) {" } }
-{ kind: "claim.add", payload: { id: "auth/verify.ts", subject: "verify entrypoint", domain: "auth", level: 5, refs: [], file: "auth/verify.ts", anchor: "export function verify(user, password) {" } }
+// 1. claims de nível 5 (chão) e nível 4, cada uma cobrindo o nó correspondente via `covers` —
+// `refs` fica livre para a escada (5→4), sem precisar apontar para o id do nó.
+{ kind: "claim.add", payload: { id: "c_login_p5",  subject: "login entrypoint",  domain: "auth", level: 5, refs: [], covers: ["auth/login.ts"],  file: "auth/login.ts",  anchor: "export function login(user, password) {" } }
+{ kind: "claim.add", payload: { id: "c_verify_p5", subject: "verify entrypoint", domain: "auth", level: 5, refs: [], covers: ["auth/verify.ts"], file: "auth/verify.ts", anchor: "export function verify(user, password) {" } }
 
-// 2. claims de nível 4 apontam para a claim-chão (adjacência 5→4), não para o nó "cru"
-{ kind: "claim.add", payload: { id: "c_login_p4",  subject: "login() delegates credential check to verify()", domain: "auth", level: 4, refs: ["auth/login.ts"],  file: "auth/login.ts",  anchor: "export function login(user, password) {" } }
-{ kind: "claim.add", payload: { id: "c_verify_p4", subject: "verify() checks password non-empty",             domain: "auth", level: 4, refs: ["auth/verify.ts"], file: "auth/verify.ts", anchor: "export function verify(user, password) {" } }
+// 2. claims de nível 4 apontam para a claim de nível 5 (adjacência 5→4), não para o nó "cru"
+{ kind: "claim.add", payload: { id: "c_login_p4",  subject: "login() delegates credential check to verify()", domain: "auth", level: 4, refs: ["c_login_p5"],  file: "auth/login.ts",  anchor: "export function login(user, password) {" } }
+{ kind: "claim.add", payload: { id: "c_verify_p4", subject: "verify() checks password non-empty",             domain: "auth", level: 4, refs: ["c_verify_p5"], file: "auth/verify.ts", anchor: "export function verify(user, password) {" } }
 ```
 
 ```

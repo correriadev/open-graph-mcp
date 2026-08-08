@@ -15,7 +15,11 @@ export type ClaimRecord = {
   id: string
   subject: string
   domain: string
-  refs: string[] // ids de meta (name_path) OU de claims do nível abaixo (subida)
+  refs: string[] // ids de CLAIM (adjacência da escada — roundtrip.checkClaims). Nunca id de nó (F4).
+  covers?: string[] // ids de NÓ que esta claim cobre (claimCoverage). Campo explícito p/ separar os dois
+  // contratos que `refs` carregava sozinho antes (F4): adjacência de escada (refs) vs. cobertura de nó
+  // (covers). Caminho recomendado desde F4; a claim-chão legada (refs contendo id de nó) continua
+  // funcionando como cobertura — ver claimCoverage.
   anchor: string // verbatim, deve existir em algum arquivo dos refs
   verdict?: { confidence: number; overclaim: boolean; contradiction?: boolean; findings?: string[] }
   // ── escada de abstração (subida governada) ──
@@ -147,12 +151,24 @@ export function readAllClaims(root: string): ClaimRecord[] {
   return [...byId.values()]
 }
 
-/** Cobertura B: toda meta referenciada por ≥1 claim. `missing` = símbolo lido mas não claimado. */
+/**
+ * Cobertura B: toda meta referenciada por ≥1 claim. `missing` = símbolo lido mas não claimado.
+ *
+ * F4: `refs` carregava dois contratos incompatíveis — adjacência da escada (ids de CLAIM, checada
+ * por `roundtrip.checkClaims`, bloqueante no commit) e cobertura de nó (ids de NÓ, checada aqui). A
+ * única saída era a claim-chão: uma claim de nível 5 cujo `id` É o id do nó, para satisfazer os dois
+ * espaços de identificador ao mesmo tempo com o mesmo campo.
+ *
+ * `covers` é o campo explícito para o segundo contrato — cobertura soma `covers` (caminho recomendado)
+ * E `refs` (caminho legado/claim-chão, mantido por compatibilidade retroativa: claims já gravadas com
+ * id de nó em `refs` não podem deixar de cobrir o que cobriam). Uma claim pode fechar cobertura por
+ * QUALQUER um dos dois campos — não é preciso repetir o id no outro.
+ */
 export function claimCoverage(
   meta: readonly MetaRecord[],
   claims: readonly ClaimRecord[],
 ): { metaCount: number; claimed: number; missing: string[]; balanced: boolean } {
-  const claimed = new Set(claims.flatMap((c) => c.refs))
+  const claimed = new Set(claims.flatMap((c) => [...(c.covers ?? []), ...c.refs]))
   const missing = meta.map((m) => m.id).filter((id) => !claimed.has(id))
   return { metaCount: meta.length, claimed: meta.length - missing.length, missing, balanced: missing.length === 0 }
 }
