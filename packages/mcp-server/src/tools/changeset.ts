@@ -28,10 +28,13 @@ type CsRow = {
   opened_at: string
   blast_cells: string
   admit_seq: number | null
+  base_seq: number | null
 }
 
 function loadCs(state: ServerState, tenant: string, csId: string): CsRow | null {
-  return (state.db.query("SELECT id, intent, status, opened_by, opened_at, blast_cells, admit_seq FROM changesets WHERE tenant_id = ? AND id = ?").get(tenant, csId) as CsRow) ?? null
+  return (
+    (state.db.query("SELECT id, intent, status, opened_by, opened_at, blast_cells, admit_seq, base_seq FROM changesets WHERE tenant_id = ? AND id = ?").get(tenant, csId) as CsRow) ?? null
+  )
 }
 
 function lockedCells(state: ServerState, tenant: string, csId: string): string[] {
@@ -85,9 +88,38 @@ function inTx<T extends { __tenant?: string }>(state: ServerState, fn: (envs: Ev
 }
 
 // ── open (explícito) / claim-or-open (implícito, F1) ────────────────────────────
+/**
+ * MP-2 — a recusa por trava não era legível: `holder` é um userId opaco (hash), e não havia NADA
+ * dizendo ao chamador o que fazer com a recusa. Um agente bloqueado ficava só com um id sem nome,
+ * girando em polling até desistir. `holderName`/`retryAfterMs`/`hint` são ADITIVOS (campo novo, não
+ * troca nem some nenhum existente — `OpenResult` é consumido pela web e pelo client, que não editamos
+ * aqui): `holder` continua o userId cru p/ quem já depende dele; `holderName` é o que `holderNameOf`
+ * (store.ts) já usa nos eventos node.editing/node.idle, só que também exposto aqui; `retryAfterMs` é
+ * `expiresAt` já presente, só em forma acionável (ms até destravar, não uma outra fonte de verdade);
+ * `hint` é a frase que soma os três — nome, prazo, e o que fazer — sem inventar mecanismo de fila ou
+ * espera bloqueante novo (fora do escopo desta correção): só torna legível o que o servidor já sabe.
+ */
 export type OpenResult =
   | { ok: true; csId: string; expiresAt: string; __tenant?: string }
-  | { ok: false; reason: "cell_locked"; cell: string; holder: string; csId: string; expiresAt: string; __tenant?: string }
+  | {
+      ok: false
+      reason: "cell_locked"
+      cell: string
+      holder: string
+      holderName: string
+      csId: string
+      expiresAt: string
+      retryAfterMs: number
+      hint: string
+      __tenant?: string
+    }
+
+/** Frase acionável de contenção (MP-2): nome do holder (não hash), quanto falta pro TTL, e o que fazer
+ *  — reaproveita `holderNameOf`/`expiresAt`, que o servidor já calculava; não introduz mecanismo novo. */
+function contentionHint(holderName: string, holderId: string, expiresAt: string, retryAfterMs: number): string {
+  const secs = Math.ceil(retryAfterMs / 1000)
+  return `held by ${holderName} (${holderId}) — expires at ${expiresAt} (~${secs}s); retry after it expires, or ask ${holderName} to commit/abort to release it sooner`
+}
 
 /** Emite o par de projeção node.editing/node.idle (F1) ao lado do lock.acquired/lock.released de
  *  auditoria — este último NÃO some (afinidade/auditoria dependem dele); o par novo é só a leitura
@@ -110,6 +142,18 @@ function emitNodeIdle(state: ServerState, tenant: string, envs: EventEnvelope[],
  *   - `node.edit`: gatilho da UI ao entrar em edição, ANTES de existir delta.
  * `changeset.open` continua chamando isto também — é o caminho explícito p/ agente que quer turno
  * multi-célula deliberado (decisão 3 do plano F1: o changeset não some).
+ *
+ * MP-3 (intent vazio no turno implícito) — decisão deliberada, não deixada por omissão: os dois
+ * chamadores implícitos (`changesetClaim` sem csId, `nodeEdit`) passam `intent: ""` aqui de propósito
+ * (decisão 2 do plano F1, comentário em `changesetCommit`: intent migrou da abertura pro commit, que
+ * o torna OBRIGATÓRIO). Cogitei derivar um intent sintético (ex. "implicit: node.edit on X") só p/
+ * turnos ainda abertos não aparecerem "anônimos" numa auditoria ao vivo — descartado: um texto gerado
+ * pelo servidor, sem o usuário ter declarado nada, é pior que vazio — parece intenção quando não é, e
+ * quem lê `graph://changeset/{id}` no meio do turno não tem como distinguir "o usuário disse isto" de
+ * "o servidor inventou isto". Vazio é honesto sobre o estado real: intent ainda NÃO FOI declarado.
+ * `changesetCommit` recusa admitir sem um intent não-vazio (`intent required to commit`), então todo
+ * turno que chega a `admitted`/`aborted-com-reasons` tem o intent verdadeiro do autor gravado por
+ * cima — o vazio só existe na janela em que o turno está genuinamente aberto e sem decisão tomada.
  */
 export function claimOrOpenCs(state: ServerState, tenant: string, userId: string, name: string, rawCells: string[], intent: string, envs: EventEnvelope[]): OpenResult {
   /**
@@ -135,7 +179,20 @@ export function claimOrOpenCs(state: ServerState, tenant: string, userId: string
       // igual todo evento gravado aqui dentro (INV-2).
       envs.push(appendEvent(state, tenant, { kind: "lock.denied", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, attempted_by: userId, holder: lock.holder, csId: lock.cs_id } }, { defer: true }))
       const exp = (state.db.query("SELECT expires_at FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, cell) as { expires_at: string }).expires_at
-      return { ok: false, reason: "cell_locked", cell, holder: lock.holder, csId: lock.cs_id, expiresAt: exp, __tenant: tenant }
+      const holderName = holderNameOf(state, tenant, lock.holder)
+      const retryAfterMs = Math.max(0, new Date(exp).getTime() - nowMs())
+      return {
+        ok: false,
+        reason: "cell_locked",
+        cell,
+        holder: lock.holder,
+        holderName,
+        csId: lock.cs_id,
+        expiresAt: exp,
+        retryAfterMs,
+        hint: contentionHint(holderName, lock.holder, exp, retryAfterMs),
+        __tenant: tenant,
+      }
     }
     if (mineCs && mineCs !== lock.cs_id) throw new Error("cells span multiple of your changesets; commit/abort first")
     mineCs = lock.cs_id
@@ -156,12 +213,33 @@ export function claimOrOpenCs(state: ServerState, tenant: string, userId: string
   }
 
   // tranca as cells ainda livres sob csId
+  let acquiredNew = false
   for (const cell of cells) {
     const held = state.db.query("SELECT cs_id FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, cell)
     if (held) continue
     write(state.db, state.stateDir, tenant, "locks", { tenant_id: tenant, cell, cs_id: csId, mode: "pessimistic", acquired_at: acquiredAt, expires_at: expiresAt, holder: userId })
     envs.push(appendEvent(state, tenant, { kind: "lock.acquired", targetKind: "cell", targetId: cell, byUser: userId, payload: { cell, csId, holder: userId, expiresAt } }, { defer: true }))
     emitNodeEditing(state, tenant, envs, cell, csId, userId)
+    acquiredNew = true
+  }
+
+  /**
+   * MP-3 — expansão de turno: `mineCs` reusa um csId já existente sem passar pelo `if (!csId)` de
+   * criação acima, então `blast_cells` (gravado só na criação) ficava congelado na 1ª célula enquanto a
+   * tabela `locks` — a verdade real — já tinha duas. Reescreve aqui, na MESMA transação que acabou de
+   * gravar a trava nova (INV-2, sem I/O assíncrono): a auditoria (graph://changeset/{id},
+   * graph://changesets, changeset.list_mine) e o sweep de TTL (que NUNCA passa pelo commit — um turno
+   * expandido que expira por TTL emitia lock.released para as duas células e changeset.aborted
+   * declarando só uma) passam a ler o mesmo `blast_cells` que a tabela `locks` diz ser verdade, sem
+   * segunda cópia. Só reescreve quando de fato houve expansão (`mineCs` + trava nova) — turno recém-
+   * criado já grava o valor certo acima; turno reusado sem célula nova (idempotente) não precisa de I/O.
+   */
+  if (mineCs && acquiredNew) {
+    const csRow = loadCs(state, tenant, csId)!
+    const trueCells = lockedCells(state, tenant, csId).sort()
+    write(state.db, state.stateDir, tenant, "changesets", {
+      tenant_id: tenant, id: csRow.id, intent: csRow.intent, parent: null, status: csRow.status, opened_by: csRow.opened_by, opened_at: csRow.opened_at, closed_at: null, base_seq: csRow.base_seq, admit_seq: csRow.admit_seq, blast_cells: JSON.stringify(trueCells),
+    })
   }
 
   return { ok: true, csId, expiresAt, __tenant: tenant }
@@ -201,7 +279,8 @@ export function changesetClaim(state: ServerState, args: { token: string; csId?:
       const cell = delta.kind === "authority.flip" ? delta.payload?.cell : cellOfClaim(delta.payload ?? {})
       if (typeof cell !== "string" || !cell.includes(":")) return { ok: false, reasons: ["cannot derive cell for implicit open"], __tenant: tenant }
       const opened = claimOrOpenCs(state, tenant, userId, name, [cell], "", envs)
-      if (!opened.ok) return { ok: false, reasons: [`cell ${opened.cell} locked by ${opened.holder}`], __tenant: tenant }
+      // MP-2: mesma frase acionável do cell_locked explícito — nome, não hash, e o que fazer.
+      if (!opened.ok) return { ok: false, reasons: [`cell ${opened.cell} locked by ${opened.holderName} (${opened.holder}) — ${opened.hint}`], __tenant: tenant }
       csId = opened.csId
     }
 
@@ -355,9 +434,26 @@ export function changesetExtend(state: ServerState, args: { token: string; csId:
 }
 
 // ── node.edit (F1 — gatilho da transição LEITURA → EDIÇÃO) ──────────────────────
+/**
+ * MP-2: `cell`/`csId`/`expiresAt`/`retryAfterMs`/`hint` aditivos, ecoando LITERALMENTE o `OpenResult`
+ * de contenção que `claimOrOpenCs` já devolveu (`r` abaixo) — mesma info, mesma frase, para as duas
+ * respostas de contenção do módulo não divergirem entre si. `editingBy`/`holderName`/`since` continuam
+ * exatamente como eram (nenhum campo existente troca de nome ou some).
+ */
 export type NodeEditResult =
   | { ok: true; csId: string; cell: string; expiresAt: string; __tenant?: string }
-  | { ok: false; editingBy: string; holderName: string; since: string | null; __tenant?: string }
+  | {
+      ok: false
+      cell: string
+      editingBy: string
+      holderName: string
+      since: string | null
+      csId: string
+      expiresAt: string
+      retryAfterMs: number
+      hint: string
+      __tenant?: string
+    }
 
 /**
  * node.edit — gatilho da UI ao ENTRAR em edição num nó, antes de existir qualquer delta (spec F1).
@@ -386,7 +482,7 @@ export function nodeEdit(state: ServerState, args: { token: string; nodeId: stri
     const r = claimOrOpenCs(state, tenant, userId, name, cells, "", envs)
     if (!r.ok) {
       const since = (state.db.query("SELECT acquired_at FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, r.cell) as { acquired_at: string } | null)?.acquired_at ?? null
-      return { ok: false, editingBy: r.holder, holderName: holderNameOf(state, tenant, r.holder), since, __tenant: tenant }
+      return { ok: false, cell: r.cell, editingBy: r.holder, holderName: r.holderName, since, csId: r.csId, expiresAt: r.expiresAt, retryAfterMs: r.retryAfterMs, hint: r.hint, __tenant: tenant }
     }
     return { ok: true, csId: r.csId, cell, expiresAt: r.expiresAt, __tenant: tenant }
   })

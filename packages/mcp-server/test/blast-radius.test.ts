@@ -6,11 +6,13 @@
  * raio a partir de um Changeset em memória; esta parte dos deltas persistidos, e faz UNIÃO com as
  * células declaradas no lock.
  *
- * O que muda: `blast_cells` é gravado uma única vez, na CRIAÇÃO do changeset, e nunca recalculado.
- * Como um turno aberto pode ser EXPANDIDO com células novas (changesetOpen, caminho `mineCs`), o
- * registro de auditoria ficava subdeclarado. Verificado antes de escrever este teste: abrir com
- * ["ui:5"] e reabrir com ["ui:5","auth:5"] reusa o csId, tranca auth:5, o gate de escopo aceita
- * claims lá — e blast_cells continuava ["ui:5"].
+ * MP-3 (corrigido em claimOrOpenCs, changeset.ts): `blast_cells` era gravado uma única vez, na
+ * CRIAÇÃO do changeset, e nunca recalculado. Como um turno aberto pode ser EXPANDIDO com células
+ * novas (changesetOpen, caminho `mineCs`), o registro de auditoria ficava subdeclarado — abrir com
+ * ["ui:5"] e reabrir com ["ui:5","auth:5"] reusava o csId, trancava auth:5, o gate de escopo aceitava
+ * claims lá, mas `blast_cells` continuava ["ui:5"]. Corrigido reescrevendo `blast_cells` a partir da
+ * tabela `locks` (verdade real) na MESMA transação que grava a trava nova — não só no commit, porque
+ * um turno que expira por TTL nunca passa por lá (ver changeset-scope-and-contention.test.ts).
  */
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
@@ -53,7 +55,7 @@ test("commit registra o raio REAL quando o turno é EXPANDIDO com uma célula no
     const a = await register(s.url, "alice")
     const { csId } = await callTool(s.url, "changeset.open", { token: a.token, cells: ["ui:5"], intent: "raio real" })
     // expande o MESMO turno: inclui a célula já trancada por mim + uma nova → reusa o csId e tranca
-    // auth:5, mas blast_cells segue congelado em ["ui:5"] (só é escrito na criação).
+    // auth:5; blast_cells é reescrito NA HORA (MP-3) para refletir as duas.
     const again = await callTool(s.url, "changeset.open", { token: a.token, cells: ["ui:5", "auth:5"], intent: "raio real" })
     expect(again.csId).toBe(csId)
 
@@ -73,7 +75,11 @@ test("commit registra o raio REAL quando o turno é EXPANDIDO com uma célula no
     expect(committed.payload.blastCells).toEqual(["auth:5", "ui:5"])
     expect(committed.payload.blastRadius).toBe(2) // antes seria 1 (só a célula declarada)
     expect(committed.payload.claimCount).toBe(2)
-    expect(committed.payload.cells).toEqual(["ui:5"]) // as TRANCADAS seguem reportadas à parte
+    // `cells` (as TRANCADAS) também mostra as duas agora — MP-3: antes desta correção o turno
+    // expandido reportava só ["ui:5"] aqui, subdeclarando a célula auth:5 que estava genuinamente
+    // trancada (e cujo lock era liberado no mesmo commit). Ambos os campos convergem porque
+    // `blast_cells` deixou de ser uma segunda cópia: `cells` já é o raio real no momento da leitura.
+    expect(committed.payload.cells).toEqual(["auth:5", "ui:5"])
   } finally {
     s.stop()
   }
