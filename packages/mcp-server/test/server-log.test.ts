@@ -7,7 +7,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
-import { callTool, register } from "./helpers"
+import { callTool, register, tempRepo } from "./helpers"
 
 /** Lê o arquivo de log inteiro e devolve uma linha por objeto JSON parseado (falha se alguma linha
  *  não for JSON válido — é exatamente o que "cada linha é JSON válido" está checando). */
@@ -119,6 +119,50 @@ test("log desligado por default: startServer() sem log:true não cria server.log
     await register(s.url, "erin")
     const logFile = `${s.state.stateDir}/server.log`
     expect(existsSync(logFile)).toBe(false)
+  } finally {
+    s.stop()
+  }
+})
+
+test("VEREDITO: recusa do gate e registrada como refused + reasons, nao como sucesso", async () => {
+  const { root, cleanup } = tempRepo("fresh")
+  const s = startServer({ log: true, repoPath: root })
+  try {
+    const logFile = `${s.state.stateDir}/server.log`
+    const a = await register(s.url, "frank")
+    await callTool(s.url, "graph.bootstrap", { token: a.token, repoPath: root })
+
+    // Ancora inventada: o gate recusa. Para o TRANSPORTE isso e um sucesso — a tool devolve
+    // {ok:false, reasons} como structuredContent, nao como isError. Foi assim que o exercicio
+    // multiplayer produziu 59 claims "ok:true" com zero claims commitadas.
+    const res = await callTool(s.url, "changeset.claim", {
+      token: a.token,
+      delta: { kind: "claim.add", payload: { id: "c-bad", subject: "x", domain: "src", level: 4, refs: [], file: "src/audit.ts", anchor: "ISTO NAO EXISTE NO ARQUIVO" } },
+    })
+    expect(res.ok).toBe(false) // o veredito de dominio e recusa
+
+    const line = readLog(logFile).find((l: any) => l.event === "tools/call" && l.tool === "changeset.claim")
+    expect(line).toBeTruthy()
+    expect(line.ok).toBe(true) // transporte funcionou — este campo nao muda de significado
+    expect(line.verdict).toBe("refused") // ...e agora da pra distinguir
+    expect(line.reasons.join(" ")).toMatch(/anchor not found/)
+  } finally {
+    s.stop()
+    cleanup()
+  }
+})
+
+test("VEREDITO ausente quando a operacao e aceita de verdade", async () => {
+  const s = startServer({ log: true })
+  try {
+    const logFile = `${s.state.stateDir}/server.log`
+    const a = await register(s.url, "grace")
+    await callTool(s.url, "changeset.open", { token: a.token, cells: ["ui:4"], intent: "aceito" })
+
+    const line = readLog(logFile).find((l: any) => l.event === "tools/call" && l.tool === "changeset.open")
+    expect(line.ok).toBe(true)
+    expect(line.verdict).toBeUndefined()
+    expect(line.reasons).toBeUndefined()
   } finally {
     s.stop()
   }

@@ -40,7 +40,16 @@ export type CallInfo = {
   /** `tenantId` (já opaco, não é PII) — `null` quando o token não resolve a nenhum tenant conhecido. */
   tenant: string | null
   durationMs: number
+  /** Sucesso de TRANSPORTE: a chamada JSON-RPC completou sem `error` e sem `isError`. NÃO diz que a
+   *  operação foi aceita — ver `verdict`. */
   ok: boolean
+  /** Veredito de DOMÍNIO quando a tool devolveu `{ok:false, reasons}` (gate recusou, trava negada,
+   *  turno fechado): para o transporte isso é `ok:true`, e sem este campo o log dizia que 59 claims
+   *  recusadas tinham dado certo. Ausente quando a operação foi aceita. */
+  verdict?: "refused"
+  /** As `reasons` da recusa — o dado que responde "por que nada entrou". Contêm ids de claim e
+   *  caminhos RELATIVOS de arquivo; nunca `subject`/`anchor` (conteúdo do repo fica fora do log). */
+  reasons?: string[]
   /** Só a MENSAGEM do erro (e stack quando a origem for um throw não-capturado antes de chegar em
    *  transport.ts — ver o comentário grande em index.ts sobre por que tools/call normalmente só tem
    *  mensagem). A mensagem de erro de uma tool pode, em teoria, ecoar um argumento inválido que o
@@ -90,7 +99,7 @@ export function createLogger(file: string, maxBytes = DEFAULT_LOG_MAX_BYTES): Lo
       write({ event: "boot", ...info })
     },
     toolCall(info) {
-      write({ event: "tools/call", tool: info.target, tenant: info.tenant, durationMs: info.durationMs, ok: info.ok, error: info.error })
+      write({ event: "tools/call", tool: info.target, tenant: info.tenant, durationMs: info.durationMs, ok: info.ok, verdict: info.verdict, reasons: info.reasons, error: info.error })
     },
     resourceRead(info) {
       write({ event: "resources/read", uri: info.target, tenant: info.tenant, durationMs: info.durationMs, ok: info.ok, error: info.error })

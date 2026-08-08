@@ -253,6 +253,29 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     return info ? info.tenantId : null
   }
 
+  /**
+   * Veredito de DOMÍNIO, separado do sucesso de TRANSPORTE.
+   *
+   * Achado do exercício multiplayer (2026-08-07): duas sessões de agente produziram 59
+   * `changeset.claim` registradas como `ok:true` e ZERO claims commitadas. As duas coisas eram
+   * verdade ao mesmo tempo — uma claim recusada pelo gate devolve `{ok:false, reasons:[...]}` como
+   * `structuredContent`, NÃO como `isError`; para o transport a chamada foi um sucesso. Só que o log
+   * existe para o dono diagnosticar "por que nada entrou", e `ok:true` 59 vezes responde o contrário
+   * da verdade. É a mesma classe de falha silenciosa que este servidor já corrigiu quatro vezes,
+   * agora dentro do próprio instrumento de diagnóstico.
+   *
+   * `reasons` viaja porque é exatamente o dado que responde a pergunta. Exposição consciente e
+   * registrada: as reasons contêm ids de claim (escolhidos pelo cliente) e caminhos de arquivo
+   * RELATIVOS ao repo. Não contêm `subject` nem `anchor` — o conteúdo do código do testador continua
+   * fora do arquivo, que é a regra dura de privacidade do log.
+   */
+  function toolVerdict(res: { result?: unknown } | null): { verdict?: "refused"; reasons?: string[] } {
+    const sc = (res?.result as { structuredContent?: { ok?: unknown; reasons?: unknown } } | undefined)?.structuredContent
+    if (!sc || sc.ok !== false) return {}
+    const reasons = Array.isArray(sc.reasons) ? sc.reasons.filter((r): r is string => typeof r === "string") : []
+    return { verdict: "refused", reasons }
+  }
+
   function rpcErrorInfo(res: { error?: { message: string }; result?: unknown } | null): { message: string } | undefined {
     if (!res) return undefined
     if (res.error) return { message: res.error.message }
@@ -316,6 +339,7 @@ export function startServer(opts: StartOptions = {}): RunningServer {
           durationMs,
           ok: res !== null && !rpcErrorInfo(res),
           error: res !== null ? rpcErrorInfo(res) : undefined,
+          ...toolVerdict(res),
         })
       } else if (method === "resources/read" && typeof body?.params?.uri === "string") {
         logger.resourceRead({
