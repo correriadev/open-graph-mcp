@@ -79,3 +79,44 @@ test("a ladder-only claim (no meta refs) is exempt from the floor-anchor check r
   const r = verifyIntegrity([], claims, files({}))
   expect(r.clean).toBe(true)
 })
+
+// F8: `claims` (3rd arg) is the REVIEW SCOPE (what gets checked); `allClaimIds` (4th arg, optional) is
+// the RESOLUTION UNIVERSE (what a ref may point at). They used to be the same set, which made every
+// mid-ladder ref look dangling once `claims` was scoped to a single cell (adjacency forces the ref
+// into a DIFFERENT cell by construction). See top-of-file note and docs/roadmap-server-beta.
+
+test("F8: without allClaimIds, ref resolution stays scoped to `claims` (back-compat: default = claims)", () => {
+  // c2 (level 4) refs c1 (level 5) — c1 is NOT in the reviewed subset, so it looks dangling.
+  // This is the pre-F8 behavior, preserved when the 4th arg is omitted.
+  const c1 = claim({ id: "c1", subject: "root", domain: "d", level: 5, refs: [], anchor: "" } as any)
+  const c2 = claim({ id: "c2", subject: "mid", domain: "d", level: 4, refs: ["c1"], anchor: "" } as any)
+  const r = verifyIntegrity([], [c2], files({}))
+  expect(r.clean).toBe(false)
+  expect(r.breaches).toEqual([{ kind: "dangling-ref", id: "c2", detail: "c1" }])
+})
+
+test("F8: with allClaimIds carrying the GLOBAL claim set, a mid-ladder ref into another cell resolves (not dangling)", () => {
+  // Same shape as above, but the caller now passes the global universe (existing + new claims across
+  // ALL cells) as the 4th arg — the reviewed subset (3rd arg) stays just [c2], mirroring finalGate's
+  // per-cell loop: `claims` = cellClaims (what to check), `allClaimIds` = allClaims (what refs resolve
+  // against).
+  const c1 = claim({ id: "c1", subject: "root", domain: "d", level: 5, refs: [], anchor: "" } as any)
+  const c2 = claim({ id: "c2", subject: "mid", domain: "d", level: 4, refs: ["c1"], anchor: "" } as any)
+  const r = verifyIntegrity([], [c2], files({}), new Set([c1.id, c2.id]))
+  expect(r.clean).toBe(true)
+  expect(r.breaches).toEqual([])
+})
+
+test("F8: allClaimIds accepts a plain array of {id} objects too (not just a Set)", () => {
+  const c1 = claim({ id: "c1", subject: "root", domain: "d", level: 5, refs: [], anchor: "" } as any)
+  const c2 = claim({ id: "c2", subject: "mid", domain: "d", level: 4, refs: ["c1"], anchor: "" } as any)
+  const r = verifyIntegrity([], [c2], files({}), [c1, c2])
+  expect(r.clean).toBe(true)
+})
+
+test("F8: a ref to an id that exists NOWHERE (not in meta, not in the global universe) is still dangling-ref — the universe fix does not loosen real breaches", () => {
+  const c2 = claim({ id: "c2", subject: "mid", domain: "d", level: 4, refs: ["nowhere"], anchor: "" } as any)
+  const r = verifyIntegrity([], [c2], files({}), new Set(["c2", "some-other-claim-not-nowhere"]))
+  expect(r.clean).toBe(false)
+  expect(r.breaches).toEqual([{ kind: "dangling-ref", id: "c2", detail: "nowhere" }])
+})

@@ -80,7 +80,13 @@ fechar. Desde a correção do F4, cada um tem seu próprio campo:**
    `changeset.commit`): todo id em `refs` precisa existir **no conjunto de
    claims** sendo commitado, e estar a 1 nível de distância. Ref para um id
    que não é claim → `dangling-ref`. `refs` é **só** isso — nunca aponte para
-   id de nó nele.
+   id de nó nele. Como célula é `(domínio, nível)` e adjacência exige nível
+   `±1`, uma ref válida aponta **quase sempre para outra célula** — isso é
+   normal, não um erro (ver F8 abaixo: `verifyIntegrity`, chamado por
+   `finalGate` no gate de `authority.flip`, resolve refs contra o universo
+   **global** de claims do changeset, não contra a célula sendo revisada;
+   só o CONJUNTO revisado — que claims entram no relatório de breaches — é
+   que fica escopado à célula).
 2. **Cobertura de nós** — `covers` (`claimCoverage`,
    `graph-core/src/claim-store.ts`, avaliada pelo gate final de
    `authority.flip`): lista de **ids de nó** que a claim cobre. Uma célula só
@@ -106,6 +112,25 @@ de cobrir o que cobriam.
 Esse padrão **continua funcionando** — nada foi removido — mas é desencorajado
 daqui em diante. Prefira `covers` explícito: mais direto, e não força uma
 claim-por-nó artificial na escada.
+
+**Correção histórica (F8, `docs/roadmap-server-beta/01-evidencias-fluxo-completo.md`):**
+até essa correção, a frase acima — "desencorajado, não recomendado" — não era
+verdade para **célula de meio-escada** (nível entre 0 e 5 exclusive). Antes de
+F8, `verifyIntegrity` (chamado por `finalGate` com `metaIds`/`claimIds`
+**escopados à célula** sendo revisada) exigia que toda `ref` resolvesse
+**dentro da mesma célula**. Como a regra de adjacência (acima) força a ref pra
+nível ±1, e célula = `(domínio, nível)`, uma ref adjacente aponta
+necessariamente pra OUTRA célula — logo sempre "danglava". Meio-escada só
+fechava um caminho limpo até `authority.flip -> graph` reusando o truque da
+claim-chão (id de claim = id de nó) DENTRO da própria célula — mesmo com
+`covers` disponível. `classify.ts` faz nós comuns nascerem em P4, então
+meio-escada não era o caso raro: era o comum. `verifyIntegrity` agora aceita
+um 4º parâmetro opcional (o universo global de ids contra o qual uma ref pode
+resolver, distinto do conjunto revisado); `finalGate` passa o conjunto
+agregado de claims do changeset. Uma ref para um id que não existe em lugar
+nenhum continua `dangling-ref` — a correção troca o universo de resolução, não
+afrouxa a checagem. Com isso fechado, a claim-chão passa a ser de fato
+legado/opcional em qualquer nível, inclusive meio-escada.
 
 **Sem `covers` NEM a claim-chão, todo caminho para autoridade β morre no
 commit.** Uma claim de nível 4 que referencia o id do nó diretamente em `refs`

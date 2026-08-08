@@ -191,7 +191,16 @@ export function finalGate(deltas: Delta[], ctx: FinalCtx): FinalResult {
     const meta = nodesOfCell(ctx.nodes, cell).map((n) => ({ id: n.id, file: n.file, kind: "Node", responsibility: n.id, exposed: false, deps: [], anchor: n.anchor }))
     const cellClaims = claimsOfCell(allClaims, cell).map((c) => ({ id: c.id, subject: c.subject ?? c.id, domain: c.domain ?? "", refs: c.refs, covers: c.covers, anchor: c.anchor ?? "" }))
     const coverage = claimCoverage(meta as any, cellClaims as any)
-    const verify = verifyIntegrity(meta as any, cellClaims as any, ctx.readFile)
+    // F8: `cellClaims` é O QUE se revisa (a célula); o universo de resolução de refs tem que ser
+    // GLOBAL (`allClaims`, existentes + novas do changeset) — a escada exige nível adjacente, e
+    // célula = (domínio, nível), então uma ref válida de meio-escada aponta pra OUTRA célula. Sem
+    // o 4º parâmetro, toda claim de meio-escada "danglaria" por construção mesmo com a escada íntegra.
+    const verify = verifyIntegrity(
+      meta as any,
+      cellClaims as any,
+      ctx.readFile,
+      new Set(allClaims.map((c) => c.id)),
+    )
     const rootOk = cellClaims.every((c) => roundtripScoped(rtSet, c.id).ok)
     cellChecks.set(cell, { coverageBalanced: coverage.balanced, verifyClean: verify.clean, roundtripOk: rootOk })
 

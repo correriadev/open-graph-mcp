@@ -296,13 +296,17 @@ const GUIDE_TEXT = `open-graph-mcp workflow for agents
    - changeset.claim {token, csId?, delta} adds one claim.add or authority.flip delta and runs the
      incremental gate. Claims form a 6-level ladder, 5=code down to 0=ideation. Every non-root claim's
      refs must point to OTHER CLAIM ids exactly 1 level away (adjacency) — never a raw node id.
-     refs: [] is only valid at level 0 or 5.
+     refs: [] is only valid at level 0 or 5. A ref's target claim commonly lives in a DIFFERENT cell
+     (adjacent level = different domain:level pair) — that is normal and resolves fine; refs are
+     validated against the whole claim set, not just the cell being reviewed.
    - Node coverage (required to ever reach authority "graph"/beta): set covers on a claim to the list
      of NODE ids it covers — a separate field from refs, so the same claim can satisfy ladder adjacency
      (refs, claim ids only) and node coverage (covers, node ids) at once, with no id-space collision.
      Legacy compat: a level-5 claim whose id IS a node's file id, with that id also appearing in refs
      (the old "floor-claim" pattern), still counts as coverage for that node — kept working for claims
-     written before covers existed, but covers is the path to use going forward.
+     written before covers existed, but covers is the path to use going forward, including for
+     mid-ladder cells (a level-4 claim can cite covers directly; it does not need to sit at level 5 or
+     reuse a node's id).
    - changeset.commit {token, csId, intent} runs the final gate and admits, or aborts with reasons.
 
 4. cell_locked: changeset.open/claim can return {ok:false, reason:"cell_locked", cell, holder,

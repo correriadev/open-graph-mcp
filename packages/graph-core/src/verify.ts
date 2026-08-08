@@ -9,6 +9,19 @@
  * NADA (nem meta, nem claim); e a checagem de âncora-verbatim-no-arquivo só se aplica a claims ancoradas no
  * chão (≥1 ref de meta) — claims de escada pura já tiveram a âncora gate-checada na admissão (ascent/expand).
  *
+ * F8: `claims` tem DUAS responsabilidades que precisam ser separadas. (a) QUE claims revisar — esse é
+ * o escopo da célula (domínio:nível) chamado por `finalGate`, correto ficar restrito. (b) contra QUE
+ * universo de ids uma ref resolve — esse tem que ser GLOBAL, porque a escada (roundtrip.checkClaims)
+ * exige nível adjacente (|level(claim) - level(ref)| === 1), e célula é (domínio, nível): uma ref
+ * válida pela regra de adjacência aponta necessariamente para OUTRA célula. Se (b) ficasse restrito à
+ * mesma célula de (a), toda claim de meio-escada (refs para claim adjacente, não para nó) seria
+ * "dangling" por construção — nunca por um problema real. `allClaimIds` (4º parâmetro, opcional) é o
+ * universo de resolução; default = `claims` (mesmo comportamento de antes, escopo único) para não
+ * quebrar chamador que só tem/quer a célula. `finalGate` passa o conjunto GLOBAL de claims do
+ * changeset (existentes + novas) como universo, mantendo `claims` = só a célula pra decidir O QUE
+ * checar. Uma ref pra um id que não existe em NENHUM lugar (nem nó, nem claim, em nenhuma célula)
+ * continua dangling — isso não afrouxa, só corrige o universo.
+ *
  * Determinístico, sem LLM. Gate: clean=true só se 0 breaches.
  */
 import { readFileSync, existsSync, readdirSync } from "node:fs"
@@ -25,15 +38,27 @@ export type Breach = {
 
 export type VerifyResult = { breaches: Breach[]; clean: boolean; checked: { nodes: number; claims: number } }
 
-/** Checa integridade estrutural sobre meta/claims já deduplicados. `readFile` injetado pra testar. */
+/**
+ * Checa integridade estrutural sobre meta/claims já deduplicados. `readFile` injetado pra testar.
+ *
+ * `claims` define O QUE é revisado (pode ser escopado a uma célula). `allClaimIds` define o UNIVERSO
+ * contra o qual uma ref resolve (tem que ser global — ver nota de topo do arquivo). Se omitido,
+ * default é `claims` (universo = escopo, comportamento anterior a F8).
+ */
 export function verifyIntegrity(
   meta: readonly MetaRecord[],
   claims: readonly ClaimRecord[],
   readFile: (f: string) => string | undefined,
+  allClaimIds?: ReadonlySet<string> | readonly { id: string }[],
 ): VerifyResult {
   const breaches: Breach[] = []
   const metaIds = new Set(meta.map((m) => m.id))
-  const claimIds = new Set(claims.map((c) => c.id))
+  const claimIds =
+    allClaimIds === undefined
+      ? new Set(claims.map((c) => c.id))
+      : allClaimIds instanceof Set
+        ? allClaimIds
+        : new Set(allClaimIds.map((c) => c.id))
 
   // nós: chão presente + âncora verbatim
   for (const m of meta) {
