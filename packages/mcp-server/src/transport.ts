@@ -62,11 +62,14 @@ const TOOLS = [
     name: "graph.impact",
     description:
       `What breaks if I change this file? Traverses the published graph's depends-on edges from a node id (repo-relative POSIX file path, e.g. "auth/login.ts"). Returns dependents (nodes that depend on id — the blast radius) and dependencies (nodes id depends on), up to depth hops (default ${DEFAULT_IMPACT_DEPTH}, max ${MAX_IMPACT_DEPTH}, silently clamped), plus the authority/lock state of every cell touched — so an agent can tell if the impact lands on a cell someone else is editing right now. Unknown id returns an explicit gap, never a silent empty result. ` +
-      `dependents/dependencies/cells are each capped at limit (default ${DEFAULT_IMPACT_LIMIT}, max ${MAX_IMPACT_LIMIT}; a value above the max is a named error, NOT clamped — unlike depth). A hub file in a large repo can have thousands of dependents; the returned lists are sorted by depth ascending then id (deterministic, stable across calls) and cut to limit, but totalDependents/totalDependencies/totalCells always report the REAL count computed before any cut, and dependentsTruncated/dependenciesTruncated/cellsTruncated say explicitly when the returned list is smaller than the total — truncation is never silent, and the total is never approximated.`,
+      `dependents/dependencies/cells are each capped at limit (default ${DEFAULT_IMPACT_LIMIT}, max ${MAX_IMPACT_LIMIT}; a value above the max is a named error, NOT clamped — unlike depth). A hub file in a large repo can have thousands of dependents; the returned lists are sorted by depth ascending then id (deterministic, stable across calls) and cut to limit, but totalDependents/totalDependencies/totalCells always report the REAL count computed before any cut, and dependentsTruncated/dependenciesTruncated/cellsTruncated say explicitly when more items exist after this page — truncation is never silent, and the total is never approximated. ` +
+      `To read past the cut, pass the opaque nextCursor back as cursor; nextCursor is null when nothing remains. The cursor already carries id/depth/limit, so send it alone — passing a DIFFERENT id/depth/limit alongside it is a named error rather than a silent reparametrization. The three lists advance independently and paginate by key, not offset, so a graph republished between pages cannot silently skip or duplicate items.`,
     inputSchema: {
       type: "object",
-      required: ["id"],
-      properties: { id: { type: "string" }, depth: { type: "number" }, limit: { type: "number" }, token: { type: "string" } },
+      // `id` NÃO é required no schema porque `cursor` o substitui na continuação (a tool exige um dos
+      // dois e nomeia o erro se faltarem os dois) — declarar required aqui obrigaria o cliente a
+      // reenviar um parâmetro que o cursor já carrega, e a discordância entre os dois seria erro.
+      properties: { id: { type: "string" }, depth: { type: "number" }, limit: { type: "number" }, cursor: { type: "string" }, token: { type: "string" } },
     },
   },
   {

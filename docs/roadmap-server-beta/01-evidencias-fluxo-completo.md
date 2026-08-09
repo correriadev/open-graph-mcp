@@ -476,7 +476,7 @@ o texto cobre o fluxo central (`session.register`, `graph.query`,
 | **F2** — `driftGrade`/`stale` sempre `"fresh"` | corrigido | `7e5a4a9` |
 | **F3** — `dangling-ref` falso no gate incremental | corrigido | `5dd7b8c` |
 | **F4a** — padrão da claim-chão indescobrível | documentado | `f45882a` |
-| **F4b** — `bootstrap` emitir claims-chão | **em execução — outro agente, agora** (resultado não verificado por este documento) | — |
+| **F4b** — separação `refs`/`covers` | corrigido | `d85477a` (+ `7766f84`, F8) |
 | **F5** — sem tool de análise de impacto | corrigido — `graph.impact` | `74b9b0f` (tool), `7bf5227` (limite) |
 | **F6** — motores da escada não expostos | em aberto — produto (ADR §3.1); falta validar Caminho B com sessão real do Claude Code (dono) | — |
 | **`"gone"` nunca era produzido** (resíduo §4.1) | corrigido | `65ff0d5` |
@@ -486,17 +486,17 @@ o texto cobre o fluxo central (`session.register`, `graph.query`,
 | Log registrava recusa do gate como `ok:true` | corrigido | `403240c` |
 | `graph://guide` afirmava filtro errado em `presence.who` | corrigido | `65ff0d5` |
 
-Suíte: **539 verdes, 0 falhas, 1 `test.todo`**.
+Suíte no root: **569 verdes, 0 falhas, 1 `test.todo`** (2026-08-08, após o
+fechamento dos resíduos 5 e 6 abaixo).
 
 ### 7. Resíduos em aberto (2026-08-08)
 
 Registrados com o cuidado de não inflar nem minimizar — cada um é o que as
 fontes acima sustentam, nada além:
 
-1. **F4b — separação de `refs`/`covers`.** Em execução por outro agente no
-   momento em que este documento foi escrito. Não é resíduo fechado nem
-   achado novo: é trabalho em andamento cujo resultado este documento não
-   conhece.
+1. ~~**F4b — separação de `refs`/`covers`.**~~ **FECHADO** em `d85477a`, e o
+   F8 que ele revelou (universo de resolução de refs é global, escopo de
+   revisão é a célula) em `7766f84`.
 2. **F6 — validação do Caminho B com sessão real.** `graph://guide` e as
    descrições de tool cobrem `claude mcp add --transport http`, mas ninguém
    ainda conectou uma sessão real do Claude Code contra o servidor para
@@ -514,14 +514,31 @@ fontes acima sustentam, nada além:
    `graph://guide` — mas é característica que vale manter registrada: um
    agente que não bate presença cedo fica, na prática, sem os avisos em
    texto da §1.6.
-5. **`graph.impact` sem paginação de continuação.** Tem `limit` (default 100,
-   máx. 500) e totais reais (`totalDependents`/`totalDependencies`/
-   `totalCells`) contados antes do corte, então "este arquivo tem 847
-   dependentes" é dado confiável mesmo truncado — mas não tem cursor para
-   pedir a próxima página. Mesma classe do F005 (paginação de
-   claims/history), fora de escala de beta.
-6. **Linhas legadas de `locks`/`authority` na grafia antiga.** Órfãs após a
-   canonicalização do F1/F7 — travas expiram por TTL sozinhas e se resolvem
-   sem intervenção; uma linha de `authority` legada exigiria re-flip manual.
-   Sem base instalada, segue aceitável — registrado para não virar surpresa
-   depois que houver.
+5. ~~**`graph.impact` sem paginação de continuação.**~~ **CORRIGIDO.** Ganhou
+   `cursor`/`nextCursor`: paginação por **chave** (a última `[depth, id]`
+   emitida por lista), não por offset, porque o grafo pode ser republicado
+   entre duas páginas e um offset sobre uma lista que mudou pula ou duplica
+   item em silêncio — a mesma classe de defeito que F1/F2/F7 corrigiram. As
+   três listas avançam independentes; o cursor carrega `id`/`depth`/`limit`,
+   então mandar valor divergente junto com ele é erro nomeado, não
+   reparametrização silenciosa; e cursor corrompido é erro, nunca reinício do
+   zero (que faria um laço de paginação girar para sempre). `l` forjado não
+   escapa do teto de `limit`. `*Truncated` passou a significar "há mais depois
+   desta página" — idêntico ao antigo `total > limit` na primeira página.
+6. ~~**Linhas legadas de `locks`/`authority` na grafia antiga.**~~
+   **CORRIGIDO.** `openDb` migra as duas tabelas em uma transação idempotente,
+   ao lado da migração de `claims.covers` que já existia. Colisão entre as duas
+   grafias não é resolvida por `INSERT OR REPLACE` cego — cada tabela usa o
+   critério que sua própria semântica já implica: `locks` mantém o
+   `expires_at` mais distante (descartar a trava viva liberaria uma célula que
+   alguém segura), `authority` mantém o `last_flip_seq` maior (é como
+   `authorityOf` já lê a tabela). Como `authority` é durável, o
+   `rebuildFromJsonl` desfaria a migração ao replayar o JSONL append-only —
+   por isso o replay também canonicaliza a célula, pelo mesmo motivo que já
+   normalizava o nível da claim.
+
+   Efeito colateral de desenho: `canonicalCell` mudou de `gates.ts` para
+   `cell.ts`, módulo **folha sem imports**. `db.ts → gates.ts` seria import
+   para cima e reabriria a porta do ciclo que já custou um **segfault** do Bun
+   nesta base (ver `tokens.ts`). `gates.ts` reexporta o símbolo: todo import
+   existente segue válido e continua havendo uma implementação só.

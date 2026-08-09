@@ -78,7 +78,79 @@ export type ImpactResult = {
   cells: CellStateLite[]
   totalCells: number
   cellsTruncated: boolean
+  /** Opaco. Devolver em `args.cursor` traz a próxima página; `null` = acabou. Ver PAGINAÇÃO no topo. */
+  nextCursor: string | null
   gaps: string[]
+}
+
+/**
+ * PAGINAÇÃO (resíduo §7.5) — o `limit` cortava sem mentir sobre o total, mas não havia como pedir o
+ * resto: "este arquivo tem 847 dependentes, aqui estão 100" e ponto final.
+ *
+ * É paginação por CHAVE (keyset), não por offset, e a diferença importa aqui mais que de costume. O
+ * grafo pode ser republicado entre duas páginas (`graph.bootstrap`/`graph.rebuild` no meio de uma
+ * sessão longa é normal, não patológico) e um offset sobre uma lista que mudou de tamanho pula ou
+ * duplica itens EM SILÊNCIO — a mesma classe de defeito que F1/F2/F7 corrigiram. A chave é a mesma
+ * ordenação determinística que a tool já garante (`byDepthThenId`), então "continue depois de
+ * (depth=2, id=x)" permanece uma pergunta bem definida mesmo que o grafo tenha mudado: o que existir
+ * depois dessa chave na ordem nova é o que volta. Sem cursor de servidor, sem estado de sessão, sem
+ * expiração.
+ *
+ * As três listas paginam INDEPENDENTES (uma pode acabar antes das outras), então o cursor carrega uma
+ * chave por lista, além de `id`/`depth`/`limit` — o chamador reenvia um único opaco e não precisa
+ * remontar os parâmetros da chamada original.
+ */
+type ImpactCursor = {
+  /** id do nó de origem — a página seguinte é da MESMA pergunta, sempre. */
+  i: string
+  d: number
+  l: number
+  /** última chave [depth, id] emitida em dependents / dependencies; ausente = lista ainda no começo. */
+  dep?: [number, string]
+  dcy?: [number, string]
+  /** última célula emitida (a ordenação de células é lexicográfica pura). */
+  cel?: string
+}
+
+function encodeCursor(c: ImpactCursor): string {
+  return Buffer.from(JSON.stringify(c), "utf8").toString("base64url")
+}
+
+/**
+ * Cursor inválido é ERRO NOMEADO, nunca "começa de novo do zero": reiniciar em silêncio faria um laço
+ * de paginação girar para sempre sem que o cliente percebesse.
+ */
+function decodeCursor(raw: unknown): ImpactCursor {
+  if (typeof raw !== "string" || raw.length === 0) {
+    throw new Error("graph.impact: cursor deve ser a string opaca devolvida em nextCursor")
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"))
+  } catch {
+    throw new Error("graph.impact: cursor inválido (não decodifica) — use o nextCursor da chamada anterior sem editá-lo")
+  }
+  const c = parsed as ImpactCursor
+  // Os limites são revalidados aqui e não apenas na emissão: o cursor viaja pelo cliente, e um
+  // `l` forjado seria um caminho para pedir uma página maior que MAX_IMPACT_LIMIT sem passar pela
+  // validação de `args.limit`.
+  const ok =
+    typeof c?.i === "string" && c.i.length > 0 &&
+    Number.isInteger(c?.d) && c.d >= 1 && c.d <= MAX_IMPACT_DEPTH &&
+    Number.isInteger(c?.l) && c.l >= 1 && c.l <= MAX_IMPACT_LIMIT
+  if (!ok) {
+    throw new Error("graph.impact: cursor inválido (formato) — use o nextCursor da chamada anterior sem editá-lo")
+  }
+  return c
+}
+
+/** Corta a lista ordenada no ponto do cursor, pega `limit`, e diz se sobrou coisa depois. */
+function page(hits: WalkHit[], after: [number, string] | undefined, limit: number): { rows: WalkHit[]; more: boolean; last?: [number, string] } {
+  const sorted = [...hits].sort(byDepthThenId)
+  const rest = after === undefined ? sorted : sorted.filter((h) => byDepthThenId(h, { depth: after[0], id: after[1] }) > 0)
+  const rows = rest.slice(0, limit)
+  const tail = rows[rows.length - 1]
+  return { rows, more: rest.length > limit, last: tail && [tail.depth, tail.id] }
 }
 
 /**
@@ -110,22 +182,35 @@ function byDepthThenId(a: WalkHit, b: WalkHit): number {
   return a.depth - b.depth || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 }
 
-/** Ordena por relevância, corta em `limit`, e só então materializa `file` para quem sobrou. */
-function cutAndMaterialize(hits: WalkHit[], limit: number, nodeById: Map<string, { id: string; file: string }>): ImpactHit[] {
-  const sorted = [...hits].sort(byDepthThenId)
-  return sorted.slice(0, limit).map((h) => ({ id: h.id, file: nodeById.get(h.id)?.file ?? h.id, depth: h.depth }))
+/** Materializa `file` — só para os itens que sobreviveram ao corte da página. */
+function materialize(hits: WalkHit[], nodeById: Map<string, { id: string; file: string }>): ImpactHit[] {
+  return hits.map((h) => ({ id: h.id, file: nodeById.get(h.id)?.file ?? h.id, depth: h.depth }))
 }
 
 export function impact(state: ServerState, args: any, tenant: string): ImpactResult {
+  // Continuação: o cursor carrega id/depth/limit da chamada original, então a página seguinte é a
+  // MESMA pergunta e não pode ser silenciosamente reparametrizada no meio do laço. Mandar `cursor`
+  // junto com `id`/`depth`/`limit` divergentes é erro nomeado, não precedência implícita — um cliente
+  // que muda `depth` na página 3 está pedindo outra coisa e precisa saber disso.
+  const cursor = args?.cursor === undefined ? undefined : decodeCursor(args.cursor)
+  if (cursor) {
+    for (const [key, value] of [["id", cursor.i], ["depth", cursor.d], ["limit", cursor.l]] as const) {
+      if (args[key] !== undefined && args[key] !== value) {
+        throw new Error(`graph.impact: ${key} difere do cursor (${JSON.stringify(args[key])} vs ${JSON.stringify(value)}) — para mudar de pergunta, chame sem cursor`)
+      }
+    }
+  }
+
   // `id` ausente/mal-tipado — mesma disciplina de graph-query.ts::query: validar na borda da tool,
   // com mensagem de contrato, em vez de deixar vazar um TypeError cru de dentro do traversal.
-  if (typeof args?.id !== "string" || args.id.length === 0) {
+  if (cursor === undefined && (typeof args?.id !== "string" || args.id.length === 0)) {
     throw new Error("graph.impact: id deve ser uma string não vazia (id de nó, ex.: \"auth/login.ts\")")
   }
-  const id = args.id
+  const id: string = cursor ? cursor.i : args.id
 
   let depth = DEFAULT_IMPACT_DEPTH
-  if (args.depth !== undefined) {
+  if (cursor) depth = cursor.d
+  else if (args.depth !== undefined) {
     if (typeof args.depth !== "number" || !Number.isInteger(args.depth) || args.depth < 1) {
       throw new Error("graph.impact: depth deve ser um inteiro >= 1")
     }
@@ -139,7 +224,8 @@ export function impact(state: ServerState, args: any, tenant: string): ImpactRes
   // graph://claims/graph://history JÁ usam neste servidor (resources.ts::pageInteger) — não inventar
   // uma segunda regra de paginação que se comporta diferente da primeira no mesmo processo.
   let limit = DEFAULT_IMPACT_LIMIT
-  if (args.limit !== undefined) {
+  if (cursor) limit = cursor.l
+  else if (args.limit !== undefined) {
     if (typeof args.limit !== "number" || !Number.isInteger(args.limit) || args.limit < 1 || args.limit > MAX_IMPACT_LIMIT) {
       throw new Error(`graph.impact: limit deve ser um inteiro entre 1 e ${MAX_IMPACT_LIMIT}`)
     }
@@ -164,6 +250,7 @@ export function impact(state: ServerState, args: any, tenant: string): ImpactRes
       cells: [],
       totalCells: 0,
       cellsTruncated: false,
+      nextCursor: null,
       gaps: [`node not found in graph: ${id}`],
     }
   }
@@ -187,8 +274,10 @@ export function impact(state: ServerState, args: any, tenant: string): ImpactRes
   const dependentsAll = walk(id, depth, dependentsAdj)
   const dependenciesAll = walk(id, depth, dependenciesAdj)
 
-  const dependents = cutAndMaterialize(dependentsAll, limit, nodeById)
-  const dependencies = cutAndMaterialize(dependenciesAll, limit, nodeById)
+  const dependentsPage = page(dependentsAll, cursor?.dep, limit)
+  const dependenciesPage = page(dependenciesAll, cursor?.dcy, limit)
+  const dependents = materialize(dependentsPage.rows, nodeById)
+  const dependencies = materialize(dependenciesPage.rows, nodeById)
 
   // Células atingidas: a do próprio `id` + a de todo dependente/dependência encontrado NO CONJUNTO
   // COMPLETO (não só na lista cortada) — classificar domain/level é barato (em memória, sem SQL), então
@@ -211,7 +300,9 @@ export function impact(state: ServerState, args: any, tenant: string): ImpactRes
   // impacto com centenas de células não vira centenas de queries por chamada.
   const sortedCellKeys = [...cellKeys].sort()
   const totalCells = sortedCellKeys.length
-  const cells: CellStateLite[] = sortedCellKeys.slice(0, limit).map((cell) => {
+  const restCellKeys = cursor?.cel === undefined ? sortedCellKeys : sortedCellKeys.filter((c) => c > cursor.cel!)
+  const pageCellKeys = restCellKeys.slice(0, limit)
+  const cells: CellStateLite[] = pageCellKeys.map((cell) => {
     const lock = state.db.query("SELECT holder FROM locks WHERE tenant_id = ? AND cell = ?").get(tenant, cell) as { holder: string } | null
     return {
       cell,
@@ -222,6 +313,24 @@ export function impact(state: ServerState, args: any, tenant: string): ImpactRes
     }
   })
 
+  // `*Truncated` significa "ainda há itens DEPOIS desta página" — na primeira página (sem cursor) isso
+  // é idêntico ao antigo `total > limit`, então o contrato que os testes existentes afirmam continua
+  // valendo; na segunda em diante, passa a responder a pergunta que o chamador realmente tem.
+  const cellsTruncated = restCellKeys.length > limit
+  const more = dependentsPage.more || dependenciesPage.more || cellsTruncated
+  // Chave de uma lista que não emitiu nada nesta página fica onde estava: ela já se esgotou, e o filtro
+  // "depois desta chave" continua devolvendo vazio para ela enquanto as outras avançam.
+  const nextCursor = more
+    ? encodeCursor({
+        i: id,
+        d: depth,
+        l: limit,
+        dep: dependentsPage.last ?? cursor?.dep,
+        dcy: dependenciesPage.last ?? cursor?.dcy,
+        cel: pageCellKeys[pageCellKeys.length - 1] ?? cursor?.cel,
+      })
+    : null
+
   return {
     id,
     depth,
@@ -230,11 +339,12 @@ export function impact(state: ServerState, args: any, tenant: string): ImpactRes
     dependencies,
     totalDependents: dependentsAll.length,
     totalDependencies: dependenciesAll.length,
-    dependentsTruncated: dependentsAll.length > limit,
-    dependenciesTruncated: dependenciesAll.length > limit,
+    dependentsTruncated: dependentsPage.more,
+    dependenciesTruncated: dependenciesPage.more,
     cells,
     totalCells,
-    cellsTruncated: totalCells > limit,
+    cellsTruncated,
+    nextCursor,
     gaps: [],
   }
 }

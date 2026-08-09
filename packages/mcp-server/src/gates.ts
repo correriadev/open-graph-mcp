@@ -14,6 +14,7 @@ import { claimCoverage } from "@open-graph-mcp/graph-core/claim-store"
 import { canFlip } from "@open-graph-mcp/graph-core/authority"
 import { excerptCheck } from "@open-graph-mcp/graph-core/extract"
 import { normalizeClaimLevel, type CanonicalClaimLevel } from "./claim-level"
+import { canonicalCell } from "./cell"
 
 export type ClaimSnapshot = { id: string; subject?: string; domain?: string; level?: CanonicalClaimLevel; refs: string[]; covers?: string[]; anchor?: string; file?: string }
 export type NodeSnapshot = { id: string; domain: string | null; level: number; file: string; anchor: string }
@@ -54,21 +55,12 @@ export function blastRadius(deltas: readonly Delta[], declaredCells: readonly st
   return { cells: [...cells].sort(), claimCount }
 }
 /**
- * Forma canônica de uma chave de célula: `domain:<nível numérico>`. `auth:P4` e `auth:4` são a MESMA
- * célula e têm que virar a mesma string antes de qualquer comparação, lookup ou escrita.
- *
- * EXPORTADA (integração dos achados F1/F7): a ausência de uma canonicalização única aplicada nas
- * BORDAS foi a causa raiz de duas falhas independentes — o gate de autoridade aprovando sem cobertura
- * (F1) e a trava pessimista podendo ser adquirida duas vezes para a mesma célula sob grafias
- * diferentes (F7). Havia três implementações paralelas da mesma comparação (`nodesOfCell` aqui,
- * o filtro próprio de `cellState` em resources.ts, e a igualdade crua no lookup de `locks`), cada uma
- * com uma convenção. Quem receber chave de célula de fora — tool, URI de recurso ou linha do banco —
- * passa por aqui primeiro. Não escreva uma quarta cópia.
+ * Reexport da canonicalização de célula (F1/F7). A implementação mudou de casa para `./cell` — módulo
+ * folha, sem imports — porque `db.ts` precisa dela na migração de boot e `db.ts -> gates.ts` seria
+ * import para cima, reabrindo o risco de ciclo. Todo `import { canonicalCell } from "./gates"` que já
+ * existia segue funcionando; continua havendo UMA implementação.
  */
-export const canonicalCell = (cell: string): string => {
-  const cut = cell.lastIndexOf(":")
-  return cut < 0 ? cell : `${cell.slice(0, cut)}:${cell.slice(cut + 1).replace(/^P/, "")}`
-}
+export { canonicalCell } from "./cell"
 const toRoundtrip = (c: ClaimSnapshot): RoundtripClaim => ({ id: c.id, level: c.level, refs: c.refs ?? [] })
 
 /** Nós da célula "domain:level" (level numérico) — level do nó é "P<n>" no grafo.

@@ -13,6 +13,7 @@ import { Database } from "bun:sqlite"
 import { appendFileSync, mkdirSync, readFileSync, existsSync, statSync, truncateSync, unlinkSync } from "node:fs"
 import path from "node:path"
 import { normalizeRecoveredClaimLevel } from "./claim-level"
+import { canonicalCell } from "./cell"
 
 /** Tabelas duráveis espelhadas em JSONL, na ordem de replay do rebuild. */
 export const DURABLE_TABLES = ["tenants", "users", "nodes", "edges", "claims", "authority", "changesets", "cs_deltas", "events"] as const
@@ -131,7 +132,64 @@ export function openDb(sqlitePath: string): Database {
     db.close()
     throw error
   }
+  try {
+    migrateLegacyCellSpelling(db)
+  } catch (error) {
+    db.close()
+    throw error
+  }
   return db
+}
+
+/**
+ * F1/F7, resíduo §7.6 — linhas de `locks` e `authority` gravadas ANTES da canonicalização ficaram na
+ * grafia antiga (`auth:P4`). Nada mais escreve nessa grafia, e nada mais a lê: todo lookup passa por
+ * `canonicalCell` agora. O efeito é uma linha órfã — uma trava que ninguém consegue liberar (nem o
+ * dono, porque `changeset.abort` procura `auth:4`) e uma autoridade `graph` conquistada que a célula
+ * deixou de enxergar, exigindo re-flip manual.
+ *
+ * Migra em UMA transação, idempotente, a cada `openDb`. As duas tabelas têm PRIMARY KEY
+ * (tenant_id, cell), então canonicalizar pode COLIDIR com uma linha já existente na grafia nova. A
+ * colisão não pode ser resolvida por `INSERT OR REPLACE` cego — isso deixaria o vencedor à mercê da
+ * ordem de varredura. Cada tabela tem sua regra, e ela é a mesma que a semântica da tabela já implica:
+ *
+ *   - `locks`: vence o `expires_at` mais distante. Trava é coordenação viva; descartar a que ainda vale
+ *     em favor de uma vencida liberaria uma célula que alguém está de fato segurando.
+ *   - `authority`: vence o `last_flip_seq` maior. Autoridade é histórico; o flip mais recente é o
+ *     estado corrente por definição, e é assim que `authorityOf` já lê a tabela.
+ *
+ * `authority` é DURÁVEL (espelhada em JSONL), então esta migração do SQLite sozinha seria desfeita por
+ * um `rebuildFromJsonl` — que replaya as linhas legadas do espelho append-only, onde nada pode ser
+ * reescrito. Por isso o rebuild canonicaliza a célula no replay (ver `rebuildFromJsonl`). `locks` não
+ * é espelhada; para ela o SQLite é a única cópia.
+ */
+function migrateLegacyCellSpelling(db: Database): void {
+  db.transaction(() => {
+    for (const table of ["locks", "authority"] as const) {
+      const rows = db.query(`SELECT * FROM ${table}`).all() as Record<string, string | number | null>[]
+      const legacy = rows.filter((r) => typeof r.cell === "string" && canonicalCell(r.cell) !== r.cell)
+      if (legacy.length === 0) continue
+      const byCanonical = new Map<string, Record<string, string | number | null>>()
+      for (const r of rows) {
+        const key = `${r.tenant_id} ${canonicalCell(String(r.cell))}`
+        const prior = byCanonical.get(key)
+        byCanonical.set(key, prior === undefined ? r : winner(table, prior, r))
+      }
+      const del = db.query(`DELETE FROM ${table} WHERE tenant_id = ? AND cell = ?`)
+      for (const r of legacy) del.run(r.tenant_id, r.cell)
+      for (const r of byCanonical.values()) insertRow(db, table, { ...r, cell: canonicalCell(String(r.cell)) })
+    }
+  })()
+}
+
+/** Desempate da migração acima. Fora da transação para deixar a regra legível e testável isolada. */
+function winner(
+  table: "locks" | "authority",
+  a: Record<string, string | number | null>,
+  b: Record<string, string | number | null>,
+): Record<string, string | number | null> {
+  if (table === "locks") return String(b.expires_at ?? "") > String(a.expires_at ?? "") ? b : a
+  return Number(b.last_flip_seq ?? -1) > Number(a.last_flip_seq ?? -1) ? b : a
 }
 
 type Row = Record<string, string | number | null>
@@ -237,6 +295,15 @@ export function rebuildFromJsonl(db: Database, stateDir: string, tenant: string)
         const normalized = normalizeRecoveredClaimLevel(parsed.level)
         if (!normalized.ok) throw new Error(normalized.reason)
         recovered.push({ table, row: { ...parsed, level: normalized.stored } })
+      } else if (table === "authority" && typeof parsed.cell === "string") {
+        // Mesma razão de `normalizeRecoveredClaimLevel` acima, aplicada à chave de célula: o JSONL é
+        // append-only, então linhas gravadas na grafia pré-F1/F7 (`auth:P4`) estão lá para sempre e a
+        // migração de boot (migrateLegacyCellSpelling) não as alcança — ela roda no SQLite, que este
+        // replay acabou de apagar. Canonicalizar AQUI é o que torna a migração durável. Como o replay
+        // é ordenado (append-only = ordem cronológica) e usa INSERT OR REPLACE, duas grafias da mesma
+        // célula convergem para a linha mais recente — que é o mesmo critério de `last_flip_seq` que
+        // a migração de boot aplica.
+        recovered.push({ table, row: { ...parsed, cell: canonicalCell(parsed.cell) } })
       } else recovered.push({ table, row: parsed })
     }
   }
