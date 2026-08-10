@@ -13,6 +13,7 @@ import type { Graph } from "@open-graph-mcp/graph-core/build"
 import { openDb, write } from "./db"
 import { route } from "./affinity"
 import { renderSystemMessage, pushSystemMessage } from "./system-message"
+import { flavor, type AgentKind } from "./agent-registry"
 import { hydrateTokens, DEFAULT_TOKEN_TTL_MS } from "./tokens"
 
 export const DEFAULT_TENANT = "default"
@@ -88,7 +89,7 @@ export type Presence = {
   sessionId: string
   tenant: string
   userId: string
-  agentKind: string
+  agentKind: AgentKind
   lastSeen: number
   focusCell: string | null
   openCsIds: string[]
@@ -272,7 +273,8 @@ export function pushEnvelope(state: ServerState, tenant: string, env: EventEnvel
 function maybeSystemMessage(state: ServerState, tenant: string, env: EventEnvelope, s: Session): void {
   if (env.kind === "system.message") return
   const presence = state.presence.get(s.id)
-  if (!presence || presence.agentKind === "web") return
+  if (!presence) return
+  if (flavor(presence.agentKind).liveTier === "none") return
   const text = renderSystemMessage(state, tenant, env, presence.userId)
   if (text) pushSystemMessage(state, tenant, s, text, env.target)
 }

@@ -233,6 +233,7 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
   const server = opts.server.replace(/\/$/, "")
   const live = opts.live !== false
   const pollIntervalMs = opts.pollIntervalMs ?? 10_000
+  const agentKind = (opts.agentKind && typeof opts.agentKind === "string") ? opts.agentKind : "unknown"
   let token = await resolveToken(server, opts)
   let closed = false
   let sessionId: string | null = null
@@ -360,9 +361,9 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
       sessionId,
       cell: focusState.cell,
       invisible: focusState.invisible,
-      agentKind: opts.agentKind,
+      agentKind,
     })
-    await call("presence.beat", { sessionId, agentKind: opts.agentKind })
+    await call("presence.beat", { sessionId, agentKind })
   }
 
   /** The one place `presence.beat`'s argument shape is built — shared by the automatic 15s timer below
@@ -375,7 +376,7 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
     if (!sessionId || !token) {
       throw new Error("connect: presence.beat() requires a live session (no session id yet)")
     }
-    return call("presence.beat", { sessionId, agentKind: opts.agentKind })
+    return call("presence.beat", { sessionId, agentKind })
   }
 
   const presence = {
@@ -393,7 +394,7 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
         sessionId,
         cell,
         invisible: focusState.invisible,
-        agentKind: opts.agentKind,
+        agentKind,
       })
       return true
     },
@@ -562,5 +563,5 @@ export async function connect(opts: ConnectOptions): Promise<OgHandle> {
     stream?.stop()
   }
 
-  return { server, agentKind: opts.agentKind, call, on, subscribe, presence, systemMessages, close }
+  return { server, agentKind, call, on, subscribe, presence, systemMessages, close }
 }

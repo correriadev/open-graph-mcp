@@ -27,6 +27,7 @@ import { broadcastEphemeral, type Presence, type ServerState, type Session } fro
 import { requireToken } from "./session"
 import { forceQuiet } from "./typing"
 import { pushSystemMessage } from "../system-message"
+import { maybeFlavor, flavor, type AgentKind } from "../agent-registry"
 
 const now = () => Date.now()
 
@@ -165,7 +166,7 @@ function touch(state: ServerState, sessionIdArg: string | undefined, tenant: str
       sessionId,
       tenant,
       userId,
-      agentKind: agentKind ?? "web",
+      agentKind: (agentKind ?? "web") as AgentKind,
       lastSeen: now(),
       focusCell: null,
       openCsIds: openCsIdsFor(state, tenant, userId),
@@ -176,7 +177,7 @@ function touch(state: ServerState, sessionIdArg: string | undefined, tenant: str
     state.presence.set(sessionId, p)
   } else {
     p.lastSeen = now()
-    if (agentKind) p.agentKind = agentKind
+    if (agentKind) p.agentKind = agentKind as AgentKind
     p.openCsIds = openCsIdsFor(state, tenant, userId)
   }
   registerActorSession(state, p)
@@ -186,7 +187,7 @@ function touch(state: ServerState, sessionIdArg: string | undefined, tenant: str
   // pra não repetir em beats subsequentes.
   if (session?.restartPending) {
     session.restartPending = false
-    if (p.agentKind !== "web") {
+    if (flavor(p.agentKind).liveTier !== "none") {
       pushSystemMessage(state, tenant, session, "[open-graph] Servidor reiniciou — sua presença foi resetada; redeclare foco.")
     }
   }
@@ -203,11 +204,12 @@ function validateOptionalSessionId(sessionId: unknown, toolName: string): assert
 
 export function presenceBeat(
   state: ServerState,
-  args: { token: string; sessionId?: string; agentKind?: string },
+  args: { token: string; sessionId?: string; agentKind: string },
 ): { ok: true; serverTs: number; sessionId: string } | { ok: false; reasons: string[] } {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
   validateOptionalSessionId(args.sessionId, "presence.beat")
-  const touched = touch(state, args.sessionId, tenant, userId, args.agentKind)
+  const agentKind = maybeFlavor(args.agentKind) ? args.agentKind : "unknown"
+  const touched = touch(state, args.sessionId, tenant, userId, agentKind)
   if (!touched) return NOT_OWNED
   const { presence, isNew } = touched
   if (isNew && !presence.invisible) emitJoined(state, presence)
@@ -220,7 +222,8 @@ export function presenceFocus(
 ): { ok: true; sessionId: string } | { ok: false; reasons: string[] } {
   const { userId, tenantId: tenant } = requireToken(state, args.token)
   validateOptionalSessionId(args.sessionId, "presence.focus")
-  const touched = touch(state, args.sessionId, tenant, userId, args.agentKind)
+  const agentKind = typeof args.agentKind === "string" ? (maybeFlavor(args.agentKind) ? args.agentKind : "unknown") : args.agentKind
+  const touched = touch(state, args.sessionId, tenant, userId, agentKind)
   if (!touched) return NOT_OWNED
   const { presence, isNew } = touched
   const sessionId = presence.sessionId

@@ -93,7 +93,7 @@ const TOOLS = [
     name: "session.register",
     description:
       "Register a session under a tenant. Returns { token, userId, tenantId, expiresAt }. Call this FIRST — every other tool except graph.query requires the token it returns. The token survives a server restart (persisted, 90-day expiry); if a call ever fails with 'invalid or expired token', call this again with the same name to get a fresh one — the identity (and any open changeset) is preserved.",
-    inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" }, tenant: { type: "string" } } },
+    inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" }, tenant: { type: "string" }, agentKind: { type: "string" } } },
   },
   {
     name: "changeset.open",
@@ -154,7 +154,7 @@ const TOOLS = [
     description:
       "Heartbeat for this session's presence. No beat for 60s expires the presence (user.left, reason heartbeat_expired). " +
       "sessionId is OPTIONAL: omit it if you never opened GET /events (no SSE) — the server derives a stable id from your token and returns it in `sessionId`; reuse that id on later beats.",
-    inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" }, sessionId: { type: "string" }, agentKind: { type: "string" } } },
+    inputSchema: { type: "object", required: ["token", "agentKind"], properties: { token: { type: "string" }, sessionId: { type: "string" }, agentKind: { type: "string" } } },
   },
   {
     name: "presence.typing",

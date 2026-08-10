@@ -424,6 +424,30 @@ export function startServer(opts: StartOptions = {}): RunningServer {
 }
 
 if (import.meta.main) {
+  const subcommand = Bun.argv[2]
+  if (subcommand === "doctor") {
+    const { runDoctor, printDoctorTable } = await import("./doctor")
+    const results = await runDoctor()
+    printDoctorTable(results)
+    process.exit(0)
+  }
+
+  if (subcommand === "install" && Bun.argv[3]) {
+    const { runInstall } = await import("./install")
+    const agentKind = Bun.argv[3]
+    const args = Bun.argv.slice(4)
+    const serverIdx = args.indexOf("--server")
+    const nameIdx = args.indexOf("--name")
+    const dryRun = args.includes("--dry-run")
+    const result = await runInstall(agentKind, {
+      server: serverIdx !== -1 ? args[serverIdx + 1] : undefined,
+      name: nameIdx !== -1 ? args[nameIdx + 1] : undefined,
+      dryRun,
+    })
+    console.log(JSON.stringify(result, null, 2))
+    process.exit(result.success ? 0 : 1)
+  }
+
   // SEM GRAPH_REPO_PATH. O servidor não é de um repo — o repo é ARGUMENTO de `graph.bootstrap`, e
   // qual repo cada tenant indexou fica no banco (tabela `tenants`). Amarrar o processo a um repo
   // por env var era o resquício do modelo em que o grafo morava dentro dele: contradizia

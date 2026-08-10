@@ -134,7 +134,7 @@ test("system.pending drena numa unica transacao — entrega-uma-vez sob dreno re
     const alice = await register(s.url, "alice")
     const bob = await register(s.url, "bob")
     const sse = await openSse(s.url, 0, alice.token)
-    await callTool(s.url, "presence.beat", { token: alice.token, sessionId: sse.events[0].sessionId, agentKind: "cli" })
+    await callTool(s.url, "presence.beat", { token: alice.token, sessionId: sse.events[0].sessionId, agentKind: "opencode" })
     await callTool(s.url, "changeset.open", { token: bob.token, cells: ["ui:21"], intent: "notify" })
     await sse.waitFor((e) => e.kind === "system.message")
 

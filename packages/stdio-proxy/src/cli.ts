@@ -34,6 +34,8 @@ import { connect, type OgHandle } from "@open-graph-mcp/client"
 import { fileTokenStore } from "@open-graph-mcp/client/node-store"
 import { type Credentials, postMcp, reregisterCredentials, resolveCredentials } from "./credentials"
 
+const KNOWN_AGENT_KINDS = new Set(["claude-code", "opencode", "cursor", "windsurf", "copilot", "zed", "gemini-cli", "codex-cli", "antigravity-cli", "web", "unknown"])
+
 function parseArgs(
   argv: string[],
 ): { server: string; name?: string; tenant?: string; live: boolean; agentKind: string } {
@@ -49,6 +51,9 @@ function parseArgs(
   const tenant = tenantIdx === -1 ? undefined : argv[tenantIdx + 1]
   const agentKindIdx = argv.indexOf("--agent-kind")
   const agentKind = agentKindIdx === -1 ? "unknown" : (argv[agentKindIdx + 1] ?? "unknown")
+  if (!KNOWN_AGENT_KINDS.has(agentKind)) {
+    console.error(`warning: unknown --agent-kind "${agentKind}" (known: ${[...KNOWN_AGENT_KINDS].join(", ")})`)
+  }
   const live = argv.includes("--live")
   if (live && !name) {
     process.stderr.write(

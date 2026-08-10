@@ -62,7 +62,7 @@ test("authority.flipped: non-web gets envelope + system.message, web gets envelo
 
     const bobSse = await openSse(s.url)
     const carolSse = await openSse(s.url)
-    await declareAgentKind(s.url, bobSse, bob.token, "cursor")
+    await declareAgentKind(s.url, bobSse, bob.token, "opencode")
     await declareAgentKind(s.url, carolSse, carol.token, "web")
 
     const flip = await callTool(s.url, "authority.flip", { token: alice.token, cell, to: "graph" })

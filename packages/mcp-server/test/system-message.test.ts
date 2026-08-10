@@ -59,7 +59,7 @@ test("lock.denied system.message reaches only the non-web session that attempted
 
     const bobSse = await openSse(s.url, 0, bob.token)
     const bobSessionId = bobSse.events[0].sessionId
-    await callTool(s.url, "presence.beat", { token: bob.token, sessionId: bobSessionId, agentKind: "cursor" })
+    await callTool(s.url, "presence.beat", { token: bob.token, sessionId: bobSessionId, agentKind: "opencode" })
 
     const denied = await callTool(s.url, "changeset.open", { token: bob.token, cells: ["ui:5"], intent: "tries and fails" })
     expect(denied.ok).toBe(false)
