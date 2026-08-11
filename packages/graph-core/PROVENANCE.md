@@ -7,7 +7,7 @@ Módulos vendorados de `open-graph` (fork opencode):
 - Data do vendoring: 2026-07-12
 - Alterações locais: import `@/util/lazy` reescrito p/ `./util/lazy`. Nada mais.
 
-Racional (ADR do roadmap, `docs/roadmap-mcp/ADR.md` no repo de origem): o serviço
+Racional (ADR do roadmap, `docs/CHANGELOG.md` no repo de origem): o serviço
 MCP "reusa conceitos do open-graph sem depender do seu runtime". O pacote
 `opencode` é workspace privado de monorepo — não instalável como dependência git
 limpa. Vendoring com proveniência explícita > submodule/git-dep.

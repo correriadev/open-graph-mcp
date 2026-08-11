@@ -3,7 +3,7 @@
  * multi-nível, `graph.rebuild` re-lendo do disco após o repo mudar), mas SEM depender de um repo
  * externo (`harness-kit`) que só existe na máquina local. `target-repo-scale.test.ts` inteiro roda
  * dentro de `describe.skipIf(!targetRepoAvailable())` — no CI isso nunca executa, então essas
- * asserções ficavam "CI-escuras" (docs/roadmap-server-beta/00-scope-sb-0-hardening-servidor.md §0).
+ * asserções ficavam "CI-escuras" (docs/CHANGELOG.md §0).
  *
  * Fixture: `test/fixtures/multi-domain/` — versionada, pequena, mas com 4 domínios e 4 níveis
  * (P1 README.md, P2 src/api/router.ts, P3 src/core/engine.test.ts, P4 os demais) e 3 arestas de

@@ -2,7 +2,7 @@
  * graph-impact.ts — `graph.impact { id, depth?, limit?, token? }`: "o que quebra se eu mexer neste
  * arquivo?"
  *
- * F5 (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md): o servidor já tem os dados — cada
+ * F5 (docs/CHANGELOG.md): o servidor já tem os dados — cada
  * `depends-on` edge do grafo (`from` depende de `to`, ver graph-core/build.ts::assembleGraph) — mas
  * nenhuma tool os percorre. `graph.query` é match de token sobre metadados de nó, não traversal de
  * aresta; sem esta tool, o cliente tinha que baixar `graph://snapshot` inteiro e andar nas arestas

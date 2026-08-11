@@ -17,8 +17,8 @@
  * no momento da conexão ou por presence.ts no primeiro beat/focus).
  *
  * O fio ainda não entrega esse token: `inputSchema`/dispatch de `graph.subscribe` moram em
- * transport.ts (fora da posse deste stream — ver docs/roadmap-server-beta/00-scope-sb-0-hardening-
- * servidor.md §3/§5). Fechar o buraco de ponta a ponta requer, lá: (1) acrescentar `token: {type:
+ * transport.ts (fora da posse deste stream — ver SB-0 §3/§5 em docs/CHANGELOG.md).
+ * Fechar o buraco de ponta a ponta requer, lá: (1) acrescentar `token: {type:
  * "string"}` a `inputSchema.properties` SEM entrar em `required` (opcional, spec §5.3 — não quebra
  * quem não manda), e (2) trocar `subscribe(state, args.sessionId, args.filters)` por
  * `subscribe(state, args.sessionId, args.filters, args.token)`. Ver subscribe-authz.test.ts para o

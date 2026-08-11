@@ -1,6 +1,6 @@
 /**
  * legacy-cell-spelling-migration.test.ts — resíduo §7.6 de
- * docs/roadmap-server-beta/01-evidencias-fluxo-completo.md.
+ * docs/CHANGELOG.md
  *
  * As correções de F1/F7 canonicalizaram a chave de célula (`auth:P4` → `auth:4`) em toda BORDA de
  * leitura e escrita, mas não tocaram no que já estava gravado. Uma linha de `locks` na grafia antiga

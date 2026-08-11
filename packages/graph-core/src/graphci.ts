@@ -112,7 +112,7 @@ export function anchoredDiffGate(
  * `changeset` is the provenance for a β-cell edit: its `id` plus the cells it actually covers
  * (the caller passes `blastRadius(deltas, lockedCells).cells` — mcp-server's gates.ts; the old
  * file-based changeset-store.ts this used to name was deleted, see
- * docs/roadmap-mcp/06-audit-e-reestruturacao.md). Provenance is NOT trusted on
+ * docs/CHANGELOG.md). Provenance is NOT trusted on
  * id presence alone — every touched β cell must appear in `changeset.cells`, else the edit is
  * unbacked and rejected (an unrelated changeset id cannot launder an edit to a cell it never
  * touched). `breakGlass` is the explicit escape (demotes touched β cells to suspended).

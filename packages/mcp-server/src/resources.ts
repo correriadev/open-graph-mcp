@@ -14,7 +14,7 @@ import { authorityOf } from "./store"
 import { canonicalCell } from "./gates"
 
 /**
- * F2 fix (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md §F2): before this, drift grade was
+ * F2 fix (docs/CHANGELOG.md §F2): before this, drift grade was
  * read off `n.stale`, a field NOBODY ever wrote — every cell/domain read reported "fresh" forever, even
  * seconds after `watch-bridge.ts` had emitted `drift.node` + `authority.demoted` for that exact cell.
  *

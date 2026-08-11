@@ -60,7 +60,7 @@ bun test                                     # 7 testes de aceite (spec §9)
   com `session not owned by caller`. `packages/client` já injeta o token
   resolvido em todo `tools/call`, então o caminho de produção é o validado.
   Chamada sem token segue aceita (compat Fase 1) — residual consciente,
-  registrado em `docs/roadmap-server-beta/00-scope-sb-0-hardening-servidor.md`.
+  registrado em `docs/CHANGELOG.md`.
 
 ## O modelo de claims: escada, `refs` e o padrão da claim-chão
 
@@ -113,7 +113,7 @@ Esse padrão **continua funcionando** — nada foi removido — mas é desencora
 daqui em diante. Prefira `covers` explícito: mais direto, e não força uma
 claim-por-nó artificial na escada.
 
-**Correção histórica (F8, `docs/roadmap-server-beta/01-evidencias-fluxo-completo.md`):**
+**Correção histórica (F8, `docs/CHANGELOG.md`):**
 até essa correção, a frase acima — "desencorajado, não recomendado" — não era
 verdade para **célula de meio-escada** (nível entre 0 e 5 exclusive). Antes de
 F8, `verifyIntegrity` (chamado por `finalGate` com `metaIds`/`claimIds`
@@ -176,7 +176,7 @@ gravada no banco é sempre a canônica (`domain:<número>`), então existe **uma
 linha de trava e **uma** de autoridade por célula, não uma por grafia.
 
 Isso foi uma família de defeitos reais, corrigida em 2026-08-07 (F1 e F7 em
-`docs/roadmap-server-beta/01-evidencias-fluxo-completo.md`): havia três
+`docs/CHANGELOG.md`): havia três
 implementações paralelas dessa comparação, com convenções divergentes, e o
 resultado era o gate de autoridade aprovando sem cobertura e a trava
 pessimista podendo ser adquirida duas vezes para a mesma célula. Se você for

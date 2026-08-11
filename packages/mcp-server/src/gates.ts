@@ -27,7 +27,7 @@ export const cellOfClaim = (c: { domain?: string | null; level?: number }): stri
  * cada claim + cada célula de authority.flip), unidas às células declaradas no lock.
  *
  * Reimplementa `blastRadius` do `changeset-store.ts` vendorado (deletado: era file-based, sem
- * tenant/token/lock/transação — ver docs/roadmap-mcp/06-audit-e-reestruturacao.md). A diferença é
+ * tenant/token/lock/transação — ver docs/CHANGELOG.md). A diferença é
  * que aquele operava sobre um Changeset em memória e este sobre os deltas persistidos.
  *
  * Por que importa: `blast_cells` é gravado UMA vez, na CRIAÇÃO do changeset, e nunca recalculado.

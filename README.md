@@ -3,8 +3,8 @@
 [![CI](https://github.com/correriadev/open-graph-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/correriadev/open-graph-mcp/actions/workflows/ci.yml)
 
 Serviço MCP de knowledge graph governado — linha de produto derivada dos
-conceitos do [open-graph]. Roadmap completo: `docs/roadmap-mcp/` no repo de
-origem (ADR + escopos Fase 1–5).
+conceitos do [open-graph]. Documentação vigente em [`docs/`](./docs/README.md):
+paper normativo, PRD e ADR. Base histórica em `docs/CHANGELOG.md`.
 
 **Estado atual: Fase 1 (MCP read-only)** — bootstrap → query → subscribe,
 zero mutação via protocolo.

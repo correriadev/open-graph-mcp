@@ -71,7 +71,7 @@ curl -s http://localhost:8787/mcp -X POST -H 'content-type: application/json' \
 ## 4. Connect Claude Code
 
 Verified for real against a local instance on 2026-07-16 (see
-`docs/roadmap-integrations/quickstart.md` §2.1 in the main repo):
+`docs/CHANGELOG.md` §2.1 in the main repo):
 
 ```sh
 claude mcp add --transport http open-graph http://localhost:8787/mcp

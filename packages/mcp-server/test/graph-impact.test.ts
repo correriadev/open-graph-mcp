@@ -1,5 +1,5 @@
 /**
- * graph-impact.test.ts — F5 (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md): "o que
+ * graph-impact.test.ts — F5 (docs/CHANGELOG.md): "o que
  * quebra se eu mexer neste arquivo?" via traversal de `depends-on`, não match de token.
  *
  * Fixture `impact-chain`: billing/invoice.ts → auth/verify.ts → auth/login.ts (import relativo,

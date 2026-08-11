@@ -51,7 +51,7 @@ export type ConnectOptions = {
    * a freshly auto-re-registered token (QA-1 fix) gets persisted, if given. */
   store?: TokenStore
   /** `true` (default): open a live SSE connection (`EventStream`) — `on()` handlers and presence updates
-   * are pushed in near-real-time. `false` (ID2 — docs/roadmap-integrations/README.md's governing
+   * are pushed in near-real-time. `false` (ID2 — docs/CHANGELOG.md's governing
    * principle: "camada viva NUNCA vira requisito"): no SSE connection is opened at all. Instead:
    *  - `on()` events for durable graph changes are synthesized by polling `graph://history?since=N`
    *    (a resource read, not a tool call) on an interval and diffing against the last-seen seq/graphId

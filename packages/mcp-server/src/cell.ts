@@ -16,7 +16,7 @@
  * Forma canônica de uma chave de célula: `domain:<nível numérico>`. `auth:P4` e `auth:4` são a MESMA
  * célula e têm que virar a mesma string antes de qualquer comparação, lookup ou escrita.
  *
- * Causa raiz de F1/F7 (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md): a ausência de uma
+ * Causa raiz de F1/F7 (docs/CHANGELOG.md): a ausência de uma
  * canonicalização única aplicada nas BORDAS produziu o gate de autoridade aprovando sem cobertura (F1)
  * e a trava pessimista adquirível duas vezes para a mesma célula sob grafias diferentes (F7). Havia
  * três implementações paralelas da mesma comparação, cada uma com uma convenção. Quem receber chave de

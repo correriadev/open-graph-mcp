@@ -1,21 +1,21 @@
-# DOCUMENTATION
+# DOCUMENTAÇÃO — OpenGraph
 
-## FEATURES
+## Cânone vigente
 
-| Document | Purpose |
+Leia nesta ordem — ela também é a ordem de autoridade: **onde um documento divergir do anterior, o anterior vence.**
+
+| # | Documento | O que é |
+|---|---|---|
+| 1 | [Working Paper v1.0](./PRD/OpenGraph_Working_Paper_v1_0.md) | **Fonte normativa.** A arquitetura cognitiva recursiva sobre substrato epistêmico verificável: planos, horizontes, promoção de autoridade, invariantes, ameaças e o programa experimental. |
+| 2 | [PRD](./PRD/PRD.md) | 89 requisitos em dez épicos, cada um com critério de aceite verificável por log, ADR de origem e a hipótese ou ameaça que o falsifica. |
+| 3 | [ADR](./ADR/ADR.md) | 21 registros de decisão arquitetural derivados do paper, mais o apêndice de ambiguidades abertas e o de achados de código. |
+
+Nenhum destes documentos descreve algo já construído. O campo **Status** de cada ADR diz em que estágio a decisão está, e o vocabulário de marcas — `[B]` conquistado, `[C]` construído e desligado, `[E]` evolução proposta, `[A]` aberto — vale para os três.
+
+## Base histórica
+
+| Documento | O que é |
 |---|---|
-| [CLAIMS AND HISTORY PAGINATION](./feature/audit_pagination_claims_history.md) | Navigate bounded cursor reads and incremental web projections. |
-| [TYPING RATE LIMIT AND ACTOR SESSION INDEX](./feature/audit_typing_rate_limit.md) | Navigate bounded browser typing signals and indexed server presence updates. |
-| [DEV-ONLY E2E INSTRUMENTATION BRIDGE](./feature/audit_dev_only_e2e_bridge.md) | Navigate compile-time browser-test instrumentation isolation. |
-| [SAFE CLAIM DRAFTS AND POINT REFERENCE LOOKUP](./feature/audit_claimdraft_ref_lookup.md) | Navigate bounded draft validation and tenant-scoped reference reads. |
-| [DENY-BY-DEFAULT CLAIM PATHS AND CANONICAL LEVELS](./feature/audit_redactfile_canonical_level.md) | Navigate safe file projection and canonical claim persistence. |
+| [CHANGELOG](./CHANGELOG.md) | Contexto consolidado dos ~150 documentos apagados em 2026-08-11: seis roadmaps, o loop autônomo, a auditoria de qualidade e o alpha v0. Registro de como se chegou até aqui — não é fonte normativa. |
 
-## CROSS-REFERENCES
-
-| Document | Relationship |
-|---|---|
-| [CLAIMS AND HISTORY PAGINATION](./feature/audit_pagination_claims_history.md) | Records the bounded cursor read feature. |
-| [TYPING RATE LIMIT AND ACTOR SESSION INDEX](./feature/audit_typing_rate_limit.md) | Records typing signal rate control and actor-session lookup. |
-| [DEV-ONLY E2E INSTRUMENTATION BRIDGE](./feature/audit_dev_only_e2e_bridge.md) | Records e2e-only bridge ownership and production artifact exclusion. |
-| [SAFE CLAIM DRAFTS AND POINT REFERENCE LOOKUP](./feature/audit_claimdraft_ref_lookup.md) | Records raw draft safeguards and bounded claim resolution. |
-| [DENY-BY-DEFAULT CLAIM PATHS AND CANONICAL LEVELS](./feature/audit_redactfile_canonical_level.md) | Records filesystem redaction and claim-level boundaries. |
+Os documentos originais permanecem recuperáveis pelo histórico do git (`git log --diff-filter=D -- docs/`).

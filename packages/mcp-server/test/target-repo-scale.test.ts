@@ -7,7 +7,7 @@
  * Guarda: se o repo-alvo não existir localmente, todo describe abaixo faz skip com motivo
  * explícito (ver fixtures/target-repo.ts) — nunca falha por ambiente ausente.
  *
- * §0 do plano (docs/roadmap-qa/07-...) dizia que `edges: 0` era a asserção correta. Isso valia
+ * §0 do plano (docs/CHANGELOG.md) dizia que `edges: 0` era a asserção correta. Isso valia
  * enquanto buildSkeleton gravava `deps: []` fixo. Desde que o esqueleto passou a extrair imports
  * relativos (extract.ts — determinístico, sem LLM), ARESTAS são esperadas e sua ausência é
  * regressão. O que segue valendo de §0: `claims: 0`, porque claim com subject/verdict é trabalho

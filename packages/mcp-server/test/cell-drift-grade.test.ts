@@ -1,5 +1,5 @@
 /**
- * cell-drift-grade.test.ts — F2 (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md §F2).
+ * cell-drift-grade.test.ts — F2 (docs/CHANGELOG.md §F2).
  *
  * Before the fix, `driftGradeOf` (resources.ts) read `n.stale`, a field nobody ever wrote — so
  * `graph://cell` and `graph://domain` reported `driftGrade: "fresh"` and every node's `stale: "fresh"`

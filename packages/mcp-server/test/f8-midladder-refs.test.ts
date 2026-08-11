@@ -1,5 +1,5 @@
 /**
- * f8-midladder-refs.test.ts — F8 (docs/roadmap-server-beta): `refs` tinha DOIS contratos mutuamente
+ * f8-midladder-refs.test.ts — F8 (docs/CHANGELOG.md): `refs` tinha DOIS contratos mutuamente
  * contraditórios para qualquer célula de meio-escada.
  *
  *   1. roundtrip.checkClaims exige nível ADJACENTE (|level(claim) - level(ref)| === 1) — GLOBAL, sobre

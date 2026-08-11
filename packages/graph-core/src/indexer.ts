@@ -11,7 +11,7 @@
  * ponytail: keyword/domain filter only, over live graph.json (fresh by construction, no cache).
  * The hybrid vector re-rank (embeddings, lazy per-node hash, .graph/index/vec.jsonl) is a
  * separate slice — added only when keyword recall proves weak on real queries. See
- * docs/specs/2026-07-01-graph-indexer-retrieval.md.
+ * docs/CHANGELOG.md
  */
 import { readFileSync } from "node:fs"
 import { createHash } from "node:crypto"

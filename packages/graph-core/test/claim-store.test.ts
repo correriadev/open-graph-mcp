@@ -37,7 +37,7 @@ test("a ref pointing at something other than a meta id in this cell doesn't crea
   expect(r.missing).toEqual(["a"])
 })
 
-// F4 (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md §F4): `refs` used to carry two
+// F4 (docs/CHANGELOG.md §F4): `refs` used to carry two
 // contracts at once — ladder adjacency (roundtrip.checkClaims) AND node coverage (claimCoverage).
 // `covers` is the explicit field for the second contract, so a claim's id no longer has to equal a
 // node's id (the floor-claim trick) just to close coverage.

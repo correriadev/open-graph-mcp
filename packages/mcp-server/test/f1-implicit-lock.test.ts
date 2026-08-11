@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
 import { callTool, readResource, register, tempRepo, bootstrapAs } from "./helpers"
 
-// F1 (docs/roadmap-mcp/07-plano-lock-implicito-e-greenfield.md §F1) — o lock some do vocabulário: o
+// F1 (docs/CHANGELOG.md §F1) — o lock some do vocabulário: o
 // gatilho passa a ser a transição LEITURA → EDIÇÃO (changeset.claim sem csId / node.edit), não mais
 // um "Abrir turno" declarado antes. Estes testes cobrem os três pontos que o plano nomeia
 // explicitamente: abertura implícita no claim, node.edit feliz, e a corrida de node.edit.

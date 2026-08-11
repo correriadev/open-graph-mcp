@@ -9,7 +9,7 @@ import { tempRepo } from "./helpers"
  * + `StreamableHTTPClientTransport` (NOT our own hand-rolled JSON-RPC client in helpers.ts) driving the
  * real `/mcp` endpoint end-to-end over HTTP. This is the regression test that proves the SDK — the same
  * code real MCP clients embed — completes the handshake and every operation tracked in
- * docs/roadmap-integrations/compliance-matrix.md without choking on some encoding/framing detail a raw
+ * docs/CHANGELOG.md without choking on some encoding/framing detail a raw
  * curl request wouldn't catch (e.g. the SDK's transport opens a GET SSE stream after connect() and
  * specifically expects — and gets — a 405 back, per Streamable HTTP spec §2.3, without erroring).
  */

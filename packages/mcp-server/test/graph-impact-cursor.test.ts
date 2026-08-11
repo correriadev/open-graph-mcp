@@ -1,5 +1,5 @@
 /**
- * graph-impact-cursor.test.ts — resíduo §7.5 de docs/roadmap-server-beta/01-evidencias-fluxo-completo.md:
+ * graph-impact-cursor.test.ts — resíduo §7.5 de docs/CHANGELOG.md
  * `graph.impact` cortava em `limit` sem mentir sobre o total, mas não havia como pedir o resto.
  *
  * Mesma fixture `impact-chain` do graph-impact.test.ts: billing/invoice.ts → auth/verify.ts →

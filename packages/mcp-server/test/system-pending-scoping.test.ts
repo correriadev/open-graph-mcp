@@ -5,7 +5,7 @@
  * the same but in different tenants actually distinct? What's the ordering/drain-once behavior across
  * multiple pending messages? What does an empty drain return?
  *
- * Pre-classified Tier 3 (see docs/roadmap-server-beta/00-scope-sb-0-hardening-servidor.md §4): systemPending
+ * Pre-classified Tier 3 (see docs/CHANGELOG.md §4): systemPending
  * does read-then-delete against SQLite with NO transaction wrapping the two statements — a crash between
  * the SELECT and the DELETE either loses the message (if the crash is after delivery but the caller never
  * gets the response) or, worse, a concurrent second `system.pending` call from a racing second process for

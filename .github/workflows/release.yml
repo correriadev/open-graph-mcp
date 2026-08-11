@@ -1,5 +1,5 @@
 # release.yml — BT-1 beta release pipeline
-# (docs/roadmap-beta-test/01-scope-bt-1-pipeline-artefato.md, BD4/BD6).
+# (docs/CHANGELOG.md BD4/BD6).
 #
 # The `test` job DELIBERATELY duplicates ci.yml's test job (architecture decision): ci.yml only
 # triggers on main pushes / PRs, so a `beta-v*` tag push or a manual dispatch would otherwise have

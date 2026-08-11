@@ -26,7 +26,7 @@ const AGENT_FLAVORS = {
   "claude-code": {
     agentKind: "claude-code",
     name: "Claude Code",
-    docsUrl: "docs/roadmap-integrations/03-scope-int-3-claude-code-plugin.md",
+    docsUrl: "docs/CHANGELOG.md",
     bin: "claude",
     fallbackBins: ["openclaude"],
     versionArgs: ["--version"],
@@ -43,7 +43,7 @@ const AGENT_FLAVORS = {
   opencode: {
     agentKind: "opencode",
     name: "opencode",
-    docsUrl: "docs/roadmap-integrations/04-scope-int-4-opencode-plugin.md",
+    docsUrl: "docs/CHANGELOG.md",
     bin: "opencode-cli",
     fallbackBins: ["opencode"],
     versionArgs: ["--version"],
@@ -61,7 +61,7 @@ const AGENT_FLAVORS = {
   "codex-cli": {
     agentKind: "codex-cli",
     name: "Codex CLI",
-    docsUrl: "docs/roadmap-integrations/README.md",
+    docsUrl: "docs/CHANGELOG.md",
     bin: "codex",
     versionArgs: ["--version"],
     install: {
@@ -77,7 +77,7 @@ const AGENT_FLAVORS = {
   "antigravity-cli": {
     agentKind: "antigravity-cli",
     name: "Antigravity CLI",
-    docsUrl: "docs/roadmap-integrations/README.md",
+    docsUrl: "docs/CHANGELOG.md",
     bin: "agy",
     fallbackBins: ["antigravity"],
     versionArgs: ["--version"],
@@ -95,7 +95,7 @@ const AGENT_FLAVORS = {
   cursor: {
     agentKind: "cursor",
     name: "Cursor",
-    docsUrl: "docs/roadmap-integrations/05-scope-int-5-editor-agents.md",
+    docsUrl: "docs/CHANGELOG.md",
     install: {
       kind: "json",
       configPath: ".cursor/mcp.json",
@@ -110,7 +110,7 @@ const AGENT_FLAVORS = {
   windsurf: {
     agentKind: "windsurf",
     name: "Windsurf",
-    docsUrl: "docs/roadmap-integrations/05-scope-int-5-editor-agents.md",
+    docsUrl: "docs/CHANGELOG.md",
     install: {
       kind: "json",
       configPath: ".windsurf/mcp_config.json",
@@ -125,7 +125,7 @@ const AGENT_FLAVORS = {
   copilot: {
     agentKind: "copilot",
     name: "Copilot",
-    docsUrl: "docs/roadmap-integrations/05-scope-int-5-editor-agents.md",
+    docsUrl: "docs/CHANGELOG.md",
     install: {
       kind: "json",
       configPath: ".github/copilot-instructions.md",
@@ -140,7 +140,7 @@ const AGENT_FLAVORS = {
   zed: {
     agentKind: "zed",
     name: "Zed",
-    docsUrl: "docs/roadmap-integrations/05-scope-int-5-editor-agents.md",
+    docsUrl: "docs/CHANGELOG.md",
     install: {
       kind: "json",
       configPath: ".zed/mcp.json",
@@ -154,7 +154,7 @@ const AGENT_FLAVORS = {
   "gemini-cli": {
     agentKind: "gemini-cli",
     name: "Gemini CLI",
-    docsUrl: "docs/roadmap-integrations/05-scope-int-5-editor-agents.md",
+    docsUrl: "docs/CHANGELOG.md",
     install: {
       kind: "json",
       configPath: ".gemini/mcp.json",
@@ -169,7 +169,7 @@ const AGENT_FLAVORS = {
   web: {
     agentKind: "web",
     name: "Web",
-    docsUrl: "docs/roadmap-integrations/README.md",
+    docsUrl: "docs/CHANGELOG.md",
     install: {
       kind: "manual",
       format: "json",
@@ -183,7 +183,7 @@ const AGENT_FLAVORS = {
   unknown: {
     agentKind: "unknown",
     name: "Unknown",
-    docsUrl: "docs/roadmap-integrations/README.md",
+    docsUrl: "docs/CHANGELOG.md",
     install: {
       kind: "manual",
       format: "json",

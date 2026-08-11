@@ -1,5 +1,5 @@
 /**
- * claim-covers.test.ts — F4 (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md §F4).
+ * claim-covers.test.ts — F4 (docs/CHANGELOG.md §F4).
  *
  * `refs` used to carry two incompatible contracts: ladder adjacency (roundtrip.checkClaims,
  * blocking at commit — every ref must resolve to a CLAIM id) and node coverage (claimCoverage,

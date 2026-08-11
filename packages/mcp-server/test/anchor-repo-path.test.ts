@@ -5,8 +5,8 @@ import path from "node:path"
 import { callTool, register, tempRepo } from "./helpers"
 
 /**
- * store.ts::makeReadFile — pré-classificado Tier 1, "maior valor da campanha" (docs/roadmap-server-beta
- * /00-scope-sb-0-hardening-servidor.md §4). No caminho de PRODUÇÃO (`bun run dev`, index.ts
+ * store.ts::makeReadFile — pré-classificado Tier 1, "maior valor da campanha"
+ * (SB-0 §4, ver docs/CHANGELOG.md). No caminho de PRODUÇÃO (`bun run dev`, index.ts
  * `import.meta.main`) `repoPath` NUNCA é passado a `startServer` — o repo é argumento de
  * `graph.bootstrap`, não config de processo (D1). Este teste reproduz exatamente essa forma:
  * `startServer({})` sem repoPath, tenant indexa via `graph.bootstrap`, então testa o gate de âncora.

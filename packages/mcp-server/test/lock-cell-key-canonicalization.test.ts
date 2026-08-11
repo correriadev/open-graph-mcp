@@ -1,6 +1,6 @@
 /**
  * lock-cell-key-canonicalization.test.ts — achado F7
- * (docs/roadmap-server-beta/01-evidencias-fluxo-completo.md).
+ * (docs/CHANGELOG.md).
  *
  * A trava pessimista era adquirida por igualdade de STRING CRUA sobre a chave de célula. Como
  * `auth:P4` e `auth:4` são a mesma célula lógica mas duas strings diferentes, viravam duas linhas

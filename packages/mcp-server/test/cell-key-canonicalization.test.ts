@@ -1,5 +1,5 @@
 /**
- * cell-key-canonicalization.test.ts — F1 (CRÍTICO), docs/roadmap-server-beta/01-evidencias-fluxo-completo.md.
+ * cell-key-canonicalization.test.ts — F1 (CRÍTICO), docs/CHANGELOG.md
  *
  * `nodesOfCell` (gates.ts) tirava o prefixo "P" do nível do NÓ mas comparava contra a célula CRUA:
  * uma célula escrita "domain:P4" (grafia natural pra quem lê "nível P4" no grafo) nunca batia com

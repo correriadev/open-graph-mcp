@@ -7,7 +7,7 @@ import { callTool, readResource, register, tempRepo, bootstrapAs } from "./helpe
  * (claims commitadas + a nova), sem o que já foi ENCENADO no mesmo changeset aberto. Uma claim-chão
  * (nível 5, refs: []) encenada e, na chamada seguinte do MESMO turno, uma claim de nível 4 apontando
  * pra ela — o roundtrip local via `dangling-ref` num ref que o gate final (que monta o conjunto
- * completo) aceita sem reclamar segundos depois. Ver docs/roadmap-server-beta/01-evidencias-fluxo-completo.md §F3.
+ * completo) aceita sem reclamar segundos depois. Ver docs/CHANGELOG.md §F3.
  */
 test("F3: claim-chão encenada no turno não dispara dangling-ref falso na claim seguinte do mesmo turno", async () => {
   const { root, cleanup } = tempRepo("fresh")

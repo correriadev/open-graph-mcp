@@ -83,7 +83,7 @@ test("a ladder-only claim (no meta refs) is exempt from the floor-anchor check r
 // F8: `claims` (3rd arg) is the REVIEW SCOPE (what gets checked); `allClaimIds` (4th arg, optional) is
 // the RESOLUTION UNIVERSE (what a ref may point at). They used to be the same set, which made every
 // mid-ladder ref look dangling once `claims` was scoped to a single cell (adjacency forces the ref
-// into a DIFFERENT cell by construction). See top-of-file note and docs/roadmap-server-beta.
+// into a DIFFERENT cell by construction). See top-of-file note and docs/CHANGELOG.md
 
 test("F8: without allClaimIds, ref resolution stays scoped to `claims` (back-compat: default = claims)", () => {
   // c2 (level 4) refs c1 (level 5) — c1 is NOT in the reviewed subset, so it looks dangling.
