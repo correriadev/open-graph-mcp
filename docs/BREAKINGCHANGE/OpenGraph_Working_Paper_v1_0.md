@@ -2,7 +2,7 @@
 
 ## Arquitetura cognitiva recursiva sobre substrato epistêmico verificável: planos, horizontes e promoção de autoridade — e o protocolo que a transforma em ecossistema
 
-**Documento de trabalho · versão 1.0-rc3 · 10 de agosto de 2026**
+**Documento de trabalho · versão 1.0-rc4 · 10 de agosto de 2026**
 
 > **Tese central (inalterada desde a v0.2)**
 > Capacidade de inferir não implica autoridade para afirmar. Capacidade de produzir não implica autoridade para persistir.
@@ -50,7 +50,7 @@ A pergunta que a v1.0 responde:
 
 > **O que precisa ser verdadeiro — como mecanismo, como contrato e como evidência — para que a arquitetura cognitiva recursiva deixe de ser a hipótese de um paper e vire a propriedade verificável de um ecossistema aberto — sem que a formalização altere aquilo que formaliza?**
 
-### 0.1 Nota de versão — o que a rc3 fixa
+### 0.1 Nota de versão — o que a rc3 fixou e o que a rc4 fecha
 
 1. **`rc` significa release candidate no sentido epistemológico exato.** Este documento é uma `PROPOSTA` que completou `DELIBERAÇÃO` e define seu próprio critério de `ADMISSÃO` (§0.2). Só perde o sufixo quando a `CONCRETIZAÇÃO` (VS-1, §28) e a `VERIFICAÇÃO` (alpha v1, §29) executarem.
 2. **A rc3 corrige três regressões de tipo conceitual da rc2**, identificadas em auditoria contra a v0.4: (a) a rc2 **trocou a máquina recursiva ao formalizá-la** — `CONCRETIZAÇÃO` desapareceu do ciclo e `PROMOTE` entrou no lugar; a rc3 restaura a máquina de seis estados e reclassifica `PROMOTE`/`CONTEST` como **operadores de fronteira entre ciclos** (§5); (b) a rc2 **colapsou três coordenadas distintas numa escala total** `none < proposto < α < β`, contrariando a definição explícita da v0.4 de que autoridade relativa não é β e de que α/β responde *quem possui a verdade da célula*, não *quanta verdade ela tem*; a rc3 separa status epistêmico, posse da verdade e autoridade relativa de horizonte (§11); (c) a rc2 chamou de "memória de trabalho crua" o que não pode ser memória — a rc3 renomeia para **estado transitório não-memorial de execução** e restaura a Lei 9 e R6 sem relaxamento (§20).
@@ -58,6 +58,7 @@ A pergunta que a v1.0 responde:
 4. **Uma lacuna nova é fechada:** a topologia de horizontes é declarada explicitamente como DAG de fronteiras de promoção — *pai* significa fronteira de promoção, não duração maior (§6).
 5. **Nenhum invariante da baseline é revogado.** I1–I10 permanecem integrais (§1). As nove leis da v0.4 permanecem e ganham três (§34).
 6. **O que não gradua não finge graduar.** Federação ativada, sandbox real, a cidade completa e os baselines externos são explicitamente 1.x (§35).
+7. **A rc4 é cirúrgica e declara o congelamento conceitual.** A auditoria da rc3 não encontrou regressão estrutural — encontrou cinco ambiguidades de segunda ordem, do tipo que só aparece quando a arquitetura fica formal o suficiente para ser implementada: a semântica universal de `CONCRETIZE` (§5.1.1), a tipagem única de `suspended` (§11, D-16), o contrato de iniciação `sessão → negociação` (§6.1), a distinção nominal entre as duas máquinas (§5.1.2, Apêndice B) e o endurecimento de `STALE_BASE` (§7). A rc4 as fecha e **para**: continuar melhorando no papel a partir daqui contrariaria [G1]. O próximo ganho de autoridade não vem de outra formulação — vem de VS-1a → VS-1b → VS-1c → alpha v1. **Pensar mais deixou de ser a próxima etapa correta; concretizar passou a ser.**
 
 ### 0.2 Regras de graduação *[G]*
 
@@ -206,6 +207,8 @@ OPERADORES DE FRONTEIRA — entre ciclos, nunca dentro deles
 
 PROMOTE     autoridade_relativa completa no filho  ──►  PROPOSE no pai (topologia §6)
 CONTEST     evidência em qualquer horizonte        ──►  desafio a conteúdo admitido em outro
+INITIATE    contexto com proveniência              ──►  PROPOSE em horizonte novo,
+                                                        sem transferir autoridade (§6.1)
 
 
 CORREÇÃO — sobre o estado persistente
@@ -222,12 +225,52 @@ Pré-condições, pós-condições e modos de recusa:
 | `PROPOSE` | proponente com escopo de submissão; conteúdo com âncoras e proveniência; `based_on_seq` declarado | candidato registrado no horizonte, status `proposed`; nada mudou de autoridade | `PROVENANCE_MISSING` · `TURN_SCOPE` · `STALE_BASE` (aviso) |
 | `DELIBERATE` | existe candidato `proposed` | questões, conflitos, resoluções e assumptions registrados; `SUPPORTED/UNKNOWN/AMBIGUOUS/INFERRED/CONFLICTING` distinguíveis | não recusa — registra |
 | `ADMIT` | candidato deliberado; gate do horizonte disponível | veredito cego ao chamador: `admitted` no escopo do horizonte, ou recusa com razões | taxonomia de admissão (§5.2) |
-| `CONCRETIZE` | conteúdo admitido no escopo; budget disponível | artefatos/efeitos produzidos **pela rota operacional** (gateway §16); evidências de execução registradas | `TOOL_UNCLASSIFIED` · `TOOL_OUT_OF_CONTRACT` · `BUDGET_EXHAUSTED` |
+| `CONCRETIZE` | conteúdo admitido no escopo; budget disponível | **o conteúdo admitido materializado na forma concreta própria do horizonte** (§5.1.1); onde a materialização tem efeito externo, atravessa o gateway (§16) com evidências de execução | `TOOL_UNCLASSIFIED` · `TOOL_OUT_OF_CONTRACT` · `BUDGET_EXHAUSTED` |
 | `VERIFY` | concretização com evidência re-checável offline | verificação concedida/negada; no persistente, é onde cobertura sustenta posse β e drift/recall degradam | `ANCHOR_NOT_FOUND` · `COVERAGE_UNBALANCED` · `ROUNDTRIP_FAILED` |
 | `AUTHORITY_relativa` | ciclo completo no horizonte | o horizonte pode exercer o que sua autoridade relativa habilita (tabela da v0.4 §4.2) — e **nada além** | — estado, não verbo |
 | `PROMOTE` | `AUTHORITY_relativa` completa; `PromotionProposal` válida (§7); alvo é o pai topológico | candidato `proposed` no pai — **nunca mais que isso** | `HORIZON_SKIP` · `AUTHORITY_REF_INVALID` · `ASSUMPTION_DROPPED` · `STALE_BASE` |
 | `CONTEST` | evidência ancorável contra alvo admitido | evento tipado com severidade; Router decide transição | `EVIDENCE_REQUIRED` |
+| `INITIATE` | contexto relevante num horizonte de origem; intenção declarada | seed registrado como `PROPOSE` no horizonte novo — referências e proveniência atravessam; **autoridade não** (§6.1) | `PROVENANCE_MISSING` |
 | `RECALL` | `Contestation(invalidante)` admitida contra o persistente | cascata sobre o grafo de derivação admitido; histórico intacto; `seq` avança | `RECALL_UNPROVEN` · `DIRECT_EDIT_FORBIDDEN` |
+
+#### 5.1.1 A semântica universal dos seis estados *[E — correção da rc4]*
+
+A rc3 associou `CONCRETIZE` à rota operacional e ao Tool Gateway. Isso é verdadeiro **apenas onde há efeito externo** — microtask e transformação. Tomado como definição, deixaria a máquina nominalmente recursiva mas semanticamente definida só no horizonte técnico. A definição universal:
+
+> **`CONCRETIZE` = materializar o conteúdo admitido na forma concreta própria daquele horizonte.** O Capability Gateway é a implementação da sua borda externa em certos horizontes — não a sua definição.
+
+E o mesmo vale para os outros cinco: implementações diferem por horizonte; **a relação abstrata precisa sobreviver aos cinco.** A tabela normativa — não para igualar implementações, mas para demonstrar que a mesma abstração atravessa:
+
+| | Sessão | Negociação | Transformação | Microtask | Persistente |
+|---|---|---|---|---|---|
+| `PROPOSE` | pergunta / intenção do operador | questão, hipótese candidata | decomposição / WorkOrder candidata | abordagem candidata da tarefa | claim / delta candidato |
+| `DELIBERATE` | confronto com o já respondido | questões, conflitos, assumptions | dependências, riscos, ordenação | tentativas e alternativas | análise de impacto, revisão |
+| `ADMIT` | ponto aceito como resolvido na sessão | questão aceita no escopo da negociação | WorkOrder emitida sob contrato | abordagem aceita para execução | claim admitida pelo gate |
+| `CONCRETIZE` | resposta contextualizada / decisão explicitada | hipótese preditiva / contrato candidato | composição coerente dos resultados aceitos | artefato / teste / análise / ação (via gateway §16) | delta incorporado ao objeto oficial |
+| `VERIFY` | resposta confrontada com o persistente (`seq`) | hipótese confrontada com estado e operador | resultados confrontados com o contrato | evidência de execução re-checável | âncora, cobertura, roundtrip |
+| `AUTHORITY_relativa` | não reabrir o ponto na sessão | instanciar a transformação | propor promoção ao persistente | devolver resultado aceito ao médio | compor o estado oficial versionado |
+
+As três relações que **nunca** mudam de significado, em qualquer coluna:
+
+- `ADMIT` sempre significa: *algo saiu de candidato e foi aceito como base legítima para a concretização naquele horizonte.*
+- `VERIFY` sempre significa: *confrontar o concretizado com aquilo que foi admitido.*
+- `AUTHORITY_relativa` sempre significa: *o verificado passa a poder governar operações dentro daquele horizonte — e nada além.*
+
+A VS-1 verifica a **relação**, não os rótulos: seis labels não são seis estados. Uma implementação cujo `ADMIT` de sessão não distingue candidato de aceito tem cinco estados com seis nomes — e falha a conformidade L3 por semântica, não por sintaxe.
+
+#### 5.1.2 Duas máquinas, declaradas como duas *[E — correção da rc4]*
+
+O documento contém dois autômatos, e o leitor não deve descobri-lo sozinho:
+
+```
+EPISTEMIC LIFECYCLE MACHINE          "em que estágio epistemológico está este
+  (§5.1 — por OpenGraph)              conhecimento, neste OpenGraph?"
+
+WORKFLOW ORCHESTRATION STATECHART    "em que estágio operacional está a
+  (Apêndice B — do Router)            sessão/mudança como um todo?"
+```
+
+`Workflow: EXECUTING` **não** significa que todos os OpenGraphs estão em `CONCRETIZE`. Num instante real: `WO-1 → AUTHORITY`, `WO-2 → VERIFY`, `WO-3 → DELIBERATE` — e o workflow simplesmente `EXECUTING`. A composição é **coordenação de autômatos**: os hosts possuem os lifecycles; o Router observa-os e decide as transições do workflow — um produto coordenado, não uma máquina única. Confundi-las na implementação produziria a versão de statechart do erro que I5 pagou: duas semânticas sob um nome.
 
 A linha divisória do protocolo — corrigida. A rc2 afirmou "DELIBERATE é o único verbo probabilístico; todos os que decidem são determinísticos", e isso contradiz a própria arquitetura: o Intermediador existe *porque* avaliar qualidade exige inteligência, e "esta arquitetura está coerente?", "este contrato satisfaz a intenção?", "este layout resolve a necessidade?" não têm teste determinístico. A formulação correta:
 
@@ -251,7 +294,7 @@ I6 estabeleceu que recusa é registrada como recusa, com razões. A v1.0 eleva a
 | Fronteira | `HORIZON_SKIP` *[E]* | `target_horizon` não é o pai na topologia declarada (§6) | propor ao pai topológico |
 | Fronteira | `AUTHORITY_REF_INVALID` *[E]* | `source_authority_ref` inexistente ou ciclo incompleto no filho | completar o ciclo no horizonte de origem |
 | Fronteira | `ASSUMPTION_DROPPED` *[E]* | assumption presente no filho ausente da proposta | reintroduzir ou resolver com registro |
-| Fronteira | `STALE_BASE` *[E]* | `based_on_seq` anterior ao `seq` corrente | rebase explícito ou aceite de defasagem pelo operador |
+| Fronteira | `STALE_BASE` *[E]* | `based_on_seq` anterior ao `seq` corrente | para **promover**: rebase/revalidação, sem exceção; `OperatorApproval` de defasagem autoriza apenas continuar concretizando sob risco (§7) |
 | Operador | `SCOPE_EXCEEDED` *[E]* | aprovação fora do `scope` declarado | re-escalar com escopo correto |
 | Operador | `APPROVAL_EXPIRED` / `APPROVAL_STALE_SEQ` *[E]* | `ttl` vencido / `based_on_seq` defasado | obter aprovação nova — consentimento antigo não é consentimento |
 | Operador | `EVIDENCE_REQUIRED` *[E]* | tentativa de aprovar o inaprovável: criar âncora, dar cobertura, cancelar cascata | não existe caminho — recusa terminal por desenho |
@@ -351,6 +394,25 @@ Três consequências:
 
 > **Decisão D-4 — Adjacência pela topologia declarada.** Toda promoção atravessa exatamente uma fronteira do DAG normativo. **Alternativas rejeitadas:** (a) cadeia linear por duração — falsa (sessão) e ambígua (negociação vs microtask); (b) salto com "endosso" do intermediário — autoridade por assinatura, R1 com passos extras; (c) promoção direta com auditoria posterior — auditoria posterior de contaminação é limpeza, não prevenção. **Consequências:** latência — uma descoberta de microtask relevante ao persistente atravessa dois gates; a via rápida legítima para urgência é `CONTEST`, que não exige promoção. **Reversibilidade:** estender o DAG é barato; permitir salto é afrouxamento de contrato — baixa.
 
+### 6.1 `INITIATE`: iniciar um horizonte não é promover *[E — lacuna fechada na rc4]*
+
+A aresta `sessão —inicia→ negociação` estava correta e incompleta: correta porque continuidade não é promoção; incompleta porque **alguma coisa precisa atravessar**. O cenário concreto: operador e Maître discutem gateways de pagamento por vinte minutos — na sessão já existem a preferência pelo Stripe, as razões que descartaram a alternativa, a constraint de recorrência, a decisão de não armazenar cartão. O operador diz: *"então vamos implementar."* A negociação não pode nascer amnésica; e também não pode nascer por **cópia de memória da sessão** — isso seria exatamente o canal inter-horizonte não governado que R6 proíbe.
+
+O operador de fronteira que faltava:
+
+```
+NegotiationSeed {
+  intent                // a intenção declarada que abre a negociação
+  session_refs[]        // referências ao OpenGraph de sessão — ponteiros, não cópia
+  operator_decisions[]  // decisões já explicitadas na sessão, com proveniência
+  based_on_seq
+}
+```
+
+Semântica: `sessão —INITIATE→ negociação` registra o seed, e **tudo que ele carrega entra na negociação como `proposed`** — a preferência pelo Stripe chega como contexto proposto com proveniência, não como fato. A negociação delibera a partir dele; nada herda autoridade por ter sido dito na sessão. Seed sem referências ou proveniência: `PROVENANCE_MISSING`.
+
+A generalização que fecha o desenho: **`INITIATE` já existia disfarçado.** A `WorkOrder` é o seed da fronteira `transformação → microtask`, e o `ChangeContract` cumpre papel análogo em `negociação → transformação`. O `NegotiationSeed` fecha a única fronteira de iniciação que não tinha contrato — e com isso **toda aresta do DAG tem contrato tipado**: iniciação carrega contexto sem autoridade; promoção carrega autoridade destilada sob nova admissão; contestação carrega evidência.
+
 ## 7. `PromotionProposal`: o atravessamento como objeto de primeira classe *[E → G]*
 
 ```
@@ -371,7 +433,7 @@ Cinco regras, todas verificáveis pelo host receptor sem julgamento probabilíst
 
 1. **Topologia.** `target_horizon` é o pai declarado no DAG (§6). Recusa: `HORIZON_SKIP`. Se saltar fosse possível, o horizonte intermediário viraria teatro.
 2. **Autoridade de origem é credencial de submissão, não mérito.** O host verifica que `source_authority_ref` completou o ciclo de seis estados no filho — e então avalia `distilled[]` do zero, cego ao chamador. **Autoridade no filho compra o direito de propor; não compra um voto.** É R5 em forma mecânica, e é a regra 2 da propagação (§11).
-3. **`based_on_seq` obrigatório e validado.** Persistente avançou ⇒ `STALE_BASE`: rebase explícito ou aceite de defasagem pelo operador (§14). Estende R3 ao atravessamento.
+3. **`based_on_seq` obrigatório, validado — e endurecido na rc4.** Persistente avançou ⇒ `STALE_BASE`: **promover exige rebase ou revalidação explícita, sem exceção.** O que o operador pode aceitar é a defasagem *operacional* — continuar concretizando sobre base antiga, sob risco declarado (§14); o que ninguém pode aprovar é a conversão de defasagem em frescor epistemológico. É a tese do root intencional aplicada a `seq`: **risco é decidível; atualidade não.** Estende R3 ao atravessamento.
 4. **`assumptions[]` conservadas ou resolvidas, nunca omitidas.** Omissão detectada por comparação estrutural com o grafo filho: `ASSUMPTION_DROPPED`. A lavanderia de suposições fica proibida exatamente onde seria mais lucrativa — a fronteira.
 5. **`excluded_summary` obrigatório.** O receptor sabe *quanto* ficou para trás sem receber o ruído; o audit registra a contagem na destruição do filho. **Destruir memória é legal (Lei 9); destruir sem registro não é.**
 
@@ -443,8 +505,9 @@ RecallNotice admitido pelo gate           ◄── recall pode ser RECUSADO (RE
 fechamento sobre o grafo de derivação ADMITIDO
       │   closure = deps⁻¹(target_claims), transitivo
       ▼
-toda claim/célula no fechamento degrada de status:
-      admitted → suspended   (com cicatriz — §26)
+o fechamento degrada duas coordenadas, cada uma no seu tipo (§11, D-16):
+      claims:              status   admitted → contested
+      células de posse β:  posse    graph → suspended   (com cicatriz — §26)
       │
       ▼
 audit log: evento + fechamento calculado + contagem
@@ -488,24 +551,31 @@ A rc2 introduziu uma escala total — `none < proposto < admitido(α) < possuíd
 Uma célula α não é "menos verdadeira" que uma célula β. São regimes de posse diferentes — e ordená-los numa escala de confiabilidade mistura dimensões. A rc3 separa três coordenadas ortogonais:
 
 ```
-STATUS EPISTÊMICO        proposed · admitted · contested · suspended · revoked
-   trajetória de qualquer claim/célula, em qualquer horizonte
-   (supersessão: vocabulário de [23] mapeado no Apêndice A)
+STATUS EPISTÊMICO        proposed · admitted · contested · superseded · revoked
+   trajetória de qualquer claim, em qualquer horizonte
+   (vocabulário de [23] mapeado no Apêndice A)
 
-POSSE DA VERDADE         source (α) · graph (β)
-   exclusiva do persistente; responde QUEM possui, não QUANTO vale
-   move-se por prova (cobertura ⇒ β) e por degradação (drift/recall ⇒ de volta)
+POSSE DA VERDADE         source (α) · graph (β) · suspended
+   exclusiva das células do persistente; responde QUEM possui, não QUANTO vale
+   conquista-se por prova (cobertura ⇒ β); degrada por drift ou recall
 
 AUTORIDADE RELATIVA      incompleta · completa
    o horizonte completou seu ciclo de seis estados?
-   completa habilita exatamente o que a tabela da v0.4 §4.2 lista — e PROMOTE
+   completa habilita exatamente o que a tabela da §5.1.1 lista — e PROMOTE
 ```
+
+**A tipagem de `suspended` — ambiguidade herdada, resolvida na rc4.** A baseline sempre tratou `α / β / suspended` como o gradiente da célula, e o comportamento pago pelo tripwire decide a questão: `structural drift → suspended`, `gone → source` são transições de **posse** — e a rc3, ao listar `suspended` também como status de claim, criou duas semânticas sob a mesma palavra: um F1 em potencial. A resolução:
+
+> **`suspended` é um valor de POSSE, e só de posse.** À pergunta *"quando uma célula está suspensa, quem possui a verdade?"* a resposta é: **ninguém, plenamente.** O grafo perdeu a prova que sustentava β, e a fonte não reassume automaticamente — a célula fica sem possuidor pleno, com cicatriz, até re-prova (⇒ β) ou demoção explícita (⇒ source, o caminho que `gone` já executa). Claims degradadas usam `contested`/`revoked` no **status** — nunca `suspended`.
+
+> **Decisão D-16 — `suspended` é posse, e só posse.** Uma palavra, um tipo. **Alternativas rejeitadas:** (a) `suspended` nas duas dimensões (estado herdado pela rc3) — duas representações da mesma palavra com semânticas diferentes: a receita exata de F1; (b) `suspended` como status de claim e um nome novo ("broken") para a célula — inventa vocabulário para a semântica que a baseline já pagou sob o nome existente (I3 usa `suspended` para células desde o tripwire). **Consequências:** a cascata do recall degrada **duas coordenadas com dois nomes** (§10.1); logs e interfaces jamais exibem `suspended` para uma claim — violação disso é bug de conformidade, não estilo. **Reversibilidade:** baixa depois que logs e clientes dependerem do vocabulário.
 
 Um mesmo elemento tem posição nas três — a extensão natural das coordenadas de estado da v0.4 §4 (durabilidade, status, horizonte), agora com a posse separada do status. Sobre essas coordenadas, três regras de propagação — nenhuma delas um `min` sobre α/β:
 
 ```
-(1) PROPAGAÇÃO DE DEGRADAÇÃO (status)
-    se dep(c) degrada para suspended/revoked, c não permanece admitted:
+(1) PROPAGAÇÃO DE DEGRADAÇÃO
+    se dep(c) degrada — status contested/revoked na claim, ou posse suspended
+    na célula que a sustenta — c não permanece admitted:
     a degradação propaga por deps⁻¹ — é o fechamento que o recall calcula,
     e o mesmo gatilho que o drift (I3) já dispara. Recall e drift são
     dois gatilhos da mesma propagação: o mundo mudando sob a claim,
@@ -549,7 +619,7 @@ Quatro precisões da v1.0:
 A transição `NEGOTIATING → CHANGE_READY` exige uma `AcceptedPredictiveHypothesis` satisfazendo três predicados mecânicos:
 
 > **(a)** `unresolved[]` vazio, **ou** cada residual aceito pelo operador como risco assumido, com `OperatorApproval` registrada;
-> **(b)** `based_on_seq` corrente, **ou** defasagem aceita com registro;
+> **(b)** `based_on_seq` corrente, **ou** defasagem aceita com registro — o aceite autoriza iniciar e concretizar sob risco; a promoção final ao persistente continua exigindo rebase (§7);
 > **(c)** toda `assumption` com dono e consequência declarada.
 
 O Guardião *recomenda* prontidão; o Router *verifica* os predicados — estrutura, não julgamento. O que o predicado deliberadamente não captura: se a hipótese é *boa*. Hipótese ruim com questões honestamente fechadas passa, e deve passar — o lugar de pagar por hipótese ruim é a concretização e a verificação, não um juiz probabilístico na transição.
@@ -594,7 +664,7 @@ A linha que separa as duas colunas, em uma frase:
 
 > **O operador pode assumir riscos declarados. Não pode fabricar evidência.** "Aceito esse risco" é uma decisão — e é dele. "Essa evidência existe" é um fato — e não se decide.
 
-O que a aprovação **pode**: fechar `unresolved[]` como risco assumido (§13a), aceitar defasagem de `seq` (§13b), autorizar irreversíveis nomeados no contrato (§16), escolher transições no escalonamento (§15). O que **não pode**, com a recusa correspondente: fazer âncora inexistente existir (`EVIDENCE_REQUIRED` — I1 não tem exceção humana), dar cobertura a célula descoberta (idem — I2), converter posse em β por assinatura, cancelar cascata calculada. O gate recusa aprovação fora de escopo pela mesma via que recusa claim sem chão — com registro (I6).
+O que a aprovação **pode**: fechar `unresolved[]` como risco assumido (§13a), aceitar defasagem de `seq` para continuar concretizando sob risco (§13b) — nunca para promover (§7), autorizar irreversíveis nomeados no contrato (§16), escolher transições no escalonamento (§15). O que **não pode**, com a recusa correspondente: fazer âncora inexistente existir (`EVIDENCE_REQUIRED` — I1 não tem exceção humana), dar cobertura a célula descoberta (idem — I2), converter posse em β por assinatura, cancelar cascata calculada. O gate recusa aprovação fora de escopo pela mesma via que recusa claim sem chão — com registro (I6).
 
 Por que isso não é tratar pessoa e LLM como equivalentes — não são, e a arquitetura o diz estruturalmente. A soberania intencional é **exclusiva do humano**: nenhum agente de silício possui uma célula sequer da coluna esquerda. O que é simétrico é apenas a coluna direita — a impossibilidade de fabricar evidência — e por três razões:
 
@@ -622,9 +692,9 @@ O operador escolhe entre transições que o statechart permite — a intervenç�
 
 > **Nenhum caminho de escalonamento termina em promoção implícita.** Timeout aborta; abandono aborta; exaustão aborta (R9). Um sistema que promove quando ninguém decide é um sistema cuja política real é o cansaço.
 
-## 16. Capability / Tool Gateway: onde a `CONCRETIZAÇÃO` acontece *[E]*
+## 16. Capability / Tool Gateway: a borda externa da `CONCRETIZAÇÃO` *[E]*
 
-Todo efeito de Técnico no mundo atravessa o gateway — a rota operacional da v0.4 §3.1, agora com o desenho que faltava. É aqui que o verbo `CONCRETIZE` executa: admitido o trabalho no escopo do horizonte, o agente age no mundo por ferramentas classificadas — e nada do que a ação produz é conhecimento até `VERIFY`.
+Todo efeito no mundo atravessa o gateway — a rota operacional da v0.4 §3.1, agora com o desenho que faltava. A precisão da rc4: o gateway **não define** `CONCRETIZE` — implementa sua borda externa. Todo horizonte concretiza na forma que lhe é própria (§5.1.1: uma resposta na sessão, uma hipótese na negociação, uma composição na transformação); somente onde a materialização produz efeito fora do OpenGraph — arquivo, processo, rede — ela atravessa o gateway por ferramentas classificadas. E nada do que a ação produz é conhecimento até `VERIFY`.
 
 | Classe | Exemplos | Política |
 |---|---|---|
@@ -810,7 +880,7 @@ O Intermediador julga — `AuditAssessment`: *"adequado; o teste de regressão n
 
 **7 — Promoção ao persistente.** Tudo aceito no médio; `AUTHORITY_relativa` da transformação completa. O `PersistentDelta` (changeset nas células + `checkout-guest×4`; supersessão da claim de minimização; coverage_delta) atravessa **o gate da baseline** — que avalia do zero, cego à origem. Uma claim recusada: `ANCHOR_NOT_FOUND` — o Técnico ancorou em linha que a própria transformação moveu. Correção, re-submissão, admissão. `PROMOTING → DONE`, `seq = 4103`. Em nenhum momento "os Técnicos terminaram" implicou "o projeto agora é assim": três fronteiras separaram uma coisa da outra.
 
-**8 — Recall, três semanas depois.** O escritório publica errata: a lei alcança também "medicamentos de venda livre". Semver de intenção: **major**. O manifesto `m-18` chega com `RecallNotice` federado; na importação (nunca por rede no gate), a cascata executa **sobre o grafo de derivação admitido**: a claim *"as categorias sujeitas são exatamente {bebidas}"* está no fechamento — `admitted → suspended`, com cicatriz; `catalog×5` degrada; o `seq` avança e transformações em voo sobre catalog ficam `STALE_BASE` automaticamente. O painel mostra a fratura, não um reset. O time reabre o ciclo para re-conquistar a célula. A claim antiga permanece no histórico como o que o sistema *acreditava* entre 4103 e 4171 — porque é isso que explica como o produto se comportou no intervalo. E se alguma claim local dependia da lei *sem aresta de derivação registrada*, a cascata não a alcançou — o preço da preguiça de proveniência, agora visível e mensurável (§10.2).
+**8 — Recall, três semanas depois.** O escritório publica errata: a lei alcança também "medicamentos de venda livre". Semver de intenção: **major**. O manifesto `m-18` chega com `RecallNotice` federado; na importação (nunca por rede no gate), a cascata executa **sobre o grafo de derivação admitido**: a claim *"as categorias sujeitas são exatamente {bebidas}"* está no fechamento — status `admitted → contested`; a posse de `catalog×5` degrada `graph → suspended`, com cicatriz (D-16: dois nomes, duas coordenadas); o `seq` avança e transformações em voo sobre catalog ficam `STALE_BASE` automaticamente. O painel mostra a fratura, não um reset. O time reabre o ciclo para re-conquistar a célula. A claim antiga permanece no histórico como o que o sistema *acreditava* entre 4103 e 4171 — porque é isso que explica como o produto se comportou no intervalo. E se alguma claim local dependia da lei *sem aresta de derivação registrada*, a cascata não a alcançou — o preço da preguiça de proveniência, agora visível e mensurável (§10.2).
 
 O exemplo encerra onde a tese sempre esteve: em nenhum passo alguém precisou de honestidade voluntária. **Cada transição foi barata de fazer certo e estruturalmente cara de fazer errado.**
 
@@ -824,7 +894,7 @@ Três instrumentos, em ordem de custo: **VS-1** (§28) prova mecanismo; **alpha 
 
 ## 28. VS-1: a fatia vertical *[G]*
 
-**VS-1a — contratos em isolamento, sem LLM.** `PromotionProposal`, `PersistentDelta`, `Contestation`, `RecallNotice`, `OperatorApproval`, `Escalation`, topologia, guardas do statechart, cascata e propriedades de propagação (conservação por coordenada, fechamento, diamante, aciclicidade — property-based, com as regras da §11 como oráculo). Se a mecânica falha sem inteligência, nada mais tem sentido. Cobre [G3], [G5], [G6].
+**VS-1a — contratos em isolamento, sem LLM.** `NegotiationSeed`, `PromotionProposal`, `PersistentDelta`, `Contestation`, `RecallNotice`, `OperatorApproval`, `Escalation`, topologia, guardas do statechart, cascata e propriedades de propagação (conservação por coordenada, fechamento, diamante, aciclicidade — property-based, com as regras da §11 como oráculo), e a conformidade **semântica** dos seis estados por horizonte, com a tabela da §5.1.1 como oráculo de revisão — seis labels não são seis estados. Se a mecânica falha sem inteligência, nada mais tem sentido. Cobre [G3], [G5], [G6].
 
 **VS-1b — um par de horizontes real.** Intermediador (cliente) + host do médio + um Técnico em tarefa real: WorkOrder, gateway com as três classes, loop `AuditAssessment`/`AuditDecision` até `accepted` ou escalonamento, promoção curto→médio. Mede H2 e H1 no par mais barato; o ledger produz os primeiros números de H9.
 
@@ -1012,7 +1082,7 @@ AuditDecision {                          // consequência governada — segue o 
 }
 ```
 
-Novos da v1.0 (definidos em §7–§10, §14–§15): `PromotionProposal`, `PersistentDelta`, `Contestation`, `RecallNotice`, `OperatorApproval`, `Escalation`.
+Novos da v1.0 (definidos em §6.1, §7–§10, §14–§15): `NegotiationSeed`, `PromotionProposal`, `PersistentDelta`, `Contestation`, `RecallNotice`, `OperatorApproval`, `Escalation`.
 
 Proveniência mínima — alinhada a PROV-O [12] no vocabulário, sem importar a ontologia. `derivation` deixa de ser burocracia: é o limite físico do recall (§10.2):
 
@@ -1028,11 +1098,15 @@ Provenance {
 Estados de supersessão — vocabulário de [23] adotado, mapeado sobre o da v0.4 (dimensão STATUS da §11, jamais misturada com posse α/β):
 
 ```
-ratified ↔ ACTIVE      superseded ↔ SUPERSEDED
-rejected ↔ REVOKED     abstained  ↔ CHALLENGED
+ratified ↔ ACTIVE ↔ admitted          superseded ↔ SUPERSEDED ↔ superseded
+rejected ↔ REVOKED ↔ revoked          abstained  ↔ CHALLENGED ↔ contested
 ```
 
-## Apêndice B — Statechart com guardas *[E]*
+Três vocabulários, uma dimensão — a coluna da direita é o STATUS da §11, e é a forma normativa; as demais são mapeamento histórico ([23]) e legado (v0.4). `suspended` não aparece aqui por definição: é posse, não status (D-16).
+
+## Apêndice B — Workflow Orchestration Statechart *[E]*
+
+Este é o autômato **operacional** do Router — não a Epistemic Lifecycle Machine da §5.1, e não a substitui (§5.1.2). `EXECUTING` no workflow não implica que os OpenGraphs estejam em `CONCRETIZE`: num instante real, WO-1 pode estar em `AUTHORITY`, WO-2 em `VERIFY`, WO-3 em `DELIBERATE`. A composição é coordenação: os hosts possuem os lifecycles; o Router os observa e decide as transições abaixo.
 
 Estados: `CHAT · QUERY · NEGOTIATING · CHANGE_READY · PLANNING · EXECUTING · VERIFYING · WAITING_HUMAN · PROMOTING · DONE · ABORTED`
 
@@ -1067,6 +1141,9 @@ Propriedade global verificável: **não existe caminho para `PROMOTING` ou `DONE
 | Duas rotas, fronteira única | [E] | [B] via gateway §16 + T11 |
 | Recursividade instrumentada (operadores de fronteira) | [E] | [B] via VS-1 **ou revogada** (H1) |
 | Topologia de horizontes como DAG | — (intuição) | [B] — declarada, testada por `HORIZON_SKIP` |
+| `INITIATE` / `NegotiationSeed` | — (fronteira informal) | [B] via VS-1c — contexto atravessa com proveniência, autoridade não |
+| Tipagem única de `suspended` (posse) | — (ambíguo desde a baseline) | [B] — vocabulário verificado em logs e telas |
+| Semântica universal dos seis estados (§5.1.1) | [E] implícito | [B] — conformidade L3 verifica a relação, não os rótulos |
 | Memória = OpenGraph por horizonte | [E] | [B] com semântica normativa + referência (D-12) |
 | Scratch não-memorial | — | [B] — teste de reutilização; R6 integral |
 | Hipótese Preditiva Aceita / `CHANGE_READY` | [E]/[A] | [B] via predicado §13 [G6] |
