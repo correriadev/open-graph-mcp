@@ -20,6 +20,7 @@ import { presenceWho, presenceFocus, presenceBeat } from "./tools/presence"
 import { systemPending } from "./system-message"
 import { presenceTyping } from "./tools/typing"
 import { resolveResource, RESOURCE_LIST } from "./resources"
+import { eapInitiate, eapPropose, eapPromote, eapContest, eapRecall } from "./tools/eap"
 
 function tenantOf(state: ServerState, token: unknown): string {
   // Ausência de token é INTENCIONAL e load-bearing (D13): o web client lê graph://snapshot no
@@ -166,24 +167,42 @@ const TOOLS = [
     description: "Drain (return and clear) system.message text queued for the caller since their last poll. Stateless — safe to call from a fresh process with no live SSE connection.",
     inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" } } },
   },
+  {
+    name: "cognitive.initiate",
+    description: "Initiate an Epistemic Horizon under EAP.",
+    inputSchema: { type: "object", required: ["token", "horizonId"], properties: { token: { type: "string" }, horizonId: { type: "string" }, parentId: { type: "string" } } },
+  },
+  {
+    name: "cognitive.propose",
+    description: "Submit or advance an Epistemic Lifecycle proposal.",
+    inputSchema: { type: "object", required: ["token", "horizonId", "candidateId", "command"], properties: { token: { type: "string" }, horizonId: { type: "string" }, candidateId: { type: "string" }, command: { type: "string" } } },
+  },
+  {
+    name: "cognitive.promote",
+    description: "Promote knowledge across immediate topological parent edge.",
+    inputSchema: { type: "object", required: ["token", "childHorizonId", "targetParentHorizonId"], properties: { token: { type: "string" }, childHorizonId: { type: "string" }, targetParentHorizonId: { type: "string" } } },
+  },
+  {
+    name: "cognitive.contest",
+    description: "Submit evidence-backed contestation against admitted claims.",
+    inputSchema: { type: "object", required: ["token", "targetClaimIds", "severity", "evidence"], properties: { token: { type: "string" }, targetClaimIds: { type: "array" }, severity: { type: "string" }, evidence: { type: "array" } } },
+  },
+  {
+    name: "cognitive.recall",
+    description: "Initiate resumable recall from an admitted invalidating contestation.",
+    inputSchema: { type: "object", required: ["token", "contestationId"], properties: { token: { type: "string" }, contestationId: { type: "string" } } },
+  },
 ]
 
 function callTool(state: ServerState, name: string, args: any): unknown {
   switch (name) {
     case "graph.bootstrap":
-      // Um comando só: indexa o repo E persiste no tenant do chamador. Eram dois
-      // (`graph.bootstrap` publicava em memória, `graph.import` levava ao banco) e ninguém
-      // encadeava — o grafo sumia no restart. requireToken (não tenantOf, que cai em
-      // DEFAULT_TENANT em silêncio): indexar ESCREVE.
       return graphBootstrap(state, args)
     case "graph.query":
       return query(state, { terms: args.terms, domain: args.domain, layer: args.layer, limit: args.limit }, tenantOf(state, args.token))
     case "graph.impact":
       return impact(state, args, tenantOf(state, args.token))
     case "graph.subscribe":
-      // Sem default de filters aqui: inputSchema já marca `filters` required, e subscribe() valida
-      // Array.isArray explicitamente — um `?? []` aqui mascararia um caller que manda `filters`
-      // ausente/malformado atrás de um "sucesso" silencioso em vez do erro que ele devia ver.
       return subscribe(state, args.sessionId, args.filters, args.token)
     case "graph.rebuild":
       return graphRebuild(state, args)
@@ -215,6 +234,16 @@ function callTool(state: ServerState, name: string, args: any): unknown {
       return presenceTyping(state, args)
     case "system.pending":
       return systemPending(state, args)
+    case "cognitive.initiate":
+      return eapInitiate(state, args)
+    case "cognitive.propose":
+      return eapPropose(state, args)
+    case "cognitive.promote":
+      return eapPromote(state, args)
+    case "cognitive.contest":
+      return eapContest(state, args)
+    case "cognitive.recall":
+      return eapRecall(state, args)
     default:
       throw new Error(`unknown tool: ${name}`)
   }

@@ -16,7 +16,23 @@ import { normalizeRecoveredClaimLevel } from "./claim-level"
 import { canonicalCell } from "./cell"
 
 /** Tabelas duráveis espelhadas em JSONL, na ordem de replay do rebuild. */
-export const DURABLE_TABLES = ["tenants", "users", "nodes", "edges", "claims", "authority", "changesets", "cs_deltas", "events"] as const
+export const DURABLE_TABLES = [
+  "tenants",
+  "users",
+  "nodes",
+  "edges",
+  "claims",
+  "authority",
+  "changesets",
+  "cs_deltas",
+  "events",
+  "horizons",
+  "admission_decisions",
+  "contestations",
+  "recalls",
+  "candidates",
+  "proposals",
+] as const
 /** Todas as tabelas com tenant_id (durables + índice live). */
 const ALL_TABLES = [...DURABLE_TABLES, "locks", "system_messages"] as const
 
@@ -100,6 +116,86 @@ CREATE TABLE IF NOT EXISTS tokens (
   PRIMARY KEY (token_hash)
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_expires ON tokens (expires_at);
+
+CREATE TABLE IF NOT EXISTS horizons (
+  tenant_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  parent_id TEXT,
+  state TEXT NOT NULL,
+  seq INTEGER NOT NULL DEFAULT 0,
+  budget_allocated INTEGER NOT NULL DEFAULT 0,
+  budget_consumed INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_horizons_tenant_parent ON horizons (tenant_id, parent_id);
+
+CREATE TABLE IF NOT EXISTS admission_decisions (
+  tenant_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  horizon_id TEXT NOT NULL,
+  candidate_id TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  refusal_code TEXT,
+  refusal_obligation TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_admission_decisions_tenant_seq ON admission_decisions (tenant_id, seq);
+CREATE INDEX IF NOT EXISTS idx_admission_decisions_tenant_candidate ON admission_decisions (tenant_id, candidate_id);
+
+CREATE TABLE IF NOT EXISTS contestations (
+  tenant_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  target_claim_ids TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  evidence TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_contestations_tenant_seq ON contestations (tenant_id, seq);
+
+CREATE TABLE IF NOT EXISTS recalls (
+  tenant_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  contestation_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  affected_claim_ids TEXT NOT NULL,
+  checkpoint INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_recalls_tenant_seq ON recalls (tenant_id, seq);
+
+CREATE TABLE IF NOT EXISTS candidates (
+  tenant_id TEXT NOT NULL,
+  horizon_id TEXT NOT NULL,
+  candidate_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  seq INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, horizon_id, candidate_id)
+);
+CREATE INDEX IF NOT EXISTS idx_candidates_tenant_horizon ON candidates (tenant_id, horizon_id);
+
+CREATE TABLE IF NOT EXISTS proposals (
+  tenant_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  parent_id TEXT NOT NULL,
+  child_id TEXT NOT NULL,
+  candidates TEXT NOT NULL,
+  status TEXT NOT NULL,
+  based_on_seq INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_proposals_tenant_parent ON proposals (tenant_id, parent_id);
 `
 
 export function openDb(sqlitePath: string): Database {

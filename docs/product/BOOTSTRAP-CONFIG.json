@@ -1,0 +1,7 @@
+{
+  "scoreThresholdTL": 0.70,
+  "scoreThresholdAdv": 0.70,
+  "maxReworks": 5,
+  "domain": "cognitive_line",
+  "featureId": "F001"
+}
