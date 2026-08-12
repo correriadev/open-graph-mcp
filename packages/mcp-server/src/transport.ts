@@ -194,7 +194,12 @@ const TOOLS = [
   },
 ]
 
-function callTool(state: ServerState, name: string, args: any): unknown {
+/**
+ * `cognitive.recall` drives the RecallWorker, whose repository API is asynchronous, so a tool result
+ * may be a promise. `dispatch`/`handleRpc` await it; every synchronous tool is unaffected (an
+ * awaited non-promise is the value itself).
+ */
+function callTool(state: ServerState, name: string, args: any): unknown | Promise<unknown> {
   switch (name) {
     case "graph.bootstrap":
       return graphBootstrap(state, args)
@@ -249,7 +254,7 @@ function callTool(state: ServerState, name: string, args: any): unknown {
   }
 }
 
-function dispatch(state: ServerState, method: string, params: any): unknown {
+async function dispatch(state: ServerState, method: string, params: any): Promise<unknown> {
   switch (method) {
     case "initialize": {
       const requested = params?.protocolVersion
@@ -265,7 +270,7 @@ function dispatch(state: ServerState, method: string, params: any): unknown {
       return { tools: TOOLS }
     case "tools/call": {
       try {
-        const result = callTool(state, params.name, params.arguments ?? {})
+        const result = await callTool(state, params.name, params.arguments ?? {})
         return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result }
       } catch (err) {
         // callTool's own `default: throw new Error("unknown tool: ...")` is the SINGLE source of
@@ -288,7 +293,7 @@ function dispatch(state: ServerState, method: string, params: any): unknown {
   }
 }
 
-export function handleRpc(state: ServerState, req: unknown): RpcResponse | null {
+export async function handleRpc(state: ServerState, req: unknown): Promise<RpcResponse | null> {
   // Envelope malformado → -32600 Invalid Request, NUNCA deixar passar pra baixo. index.ts já cobre
   // JSON não-parseável (-32700) antes de chamar isto; aqui é sobre o valor que SURVIVE ao JSON.parse
   // mas não é um request JSON-RPC conforme. Dois casos reais achados em probe ao vivo:
@@ -308,14 +313,14 @@ export function handleRpc(state: ServerState, req: unknown): RpcResponse | null 
   if (validReq.id === undefined) {
     // notification — sem resposta
     try {
-      dispatch(state, validReq.method, validReq.params ?? {})
+      await dispatch(state, validReq.method, validReq.params ?? {})
     } catch {
       /* notifications não retornam erro */
     }
     return null
   }
   try {
-    return { jsonrpc: "2.0", id, result: dispatch(state, validReq.method, validReq.params ?? {}) }
+    return { jsonrpc: "2.0", id, result: await dispatch(state, validReq.method, validReq.params ?? {}) }
   } catch (err) {
     const msg = (err as Error).message
     const code = /^method not found:/.test(msg) ? -32601 : /^unknown tool:/.test(msg) ? -32602 : -32603

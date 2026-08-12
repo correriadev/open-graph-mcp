@@ -15,6 +15,13 @@ export interface RecallNotice {
   tenantId?: string
   initiatedAt: string
   faultySinceSeq?: number
+  /**
+   * Host-allocated admission sequence for the recall itself. It travels inside the notice — which
+   * is persisted verbatim with the case — so that replaying an already-initiated recall reports the
+   * SAME sequence instead of burning a new one, which is what makes recall idempotent by
+   * contestation rather than merely non-duplicating.
+   */
+  seq?: number
 }
 
 export interface RecallRefusal {

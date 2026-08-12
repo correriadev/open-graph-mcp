@@ -18,6 +18,7 @@ import path from "node:path"
 import type { Server } from "bun"
 import { createState, DEFAULT_TENANT, type ServerState } from "./state"
 import { handleRpc } from "./transport"
+import { eapServices, type EapServices } from "./eap/services"
 import { handleEvents } from "./sse"
 import { bootstrap, hydrateFromDb } from "./tools/graph-bootstrap"
 import { startWatchLoop, tick } from "./watch-bridge"
@@ -200,6 +201,8 @@ export type RunningServer = {
   state: ServerState
   server: Server
   url: string
+  /** The EAP composition root for a tenant (see the property's comment in `startServer`). */
+  eap: (tenantId: string) => EapServices
   tick: () => Promise<unknown>
   sweep: () => void
   flush: () => void
@@ -325,7 +328,7 @@ export function startServer(opts: StartOptions = {}): RunningServer {
       }
       const method = typeof body?.method === "string" ? body.method : null
       const start = Date.now()
-      const res = handleRpc(state, body)
+      const res = await handleRpc(state, body)
       const durationMs = Date.now() - start
 
       // Log só o que interessa pro beta: chamada de tool e leitura de resource. NUNCA os `arguments`/
@@ -406,6 +409,14 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     state,
     server,
     url: `http://localhost:${server.port}`,
+    /**
+     * The EAP composition root, per tenant. `initiate/propose/promote/contest/recall` reach the
+     * governed aggregates through their `cognitive.*` tools; the tactical design (003, "MCP
+     * Cognitive Binding") declares exactly those five and no tool surface for capability execution
+     * or persistent-delta admission, so those two are wired HERE rather than given invented tool
+     * names — reachable from the composition root, not from nothing.
+     */
+    eap: (tenantId: string) => eapServices(state, tenantId),
     tick: () => tick(state, watchTenant),
     sweep: () => sweepTtl(state),
     flush: () => flushDeltas(state),

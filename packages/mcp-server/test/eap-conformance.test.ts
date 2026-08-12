@@ -11,7 +11,7 @@
  */
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
-import { callTool, register } from "./helpers"
+import { advanceCandidates, callTool, register } from "./helpers"
 import { REFUSAL_CODES, CLIENT_OBLIGATIONS, type RefusalCode } from "@open-graph-mcp/graph-core/eap/refusals"
 
 test("INV-02 — the refusal taxonomy is closed and every code carries a client obligation", () => {
@@ -108,6 +108,8 @@ test("Host conformance profile: lifecycle, promotion, contestation, recall and a
 
     // ── INV-05: promotion crosses exactly one declared edge ──
     await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "leaf", parentId: "mid" })
+    // Promotion distils VERIFIED knowledge out of the child horizon; nothing else is eligible.
+    await advanceCandidates(s.url, a.token, "leaf", ["c1"], "verified")
     const skip = await callTool(s.url, "cognitive.promote", {
       token: a.token,
       childHorizonId: "leaf",
@@ -126,6 +128,8 @@ test("Host conformance profile: lifecycle, promotion, contestation, recall and a
     expect(promoted.admitted.status).toBe("proposed")
 
     // ── INV-07/INV-08: recall requires an admitted invalidating contestation, and is idempotent ──
+    // A contestation targets ADMITTED knowledge of the caller's tenant — admit it first.
+    await advanceCandidates(s.url, a.token, "hz-claims", ["claim-1", "claim-2"])
     const informative = await callTool(s.url, "cognitive.contest", {
       token: a.token,
       targetClaimIds: ["claim-1"],

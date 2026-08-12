@@ -1,17 +1,37 @@
 {
-  // KNOWN BROKEN (pre-existing, predates INT-2): "@tsconfig/bun" below is not an installed
-  // devDependency anywhere in this monorepo (not in bun.lock, no package.json references it),
-  // so `extends` fails with TS6053 and ~356 cascading errors (mostly duplicate @types/node
-  // identifiers). packages/stdio-proxy/tsconfig.json has the identical problem. No CI step
-  // type-checks this package because of it. Found during INT-2 T7; not fixed there (out of
-  // scope) — fix by either installing @tsconfig/bun as a devDependency or dropping this extends
-  // and inlining whatever options it was meant to provide.
+  // This package used to `extends: "@tsconfig/bun/tsconfig.json"`, a package that is not installed
+  // anywhere in this monorepo (not in bun.lock, referenced by no package.json). `extends` therefore
+  // failed with TS6053 and the package could not be type-checked at all; a previous session worked
+  // around it with a parallel `tsconfig.check.json`. The base's options are inlined below instead of
+  // adding a dependency for six lines of configuration, so there is exactly ONE tsconfig for this
+  // package again and `bunx tsc -p tsconfig.json --noEmit` works from a clean checkout.
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
+    // ── inlined from @tsconfig/bun ──
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "composite": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    // ── this package's own overrides ──
     "types": ["bun"],
     "noUncheckedIndexedAccess": false,
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    // Workspace source resolution: the sibling packages are consumed straight from `src`, and
+    // `exports` maps alone do not tell tsc where those files live.
+    "paths": {
+      "@open-graph-mcp/graph-core/*": ["../graph-core/src/*"],
+      "@open-graph-mcp/client": ["../client/src/index.ts"],
+      "@open-graph-mcp/client/*": ["../client/src/*"]
+    }
   },
   "include": ["src", "test"]
 }

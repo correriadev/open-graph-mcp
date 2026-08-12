@@ -36,7 +36,12 @@ import type {
   RecallNotice,
   RecallScarRecord,
 } from "@open-graph-mcp/graph-core/eap/recall"
-import type { CapabilityClassification, CapabilityRefusal, OperatorApproval } from "@open-graph-mcp/graph-core/eap/capabilities"
+import {
+  resolveExpiry,
+  type CapabilityClassification,
+  type CapabilityRefusal,
+  type OperatorApproval,
+} from "@open-graph-mcp/graph-core/eap/capabilities"
 
 const nowIso = () => new Date().toISOString()
 
@@ -298,9 +303,28 @@ export class SqliteRecallRepository {
           updated_at: nowIso(),
         })
       } else {
-        this.db
-          .query("UPDATE recall_cases SET status = 'completed', updated_at = ? WHERE tenant_id = ? AND id = ?")
-          .run(nowIso(), this.tenantId, recallId)
+        // The caller did not hand us the case, but completion still has to travel the SAME durable
+        // path. The old raw UPDATE touched SQLite only: the append-only JSONL mirror never saw the
+        // status change, so `rebuildFromJsonl` replayed the pre-completion row and a finished recall
+        // came back as `in_progress` to be processed a second time (validation audit, DATA_INTEGRITY).
+        // Read the stored row, flip the status, and re-write it through `write()`.
+        const stored = this.db
+          .query("SELECT contestation_id, notice, closure, state, created_at FROM recall_cases WHERE tenant_id = ? AND id = ?")
+          .get(this.tenantId, recallId) as
+          | { contestation_id: string; notice: string; closure: string; state: string; created_at: string }
+          | null
+        if (!stored) throw new Error(`Recall case '${recallId}' not found; cannot complete`)
+        write(this.db, this.stateDir, this.tenantId, "recall_cases", {
+          tenant_id: this.tenantId,
+          id: recallId,
+          contestation_id: stored.contestation_id,
+          status: "completed",
+          notice: stored.notice,
+          closure: stored.closure,
+          state: stored.state,
+          created_at: stored.created_at,
+          updated_at: nowIso(),
+        })
       }
     })
   }
@@ -344,6 +368,8 @@ export class SqliteRecallRepository {
 
 // ── Operator approvals ─────────────────────────────────────────────────────────
 
+export type ApprovalRegistrationResult = { registered: true } | { registered: false; reason: string }
+
 export class SqliteApprovalRepository {
   constructor(
     private db: Database,
@@ -351,8 +377,42 @@ export class SqliteApprovalRepository {
     private tenantId: string,
   ) {}
 
-  registerApproval(approval: OperatorApproval): void {
-    serialTransaction(this.db, () => {
+  /**
+   * Registration is CREATE-ONLY and validates the deadline.
+   *
+   * This used to be an unconditional `INSERT OR REPLACE` keyed on (tenant_id, id) that also wrote
+   * the `consumed` column. Re-registering the id of an already-spent single-use grant therefore
+   * reset `consumed` to 0 and re-armed a spent irreversible authorization — an authorization bypass
+   * reproduced end-to-end by the Retry #5 validation audit. An approval id is now write-once:
+   * consumption is terminal, and re-registering an existing id is refused rather than silently
+   * overwriting the operator's grant.
+   *
+   * The expiry is validated here too: an `expiresAt` that resolves to no instant can never be
+   * evaluated by `validateOperatorApproval`, so storing it would create a grant that fails open
+   * anywhere the fail-closed check is not reached.
+   */
+  registerApproval(approval: OperatorApproval): ApprovalRegistrationResult {
+    return serialTransaction(this.db, () => {
+      if (typeof approval.id !== "string" || approval.id.trim() === "") {
+        return { registered: false as const, reason: "Approval id must be a non-empty string" }
+      }
+      if (resolveExpiry(approval.expiresAt) === null) {
+        return {
+          registered: false as const,
+          reason: `Approval expiry '${String(approval.expiresAt)}' is not a valid instant`,
+        }
+      }
+      const existing = this.db
+        .query("SELECT consumed FROM operator_approvals WHERE tenant_id = ? AND id = ?")
+        .get(this.tenantId, approval.id) as { consumed: number } | null
+      if (existing) {
+        return {
+          registered: false as const,
+          reason: `Approval '${approval.id}' is already registered${
+            Number(existing.consumed) === 1 ? " and has been consumed" : ""
+          }; approval identifiers are single-use and write-once`,
+        }
+      }
       write(this.db, this.stateDir, this.tenantId, "operator_approvals", {
         tenant_id: this.tenantId,
         id: approval.id,
@@ -364,6 +424,7 @@ export class SqliteApprovalRepository {
         created_at: nowIso(),
         consumed_at: null,
       })
+      return { registered: true as const }
     })
   }
 
@@ -470,10 +531,47 @@ export class SqliteCapabilityAuditRepository {
   findByIdempotencyKey(key: string): CapabilityExecutedEvent | undefined {
     const row = this.db
       .query(
-        "SELECT execution_id, classification, contract_ref, outcome, idempotency_key, ts FROM capability_executions WHERE tenant_id = ? AND idempotency_key = ?",
+        "SELECT execution_id, classification, contract_ref, outcome, idempotency_key, ts FROM capability_executions WHERE tenant_id = ? AND idempotency_key = ? AND status = 'completed'",
       )
       .get(this.tenantId, key) as Record<string, unknown> | null
     return row ? toAuditEvent(row) : undefined
+  }
+
+  /**
+   * Durably RESERVES an idempotency key before the provider is called.
+   *
+   * Checking `findByIdempotencyKey` and recording only afterwards leaves the whole provider call
+   * unguarded: three concurrent requests carrying the same key all read "no outcome yet" and all
+   * invoke the external effect (validation audit, RACE_CONDITION). The reservation is an INSERT of
+   * a `reserved` row under the table's UNIQUE (tenant_id, idempotency_key) primary key, inside a
+   * serialized transaction — so exactly one caller can hold a key at a time, and the loser can tell
+   * the difference between "already done" and "in flight" instead of duplicating the effect.
+   *
+   * Returns false when the key is already held or already completed.
+   */
+  reserve(key: string, meta: { capabilityId: string; classification: CapabilityClassification; contractRef: string }): boolean {
+    return serialTransaction(this.db, () => {
+      const existing = this.db
+        .query("SELECT status FROM capability_executions WHERE tenant_id = ? AND idempotency_key = ?")
+        .get(this.tenantId, key) as { status: string } | null
+      if (existing) return false
+      const ordinal = allocateSequence(this.db, this.tenantId, "capability_executions")
+      this.db
+        .query(
+          `INSERT INTO capability_executions
+             (tenant_id, idempotency_key, ordinal, execution_id, classification, contract_ref, capability_id, approval_id, outcome, ts, status)
+           VALUES (?, ?, ?, '', ?, ?, ?, NULL, NULL, ?, 'reserved')`,
+        )
+        .run(this.tenantId, key, ordinal, meta.classification, meta.contractRef, meta.capabilityId, Date.now())
+      return true
+    })
+  }
+
+  /** Releases a reservation that never produced an outcome. Never touches a completed row. */
+  release(key: string): void {
+    this.db
+      .query("DELETE FROM capability_executions WHERE tenant_id = ? AND idempotency_key = ? AND status = 'reserved'")
+      .run(this.tenantId, key)
   }
 
   /**
@@ -483,12 +581,17 @@ export class SqliteCapabilityAuditRepository {
    */
   record(event: CapabilityExecutedEvent, meta: { capabilityId: string; approvalId?: string }): void {
     serialTransaction(this.db, () => {
-      const ordinal = allocateSequence(this.db, this.tenantId, "capability_executions")
+      // Reuse the ordinal the reservation already burned for this key. Allocating a second one
+      // would make the retention window count reservations as if they were outcomes.
+      const held = this.db
+        .query("SELECT ordinal FROM capability_executions WHERE tenant_id = ? AND idempotency_key = ?")
+        .get(this.tenantId, event.idempotencyKey) as { ordinal: number } | null
+      const ordinal = held ? Number(held.ordinal) : allocateSequence(this.db, this.tenantId, "capability_executions")
       this.db
         .query(
           `INSERT OR REPLACE INTO capability_executions
-             (tenant_id, idempotency_key, ordinal, execution_id, classification, contract_ref, capability_id, approval_id, outcome, ts)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (tenant_id, idempotency_key, ordinal, execution_id, classification, contract_ref, capability_id, approval_id, outcome, ts, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
         )
         .run(
           this.tenantId,
@@ -506,6 +609,7 @@ export class SqliteCapabilityAuditRepository {
         .query(
           `DELETE FROM capability_executions
              WHERE tenant_id = ?
+               AND status = 'completed'
                AND ordinal <= (
                  SELECT COALESCE(MAX(ordinal), 0) - ? FROM capability_executions WHERE tenant_id = ?
                )`,
@@ -516,7 +620,7 @@ export class SqliteCapabilityAuditRepository {
 
   count(): number {
     const row = this.db
-      .query("SELECT COUNT(*) AS n FROM capability_executions WHERE tenant_id = ?")
+      .query("SELECT COUNT(*) AS n FROM capability_executions WHERE tenant_id = ? AND status = 'completed'")
       .get(this.tenantId) as { n: number }
     return Number(row.n)
   }
@@ -524,7 +628,7 @@ export class SqliteCapabilityAuditRepository {
   list(): CapabilityExecutedEvent[] {
     const rows = this.db
       .query(
-        "SELECT execution_id, classification, contract_ref, outcome, idempotency_key, ts FROM capability_executions WHERE tenant_id = ? ORDER BY ordinal",
+        "SELECT execution_id, classification, contract_ref, outcome, idempotency_key, ts FROM capability_executions WHERE tenant_id = ? AND status = 'completed' ORDER BY ordinal",
       )
       .all(this.tenantId) as Record<string, unknown>[]
     return rows.map(toAuditEvent)

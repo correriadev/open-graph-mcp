@@ -141,9 +141,34 @@ export class CapabilityGateway {
       return { status: 'REFUSED', refusal: authResult.refusal }
     }
 
+    // RESERVE the idempotency key before anything irreversible happens — the consumption of the
+    // operator's single-use grant included. Reserving after the read-check left the entire provider
+    // call unguarded: three concurrent requests with one key produced three external effects.
+    const reserved = this.audit.reserve(request.idempotencyKey, {
+      capabilityId: request.capabilityId,
+      classification: authResult.classification,
+      contractRef: request.contract.contractRef,
+    })
+    if (!reserved) {
+      // Lost the race, or the winner finished between our first read and here. A completed outcome
+      // is the idempotent answer; a still-held reservation is an explicit conflict, never a second
+      // execution of the same effect.
+      const now = this.audit.findByIdempotencyKey(request.idempotencyKey)
+      if (now) return { status: 'COMPLETED', event: now, isCached: true }
+      return {
+        status: 'REFUSED',
+        refusal: {
+          code: 'IDEMPOTENCY_CONFLICT',
+          reason: `Idempotency key '${request.idempotencyKey}' is already held by an execution in flight`,
+          obligation: 'Await the in-flight execution outcome; do not retry with the same key concurrently',
+        },
+      }
+    }
+
     if (authResult.classification === 'irreversible') {
       const consumeResult = this.approvals.consumeAuthorization(storedApproval!.id)
       if (!consumeResult.success) {
+        this.audit.release(request.idempotencyKey)
         return { status: 'REFUSED', refusal: consumeResult.refusal }
       }
     }
@@ -169,6 +194,8 @@ export class CapabilityGateway {
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err))
         if (!controller.signal.aborted) controller.abort(error)
+        // No outcome was produced, so the key is free again: a failed call must stay retryable.
+        this.audit.release(request.idempotencyKey)
         return {
           status: 'FAILED',
           refusal: {

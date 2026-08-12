@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test"
 import { createEapEnv } from "./eap-env"
 import { startServer } from "../src/index"
-import { callTool, register } from "./helpers"
+import { advanceCandidates, callTool, register } from "./helpers"
 import { SqliteContestationRepository, SqlitePromotionRepository } from "../src/eap/eap-repositories"
 import { PromotionService } from "../src/eap/promotion-service"
 import { ContestationService } from "../src/eap/contestation-service"
@@ -228,6 +228,7 @@ describe("F001 retry#5 — defect 1: the domain service and the MCP adapter shar
       const a = await register(s.url, "alice")
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "root" })
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "mid", parentId: "root" })
+      await advanceCandidates(s.url, a.token, "mid", ["cand-x"], "verified")
 
       const viaTool = await callTool(s.url, "cognitive.promote", {
         token: a.token,
@@ -253,6 +254,7 @@ describe("F001 retry#5 — defect 1: the domain service and the MCP adapter shar
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
+      await advanceCandidates(s.url, a.token, "hz-claims", ["claim-1"])
       const viaTool = await callTool(s.url, "cognitive.contest", {
         token: a.token,
         targetClaimIds: ["claim-1"],

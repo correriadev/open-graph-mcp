@@ -36,6 +36,7 @@ export interface CapabilityExecutionRequest {
 }
 
 export type CapabilityRefusalCode =
+  | 'IDEMPOTENCY_CONFLICT'
   | 'SCOPE_EXCEEDED'
   | 'APPROVAL_EXPIRED'
   | 'APPROVAL_STALE_SEQ'
@@ -63,6 +64,20 @@ export function classifyCapability(
     return classificationMap.get(toolName)!
   }
   return 'irreversible'
+}
+
+/**
+ * Resolves an approval deadline to epoch milliseconds, or `null` when it does not denote an instant.
+ * Shared by the authorization check (which fails closed on `null`) and by registration (which
+ * refuses to store an approval whose expiry can never be evaluated).
+ */
+export function resolveExpiry(expiresAt: string | number | undefined | null): number | null {
+  if (typeof expiresAt === 'number') return Number.isFinite(expiresAt) ? expiresAt : null
+  if (typeof expiresAt !== 'string' || expiresAt.trim() === '') return null
+  const numeric = Number(expiresAt)
+  if (Number.isFinite(numeric) && String(numeric) === expiresAt.trim()) return numeric
+  const parsed = Date.parse(expiresAt)
+  return Number.isNaN(parsed) ? null : parsed
 }
 
 export function validateOperatorApproval(
@@ -106,13 +121,20 @@ export function validateOperatorApproval(
     }
   }
 
-  const expiresAtMs = typeof approval.expiresAt === 'string' ? Date.parse(approval.expiresAt) : approval.expiresAt
-  if (now > expiresAtMs) {
+  // FAIL CLOSED on an expiry that does not resolve to a real instant. `Date.parse` returns NaN for
+  // an unparseable timestamp, and EVERY comparison against NaN is false — including `now > NaN`, so
+  // the old check silently granted such an approval eternal life. An expiry that cannot be evaluated
+  // is not an expiry, and an authorization whose deadline is unknown must not authorize anything.
+  const expiresAtMs = resolveExpiry(approval.expiresAt)
+  if (expiresAtMs === null || now > expiresAtMs) {
     return {
       valid: false,
       refusal: {
         code: 'APPROVAL_EXPIRED',
-        reason: `Approval expired at ${new Date(expiresAtMs).toISOString()}`,
+        reason:
+          expiresAtMs === null
+            ? `Approval expiry '${String(approval.expiresAt)}' is not a valid instant; treated as expired`
+            : `Approval expired at ${new Date(expiresAtMs).toISOString()}`,
         obligation: 'Obtain a new non-expired operator approval',
       },
     }

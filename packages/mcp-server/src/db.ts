@@ -29,7 +29,6 @@ export const DURABLE_TABLES = [
   "horizons",
   "admission_decisions",
   "contestations",
-  "recalls",
   "candidates",
   "proposals",
   "promotion_events",
@@ -174,18 +173,12 @@ CREATE TABLE IF NOT EXISTS contestations (
 );
 CREATE INDEX IF NOT EXISTS idx_contestations_tenant_seq ON contestations (tenant_id, seq);
 
-CREATE TABLE IF NOT EXISTS recalls (
-  tenant_id TEXT NOT NULL,
-  id TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  contestation_id TEXT NOT NULL,
-  status TEXT NOT NULL,
-  affected_claim_ids TEXT NOT NULL,
-  checkpoint INTEGER NOT NULL,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (tenant_id, id)
-);
-CREATE INDEX IF NOT EXISTS idx_recalls_tenant_seq ON recalls (tenant_id, seq);
+/* A "recalls" table used to live here. It was the MCP adapter's private, second recall schema: one
+   row, status hardcoded to 'completed', affected_claim_ids copied verbatim from the contestation,
+   no closure, no checkpoint, no scar -- while SqliteRecallRepository wrote the real case to
+   recall_cases/recall_checkpoints/recall_scars. Two writers and two disjoint schemas for the same
+   aggregate is not durability, it is two truths. The adapter now drives RecallWorker, and the
+   recall_ tables below are the only recall state. (Sem crase: o SCHEMA e um template literal.) */
 
 CREATE TABLE IF NOT EXISTS candidates (
   tenant_id TEXT NOT NULL,
@@ -252,6 +245,11 @@ CREATE TABLE IF NOT EXISTS capability_executions (
   approval_id TEXT,
   outcome TEXT,
   ts INTEGER NOT NULL,
+  /* 'reserved' = a caller holds this idempotency key and the provider call is in flight;
+     'completed' = the external effect happened and this row IS the outcome. The reservation is
+     what makes the key a mutual-exclusion token instead of an optimistic read: without it, N
+     concurrent callers with the same key all observed "no outcome yet" and all ran the effect. */
+  status TEXT NOT NULL DEFAULT 'completed',
   PRIMARY KEY (tenant_id, idempotency_key)
 );
 CREATE INDEX IF NOT EXISTS idx_capability_executions_ordinal ON capability_executions (tenant_id, ordinal);
@@ -296,10 +294,23 @@ CREATE TABLE IF NOT EXISTS recall_scars (
 );
 `
 
-/** ALTER TABLE idempotente: só adiciona a coluna se o PRAGMA não a listar. */
+/**
+ * ALTER TABLE idempotente: só adiciona a coluna se o PRAGMA não a listar.
+ *
+ * `db.prepare` + `finalize()` em vez de `db.query`: `query` guarda o statement num CACHE por texto
+ * de SQL que vive enquanto o `Database` viver, e no Windows um statement de PRAGMA ainda vivo mantém
+ * o arquivo do banco ABERTO depois de `db.close()` — o diretório de estado vira EBUSY na hora de
+ * apagar (foi assim que um teste de bootstrap quebrou ao ganhar mais uma migração de coluna aqui).
+ * Uma migração de boot roda uma vez por processo; não há nada a cachear, e há um handle a devolver.
+ */
 function addColumnIfMissing(db: Database, table: string, column: string, type: string): void {
-  const cols = db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]
-  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`)
+  const stmt = db.prepare(`PRAGMA table_info(${table})`)
+  try {
+    const cols = stmt.all() as { name: string }[]
+    if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`)
+  } finally {
+    stmt.finalize()
+  }
 }
 
 export function openDb(sqlitePath: string): Database {
@@ -312,14 +323,14 @@ export function openDb(sqlitePath: string): Database {
   // STATE_DIR from a server started before this change has a `claims` table without `covers`, and
   // SCHEMA above silently no-ops on it. Migrate explicitly, idempotently: check PRAGMA table_info and
   // ALTER TABLE only if the column is actually missing. Runs on every openDb call; safe to repeat.
-  const claimsCols = db.query("PRAGMA table_info(claims)").all() as { name: string }[]
-  if (!claimsCols.some((c) => c.name === "covers")) {
-    db.exec("ALTER TABLE claims ADD COLUMN covers TEXT")
-  }
+  addColumnIfMissing(db, "claims", "covers", "TEXT")
   // Mesmo motivo do `covers` acima: um STATE_DIR criado antes da linha cognitiva tem `contestations`
   // sem as colunas de proveniencia, e `CREATE TABLE IF NOT EXISTS` no-opa silenciosamente.
   addColumnIfMissing(db, "contestations", "source_horizon_id", "TEXT")
   addColumnIfMissing(db, "contestations", "reason", "TEXT")
+  // Same reason: a STATE_DIR created before idempotency-key reservation has `capability_executions`
+  // without `status`, and `CREATE TABLE IF NOT EXISTS` no-ops on it. Existing rows are outcomes.
+  addColumnIfMissing(db, "capability_executions", "status", "TEXT NOT NULL DEFAULT 'completed'")
   // Canonicalize legacy numeric levels once so cell pagination can use equality and the full
   // (tenant, domain, level, seq) index instead of an IN predicate plus a tenant-scale sort.
   try {

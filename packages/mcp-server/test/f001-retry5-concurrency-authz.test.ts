@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from "bun:test"
 import { startServer } from "../src/index"
-import { callTool, register } from "./helpers"
+import { advanceCandidates, callTool, register } from "./helpers"
 import { createEapEnv } from "./eap-env"
 import { AUDIT_READ_SCOPE, CapabilityGateway } from "../src/eap/capability-gateway"
 import { eapContest, eapPromote, eapRecall } from "../src/tools/eap"
@@ -25,6 +25,14 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
+      // Contestation targets must resolve to admitted knowledge of this tenant (validation audit,
+      // VALIDATION_BYPASS): admit them through the lifecycle before challenging them.
+      await advanceCandidates(
+        s.url,
+        a.token,
+        "hz-seq",
+        [...Array.from({ length: 10 }, (_, i) => `claim-${i}`), "claim-after-purge"],
+      )
       const seqs: number[] = []
       for (let i = 0; i < 10; i++) {
         const res = eapContest(s.state, {
@@ -59,6 +67,7 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
+      await advanceCandidates(s.url, a.token, "hz-ids", Array.from({ length: 5 }, (_, i) => `c-${i}`))
       const ids = new Set<string>()
       for (let i = 0; i < 5; i++) {
         const res = eapContest(s.state, {
@@ -80,6 +89,7 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
+      await advanceCandidates(s.url, a.token, "hz-recall", ["claim-1", "claim-2"])
       const c1 = eapContest(s.state, {
         token: a.token,
         targetClaimIds: ["claim-1"],
@@ -95,8 +105,8 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
       expect(c1.ok && c2.ok).toBe(true)
       if (!c1.ok || !c2.ok) return
 
-      const r1 = eapRecall(s.state, { token: a.token, contestationId: c1.admitted.contestationId })
-      const r2 = eapRecall(s.state, { token: a.token, contestationId: c2.admitted.contestationId })
+      const r1 = await eapRecall(s.state, { token: a.token, contestationId: c1.admitted.contestationId })
+      const r2 = await eapRecall(s.state, { token: a.token, contestationId: c2.admitted.contestationId })
       expect(r1.ok && r2.ok).toBe(true)
       if (r1.ok && r2.ok) expect(r1.admitted.seq).not.toBe(r2.admitted.seq)
     } finally {
@@ -110,6 +120,7 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
       const a = await register(s.url, "alice")
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "root" })
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "mid", parentId: "root" })
+      await advanceCandidates(s.url, a.token, "mid", ["cand-x", "cand-y"], "verified")
 
       const res = eapPromote(s.state, {
         token: a.token,
@@ -142,6 +153,7 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "root" })
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "mid", parentId: "root" })
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "leaf", parentId: "mid" })
+      await advanceCandidates(s.url, a.token, "leaf", ["c1"], "verified")
 
       const seqBefore = (
         s.state.db.query("SELECT seq FROM horizons WHERE tenant_id = ? AND id = ?").get(a.tenantId, "leaf") as {
@@ -179,6 +191,7 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
       const a = await register(s.url, "alice")
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "root" })
       await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "mid", parentId: "root" })
+      await advanceCandidates(s.url, a.token, "mid", ["c1"], "verified")
 
       const seqBefore = (
         s.state.db.query("SELECT seq FROM horizons WHERE tenant_id = ? AND id = ?").get(a.tenantId, "mid") as {
@@ -186,8 +199,8 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
         }
       ).seq
 
-      // Fail the second durable append of the promote unit: the horizon transition is already
-      // written, so a non-atomic implementation leaves an advanced sequence with no proposal.
+      // Fail the second durable append of the promote unit: the proposal is already written, so a
+      // non-atomic implementation leaves a proposal behind or an advanced sequence with none.
       const clear = injectMirrorAppendFailure(s.state.db, 2)
       try {
         expect(() =>
@@ -372,13 +385,14 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
         created_at: new Date().toISOString(),
       })
 
-      const res = eapRecall(s.state, { token: a.token, contestationId: "contest-refused" })
+      const res = await eapRecall(s.state, { token: a.token, contestationId: "contest-refused" })
       expect(res.ok).toBe(false)
       if (!res.ok) expect(res.refusal.code).toBe("RECALL_UNPROVEN")
 
-      const recalls = s.state.db.query("SELECT COUNT(*) AS n FROM recalls WHERE tenant_id = ?").get(a.tenantId) as {
-        n: number
-      }
+      // The adapter's private `recalls` table is gone; `recall_cases` is the only recall state.
+      const recalls = s.state.db
+        .query("SELECT COUNT(*) AS n FROM recall_cases WHERE tenant_id = ?")
+        .get(a.tenantId) as { n: number }
       expect(recalls.n).toBe(0)
     } finally {
       s.stop()

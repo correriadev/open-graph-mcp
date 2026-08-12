@@ -46,6 +46,39 @@ export async function rebuildAs(base: string, name = "bootstrapper", tenant?: st
   return callTool(base, "graph.rebuild", { token })
 }
 
+/**
+ * Drives candidates through the real epistemic lifecycle so a test has knowledge that actually
+ * exists to contest or promote.
+ *
+ * `cognitive.contest` now refuses a target that does not resolve to admitted knowledge of the
+ * caller's tenant, and `cognitive.promote` refuses a candidate that is not VERIFIED in the child
+ * horizon. Both rules live in the governed services; tests that used to invent claim ids have to
+ * admit them first, which is the point.
+ */
+export async function advanceCandidates(
+  base: string,
+  token: string,
+  horizonId: string,
+  candidateIds: string[],
+  upTo: "admitted" | "verified" = "admitted",
+): Promise<void> {
+  const ladder = ["DELIBERATE", "ADMIT", "CONCRETIZE", "VERIFY"] as const
+  const stop = upTo === "admitted" ? 2 : 4
+  await callTool(base, "cognitive.initiate", { token, horizonId })
+  for (const candidateId of candidateIds) {
+    for (const command of ladder.slice(0, stop)) {
+      const res = await callTool(base, "cognitive.propose", {
+        token,
+        horizonId,
+        candidateId,
+        command,
+        evidence: [`ev-${command.toLowerCase()}-${candidateId}`],
+      })
+      if (!res.ok) throw new Error(`advanceCandidates ${command} ${candidateId}: ${JSON.stringify(res.refusal)}`)
+    }
+  }
+}
+
 export type SseClient = {
   events: any[]
   waitFor: (pred: (e: any) => boolean, timeoutMs?: number) => Promise<any>

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { startServer } from "../src/index"
-import { callTool, register } from "./helpers"
+import { advanceCandidates, callTool, register } from "./helpers"
 
 test("cognitive.initiate creates horizon and returns admitted outcome or typed refusal for invalid parent", async () => {
   const s = startServer()
@@ -110,6 +110,8 @@ test("cognitive.promote handles immediate parent edges and refuses HORIZON_SKIP"
     await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "root" })
     await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "mid", parentId: "root" })
     await callTool(s.url, "cognitive.initiate", { token: a.token, horizonId: "leaf", parentId: "mid" })
+    // Only VERIFIED knowledge is promotable — the child horizon has to actually hold it.
+    await advanceCandidates(s.url, a.token, "leaf", ["c1"], "verified")
 
     const promValid = await callTool(s.url, "cognitive.promote", {
       token: a.token,
@@ -137,6 +139,8 @@ test("cognitive.contest and cognitive.recall enforce evidence-backed contestatio
   const s = startServer()
   try {
     const a = await register(s.url, "alice")
+    // A contestation targets ADMITTED knowledge; the targets have to exist in this tenant first.
+    await advanceCandidates(s.url, a.token, "hz-claims", ["claim-1", "claim-2"])
 
     const contestNoEv = await callTool(s.url, "cognitive.contest", {
       token: a.token,
