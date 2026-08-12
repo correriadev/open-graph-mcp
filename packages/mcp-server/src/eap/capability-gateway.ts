@@ -29,6 +29,7 @@ import {
 } from '@open-graph-mcp/graph-core/eap/capabilities'
 import type {
   CapabilityExecutedEvent,
+  ObservedSequenceSource,
   RedactedCapabilityAuditEntry,
   SqliteApprovalRepository,
   SqliteCapabilityAuditRepository,
@@ -70,9 +71,19 @@ export class CapabilityGateway {
   constructor(
     private readonly approvals: SqliteApprovalRepository,
     private readonly audit: SqliteCapabilityAuditRepository,
+    /**
+     * Where "the current sequence" comes from. REQUIRED, and deliberately not defaulted: a default
+     * would silently reinstate the caller-supplied `request.currentSeq` that made
+     * `APPROVAL_STALE_SEQ` inert, and it would do so at exactly the construction sites a host
+     * embedding this library uses.
+     */
+    private readonly sequences: ObservedSequenceSource,
   ) {
     if (!approvals || !audit) {
       throw new Error('CapabilityGateway requires durable approval and audit repositories')
+    }
+    if (!sequences || typeof sequences.currentSeq !== 'function') {
+      throw new Error('CapabilityGateway requires a durable observed-sequence source')
     }
   }
 
@@ -132,8 +143,11 @@ export class CapabilityGateway {
       }
     }
 
+    // BOTH sides of the freshness comparison are the host's: the grant comes from the approval
+    // repository, the sequence from durable governed state. `request.currentSeq` is overwritten
+    // here and never reaches `validateOperatorApproval`.
     const authResult = authorizeCapability(
-      { ...request, approval: storedApproval },
+      { ...request, approval: storedApproval, currentSeq: this.sequences.currentSeq() },
       { classificationMap: this.classificationMap, currentTime: options?.currentTime },
     )
 

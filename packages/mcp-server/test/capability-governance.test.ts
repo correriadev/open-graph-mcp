@@ -28,7 +28,10 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
   })
 
   it('1. Irreversible execution requires a valid matching single-use authorization', async () => {
-    const gateway = new CapabilityGateway(env.approvals, env.audit)
+    // The gateway reads the sequence from durable governed state, never from the request, so the
+    // world this approval is bound to has to actually exist.
+    env.setObservedSeq(42)
+    const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('deploy_tool', 'irreversible')
     gateway.getApprovalRepo().registerApproval(validApproval)
 
@@ -47,7 +50,7 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
   })
 
   it('2. Expired, stale, or out-of-scope approval is refused', async () => {
-    const gateway = new CapabilityGateway(env.approvals, env.audit)
+    const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('deploy_tool', 'irreversible')
 
     const staleApproval: OperatorApproval = {
@@ -73,7 +76,7 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
   })
 
   it('3. An expired approval is refused and the single-use grant is not consumed', async () => {
-    const gateway = new CapabilityGateway(env.approvals, env.audit)
+    const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('deploy_tool', 'irreversible')
     gateway.getApprovalRepo().registerApproval({
       ...validApproval,
@@ -95,7 +98,8 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
   })
 
   it('4. A consumed irreversible authorization cannot be reused', async () => {
-    const gateway = new CapabilityGateway(env.approvals, env.audit)
+    env.setObservedSeq(42)
+    const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('deploy_tool', 'irreversible')
     gateway.getApprovalRepo().registerApproval({ ...validApproval, id: 'appr-once' })
 
@@ -127,7 +131,7 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
   })
 
   it('5. A reversible capability executes without an operator approval and is idempotency-keyed', async () => {
-    const gateway = new CapabilityGateway(env.approvals, env.audit)
+    const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('read_tool', 'reversible')
 
     let runs = 0
@@ -151,7 +155,7 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
   })
 
   it('6. An unclassified capability defaults to irreversible and therefore requires approval', async () => {
-    const gateway = new CapabilityGateway(env.approvals, env.audit)
+    const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     expect(gateway.classify('unknown_tool')).toBe('irreversible')
 
     const res = await gateway.execute({

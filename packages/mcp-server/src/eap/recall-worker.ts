@@ -57,12 +57,27 @@ export class RecallWorker {
   }
 
   async initiateRecall(notice: RecallNotice): Promise<RecallCase | RecallRefusal> {
+    return this.initiateRecallAtomic(notice)
+  }
+
+  /**
+   * Synchronous initiation — the SAME domain path as `initiateRecall`, callable from inside a
+   * caller's serialized transaction.
+   *
+   * `eapRecall` establishes idempotency by asking whether a case exists for the contestation and
+   * satisfies it by creating that case. While initiation was reachable only through an `async`
+   * method, those two steps were separated by microtask boundaries: two concurrent
+   * `cognitive.recall` calls in ONE process both observed "no case", both burned a `recalls`
+   * sequence and both drove `processBatch` over the same closure. The read and the write now commit
+   * as one BEGIN IMMEDIATE unit, which is what "idempotent by contestation" has to mean.
+   */
+  initiateRecallAtomic(notice: RecallNotice): RecallCase | RecallRefusal {
     const result = createRecallCase(notice, this.depQuery)
     if ("refused" in result) {
       return result
     }
 
-    await this.repo.create(result)
+    this.repo.createSync(result)
     this.emit({
       type: "KnowledgeContested",
       payload: {

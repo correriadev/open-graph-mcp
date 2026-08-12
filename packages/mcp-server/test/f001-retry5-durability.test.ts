@@ -187,7 +187,7 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
   test("capability execution outcomes are durable and idempotency survives a restart", async () => {
     let env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("reversible_tool", "reversible")
 
       const req: CapabilityExecutionRequest = {
@@ -203,7 +203,7 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
       env = env.restart()
 
       let ranAgain = false
-      const gateway2 = new CapabilityGateway(env.approvals, env.audit)
+      const gateway2 = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway2.registerClassification("reversible_tool", "reversible")
       const replay = await gateway2.execute({
         ...req,
@@ -280,7 +280,7 @@ describe("F001 retry#5 — defect 2: bounded memory for accumulating collections
   test("CapabilityGateway keeps no unbounded in-memory outcome or audit collections", () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit) as unknown as Record<string, unknown>
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences) as unknown as Record<string, unknown>
       expect(gateway.executedOutcomes).toBeUndefined()
       expect(gateway.auditLog).toBeUndefined()
     } finally {
@@ -291,7 +291,7 @@ describe("F001 retry#5 — defect 2: bounded memory for accumulating collections
   test("audit retention policy evicts oldest entries beyond the configured bound", async () => {
     const env = createEapEnv({ auditMaxEntries: 5 })
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("reversible_tool", "reversible")
 
       for (let i = 0; i < 20; i++) {

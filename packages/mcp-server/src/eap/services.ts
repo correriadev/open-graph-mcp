@@ -23,6 +23,7 @@ import {
   SqliteCapabilityAuditRepository,
   SqliteContestationRepository,
   SqlitePromotionRepository,
+  SqliteObservedSequenceSource,
   SqliteRecallRepository,
 } from "./eap-repositories"
 import { PromotionService } from "./promotion-service"
@@ -73,7 +74,7 @@ export function eapServices(state: ServerState, tenantId: string): EapServices {
     promotions: new PromotionService(promotionRepo),
     contestations: new ContestationService(contestationRepo),
     recalls: new RecallWorker(recallRepo, new SqliteDependencyQuery(db, tenantId)),
-    capabilities: new CapabilityGateway(approvalRepo, auditRepo),
+    capabilities: new CapabilityGateway(approvalRepo, auditRepo, new SqliteObservedSequenceSource(db, tenantId)),
     recallContext: () => buildRecallExecutionContext(db, tenantId),
     admitPersistentDelta: (args) => admitPersistentDelta(state, args),
   }

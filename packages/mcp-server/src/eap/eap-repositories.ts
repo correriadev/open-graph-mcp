@@ -22,6 +22,7 @@
  */
 import type { Database } from "bun:sqlite"
 import { allocateSequence, serialTransaction, write } from "../db"
+import { projectRecallToReadModel } from "./recall-projection"
 import type {
   Candidate,
   Horizon,
@@ -44,6 +45,37 @@ import {
 } from "@open-graph-mcp/graph-core/eap/capabilities"
 
 const nowIso = () => new Date().toISOString()
+
+/**
+ * A stored JSON column that does not parse.
+ *
+ * Every writer in this file stringifies, so this is unreachable from client input — but
+ * `rebuildFromJsonl` replays arbitrary on-disk JSONL into exactly these columns, so a truncated or
+ * hand-edited mirror turned a governed read into an unhandled `SyntaxError` escaping the repository
+ * boundary. The tool adapters map this to a typed Refusal: durable state that cannot be read is a
+ * resource that does not resolve, not a crash. `dependency-query.ts` models the same discipline for
+ * the columns where an empty result is the honest answer; here the row IS the aggregate, so the
+ * only honest answer is a refusal.
+ */
+export class StoredStateCorruptionError extends Error {
+  constructor(
+    readonly table: string,
+    readonly column: string,
+    readonly rowId: string,
+  ) {
+    super(`Stored ${table}.${column} for '${rowId}' is not readable JSON; durable state is corrupt`)
+    this.name = "StoredStateCorruptionError"
+  }
+}
+
+function parseStored<T>(raw: unknown, table: string, column: string, rowId: string, fallback?: string): T {
+  const text = raw === null || raw === undefined ? (fallback ?? "null") : String(raw)
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new StoredStateCorruptionError(table, column, rowId)
+  }
+}
 
 // ── Promotion ──────────────────────────────────────────────────────────────────
 
@@ -127,7 +159,7 @@ export class SqlitePromotionRepository {
     const rows = this.db
       .query("SELECT payload FROM promotion_events WHERE tenant_id = ? ORDER BY ordinal")
       .all(this.tenantId) as { payload: string }[]
-    return rows.map((r) => JSON.parse(r.payload) as PromotionProposedEvent)
+    return rows.map((r, i) => parseStored<PromotionProposedEvent>(r.payload, "promotion_events", "payload", `ordinal#${i}`))
   }
 }
 
@@ -136,7 +168,7 @@ function toProposal(row: Record<string, unknown>): ParentProposal {
     id: String(row.id),
     parentId: String(row.parent_id),
     childId: String(row.child_id),
-    candidates: JSON.parse(String(row.candidates ?? "[]")) as Candidate[],
+    candidates: parseStored<Candidate[]>(row.candidates, "proposals", "candidates", String(row.id), "[]"),
     status: "proposed",
     basedOnSeq: Number(row.based_on_seq),
     createdAt: String(row.created_at),
@@ -183,8 +215,8 @@ export class SqliteContestationRepository {
     return {
       id: String(row.id),
       sourceHorizonId: String(row.source_horizon_id ?? ""),
-      targetClaimIds: JSON.parse(String(row.target_claim_ids ?? "[]")),
-      evidenceRefs: JSON.parse(String(row.evidence ?? "[]")),
+      targetClaimIds: parseStored<string[]>(row.target_claim_ids, "contestations", "target_claim_ids", String(row.id), "[]"),
+      evidenceRefs: parseStored<string[]>(row.evidence, "contestations", "evidence", String(row.id), "[]"),
       severity: row.severity as Contestation["severity"],
       reason: (row.reason as string | null) ?? undefined,
       submittedAt: String(row.created_at),
@@ -231,6 +263,15 @@ export class SqliteRecallRepository {
   ) {}
 
   async create(recallCase: RecallCase): Promise<void> {
+    this.createSync(recallCase)
+  }
+
+  /**
+   * Synchronous creation, for a caller that must establish idempotency (does a case exist?) and
+   * satisfy it (create the case) inside ONE serialized transaction. `create` above is the async
+   * face of exactly this; there is no second write path.
+   */
+  createSync(recallCase: RecallCase): void {
     serialTransaction(this.db, () => {
       const ts = nowIso()
       write(this.db, this.stateDir, this.tenantId, "recall_cases", {
@@ -246,6 +287,15 @@ export class SqliteRecallRepository {
       })
       this.writeCheckpoint(recallCase.checkpoint)
     })
+  }
+
+  /** Row-level existence, synchronous on purpose: it is the read half of an atomic idempotency
+   *  guard and must be able to run in the same serialized transaction as the write half. */
+  exists(recallId: string): boolean {
+    return (
+      this.db.query("SELECT 1 AS x FROM recall_cases WHERE tenant_id = ? AND id = ?").get(this.tenantId, recallId) !==
+      null
+    )
   }
 
   async checkpoint(recallId: string, checkpoint: RecallCheckpoint, recallCase?: RecallCase): Promise<void> {
@@ -265,6 +315,9 @@ export class SqliteRecallRepository {
           created_at: existing?.created_at ?? nowIso(),
           updated_at: nowIso(),
         })
+        // SAME UNIT OF WORK as the checkpoint: the read model can never lag the case state it is
+        // derived from, not even by one failed transaction. See recall-projection.ts.
+        projectRecallToReadModel(this.db, this.stateDir, this.tenantId, recallCase)
       }
       this.writeCheckpoint(checkpoint)
     })
@@ -302,6 +355,7 @@ export class SqliteRecallRepository {
           created_at: existing?.created_at ?? nowIso(),
           updated_at: nowIso(),
         })
+        projectRecallToReadModel(this.db, this.stateDir, this.tenantId, recallCase)
       } else {
         // The caller did not hand us the case, but completion still has to travel the SAME durable
         // path. The old raw UPDATE touched SQLite only: the append-only JSONL mirror never saw the
@@ -339,15 +393,15 @@ export class SqliteRecallRepository {
       .get(this.tenantId, recallId) as { checkpoint: string } | null
     if (!cpRow) return null
 
-    const checkpoint = JSON.parse(cpRow.checkpoint) as RecallCheckpoint
-    const state = JSON.parse(String(row.state)) as SerializedRecallState
+    const checkpoint = parseStored<RecallCheckpoint>(cpRow.checkpoint, "recall_checkpoints", "checkpoint", recallId)
+    const state = parseStored<SerializedRecallState>(row.state, "recall_cases", "state", recallId)
     const scar = await this.getScar(recallId)
 
     const recallCase: RecallCase = {
       id: String(row.id),
-      notice: JSON.parse(String(row.notice)) as RecallNotice,
+      notice: parseStored<RecallNotice>(row.notice, "recall_cases", "notice", recallId),
       status: row.status as RecallCase["status"],
-      closure: JSON.parse(String(row.closure)) as string[],
+      closure: parseStored<string[]>(row.closure, "recall_cases", "closure", recallId),
       processedClaimIds: new Set(state.processedClaimIds),
       checkpoint,
       degradedClaimStates: new Map(state.degradedClaimStates),
@@ -362,7 +416,38 @@ export class SqliteRecallRepository {
     const row = this.db
       .query("SELECT scar FROM recall_scars WHERE tenant_id = ? AND recall_id = ?")
       .get(this.tenantId, recallId) as { scar: string } | null
-    return row ? (JSON.parse(row.scar) as RecallScarRecord) : null
+    return row ? parseStored<RecallScarRecord>(row.scar, "recall_scars", "scar", recallId) : null
+  }
+}
+
+// ── Observed admission sequence ────────────────────────────────────────────────
+
+/**
+ * The sequence an operator approval is validated against.
+ *
+ * `validateOperatorApproval` compares the STORED grant's `basedOnSeq` with "the current sequence".
+ * Until this existed, the gateway took that second operand from `request.currentSeq` — the caller's
+ * own field — so a holder of an unconsumed, unexpired, in-scope grant could replay it against
+ * arbitrary world state simply by asserting the sequence the grant was bound to, and
+ * `APPROVAL_STALE_SEQ` was inert (validation audit, AUTH_BYPASS). Freshness is a property of the
+ * host's durable state, so it is read from the host's durable state.
+ */
+export interface ObservedSequenceSource {
+  currentSeq(): number
+}
+
+/** The tenant's highest governed Horizon sequence; 0 when the tenant has initiated no horizon. */
+export class SqliteObservedSequenceSource implements ObservedSequenceSource {
+  constructor(
+    private db: Database,
+    private tenantId: string,
+  ) {}
+
+  currentSeq(): number {
+    const row = this.db
+      .query("SELECT COALESCE(MAX(seq), 0) AS seq FROM horizons WHERE tenant_id = ?")
+      .get(this.tenantId) as { seq: number } | null
+    return Number(row?.seq ?? 0)
   }
 }
 
@@ -649,7 +734,10 @@ function toAuditEvent(row: Record<string, unknown>): CapabilityExecutedEvent {
     executionId: String(row.execution_id),
     classification: row.classification as CapabilityClassification,
     contractRef: String(row.contract_ref),
-    outcome: row.outcome === null || row.outcome === undefined ? null : JSON.parse(String(row.outcome)),
+    outcome:
+      row.outcome === null || row.outcome === undefined
+        ? null
+        : parseStored<unknown>(row.outcome, "capability_executions", "outcome", String(row.execution_id)),
     idempotencyKey: String(row.idempotency_key),
     timestamp: Number(row.ts),
   }

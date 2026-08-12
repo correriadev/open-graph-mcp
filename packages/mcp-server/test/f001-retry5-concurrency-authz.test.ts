@@ -235,7 +235,7 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
   test("CapabilityGateway refuses a client-supplied approval that is not registered by an operator", async () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("deploy_tool", "irreversible")
 
       let providerRan = false
@@ -269,7 +269,7 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
   test("CapabilityGateway validates the stored approval, not the client-supplied copy", async () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("deploy_tool", "irreversible")
 
       // Operator granted a narrow scope; the client presents a widened copy with the same id.
@@ -307,7 +307,7 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
   test("getAuditLog applies an authorization projection filter", async () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("reversible_tool", "reversible")
       await gateway.execute({
         capabilityId: "reversible_tool",
@@ -341,7 +341,7 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
   test("CapabilityGateway times out a hanging provider and cancels it via AbortSignal", async () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("slow_tool", "reversible")
 
       let observed: AbortSignal | undefined

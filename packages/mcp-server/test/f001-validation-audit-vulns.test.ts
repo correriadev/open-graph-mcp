@@ -22,7 +22,8 @@ describe("Validation audit HIGH #1 — a consumed single-use approval cannot be 
   test("re-registering an existing approval id does not reset the consumed flag", async () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      env.setObservedSeq(42)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("deploy_tool", "irreversible")
 
       const approval = {
@@ -120,7 +121,7 @@ describe("Validation audit HIGH #2 — a malformed expiry fails closed", () => {
   test("a stored approval whose expiry does not parse is treated as expired, not as valid forever", async () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("deploy_tool", "irreversible")
 
       // Bypass registration validation to model a row that predates it (or arrived by replay).
@@ -158,7 +159,7 @@ describe("Validation audit HIGH #3 — the idempotency key is reserved, not mere
   test("three concurrent executions with the same key invoke the provider exactly once", async () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("reversible_tool", "reversible")
 
       let invocations = 0
@@ -188,7 +189,7 @@ describe("Validation audit HIGH #3 — the idempotency key is reserved, not mere
   test("a failed execution releases its reservation so the key can be retried", async () => {
     const env = createEapEnv()
     try {
-      const gateway = new CapabilityGateway(env.approvals, env.audit)
+      const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
       gateway.registerClassification("flaky_tool", "reversible")
 
       const failing = await gateway.execute({

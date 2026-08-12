@@ -25,6 +25,16 @@ export interface CapabilityExecutionRequest {
   classification?: CapabilityClassification
   idempotencyKey: string
   contract: ChangeContract
+  /**
+   * The sequence the approval is validated against.
+   *
+   * A CALLER MAY NOT DEFINE THIS. `CapabilityGateway.execute` overwrites whatever the request
+   * carries with the sequence it reads from durable governed state before authorization runs: a
+   * requester that could pick the sequence its own approval is checked against could spend a grant
+   * issued for one state of the horizon against a later, materially different one, which made
+   * `APPROVAL_STALE_SEQ` inert. It stays on the request type because `authorizeCapability` is a
+   * pure function that cannot read durable state itself — the gateway supplies the operand.
+   */
   currentSeq: number
   approval?: OperatorApproval
   /**

@@ -28,6 +28,7 @@ import { REFUSAL_OBLIGATIONS, type RefusalCode } from "@open-graph-mcp/graph-cor
 import type { Candidate } from "@open-graph-mcp/graph-core/eap/promotion"
 import type { RecallNotice, RecallProgress } from "@open-graph-mcp/graph-core/eap/recall"
 import { validateEvidence } from "@open-graph-mcp/graph-core/eap/contestation"
+import { StoredStateCorruptionError } from "../eap/eap-repositories"
 
 export type EapRefusal = {
   code: RefusalCode
@@ -39,13 +40,53 @@ export type EapResponse<T = any> =
   | { ok: true; admitted: T }
   | { ok: false; refusal: EapRefusal }
 
-export type CandidateState = "proposed" | "deliberated" | "admitted" | "concretized" | "verified"
+/**
+ * `recalled` is a TERMINAL lifecycle state written by the recall projection, never by a client
+ * command: a claim invalidated by an admitted invalidating contestation has no next transition.
+ * Without it in this union the fallback below would treat a recalled candidate as `proposed` and
+ * happily re-admit it (QA: invalidated knowledge kept climbing the lifecycle).
+ */
+export type CandidateState = "proposed" | "deliberated" | "admitted" | "concretized" | "verified" | "recalled"
 
 const CONTESTATION_SEVERITIES = ["informative", "blocking", "invalidating"] as const
 type ContestationSeverity = (typeof CONTESTATION_SEVERITIES)[number]
 
 /** Contract limit for opaque identifiers reaching a governed boundary (test scenario §3.3). */
 const MAX_IDENTIFIER_LENGTH = 256
+
+/**
+ * Upper bound for a caller-supplied sequence (test scenario §3.3, "oversized or out-of-range
+ * contract values" — enforced for strings via MAX_IDENTIFIER_LENGTH, and now for numbers too).
+ *
+ * `Number.isInteger(1e308)` is TRUE, so the only validation this gate used to have admitted a value
+ * no sequence allocator can ever reach, and the optimistic-concurrency check that compared against
+ * it was bypassed unconditionally and forever (validation audit, VALIDATION_BYPASS). Beyond
+ * MAX_SAFE_INTEGER integer arithmetic is not exact either, so a sequence outside it is not a
+ * sequence.
+ */
+const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
+
+/**
+ * A caller-supplied `basedOnSeq`: a non-negative safe integer, or a typed refusal.
+ *
+ * Callers state the sequence they observed. The gate is EQUALITY with the sequence the host
+ * actually holds, not `<`: a request declaring a base BEHIND the horizon is stale (someone else
+ * advanced it), and a request declaring a base AHEAD of it is based on a state this host never
+ * produced. Both must rebase; neither is fresh.
+ */
+function validateBasedOnSeq(value: unknown): { ok: true } | { ok: false; refusal: EapRefusal } {
+  if (value === undefined) return { ok: true }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > MAX_SEQUENCE) {
+    return {
+      ok: false,
+      refusal: createEapRefusal(
+        "MALFORMED_CONTRACT",
+        `basedOnSeq must be a non-negative integer no greater than ${MAX_SEQUENCE}`,
+      ),
+    }
+  }
+  return { ok: true }
+}
 
 function createEapRefusal(code: RefusalCode, reason: string): EapRefusal {
   return {
@@ -169,12 +210,8 @@ export function eapPropose(
   const candidateRef = validateIdentifier(args.candidateId, "candidateId")
   if (!candidateRef.ok) return { ok: false, refusal: candidateRef.refusal }
 
-  if (args.basedOnSeq !== undefined && (!Number.isInteger(args.basedOnSeq) || args.basedOnSeq < 0)) {
-    return {
-      ok: false,
-      refusal: createEapRefusal("MALFORMED_CONTRACT", "basedOnSeq must be a non-negative integer"),
-    }
-  }
+  const proposeBase = validateBasedOnSeq(args.basedOnSeq)
+  if (!proposeBase.ok) return { ok: false, refusal: proposeBase.refusal }
 
   if (!args.evidence || (Array.isArray(args.evidence) && args.evidence.length === 0)) {
     return {
@@ -202,10 +239,13 @@ export function eapPropose(
       }
     }
 
-    if (args.basedOnSeq !== undefined && args.basedOnSeq < horizon.seq) {
+    if (args.basedOnSeq !== undefined && args.basedOnSeq !== horizon.seq) {
       return {
         ok: false,
-        refusal: createEapRefusal("STALE_BASE", `basedOnSeq ${args.basedOnSeq} precedes current horizon seq ${horizon.seq}`),
+        refusal: createEapRefusal(
+          "STALE_BASE",
+          `basedOnSeq ${args.basedOnSeq} does not match current horizon seq ${horizon.seq}`,
+        ),
       }
     }
 
@@ -221,9 +261,20 @@ export function eapPropose(
       admitted: { command: "CONCRETIZE", next: "concretized" },
       concretized: { command: "VERIFY", next: "verified" },
       verified: { command: "", next: "verified" },
+      recalled: { command: "", next: "recalled" },
     }
 
     const expected = nextStateMap[currentCandState] ?? { command: "DELIBERATE", next: "deliberated" }
+
+    if (currentCandState === "recalled") {
+      return {
+        ok: false,
+        refusal: createEapRefusal(
+          "ILLEGAL_TRANSITION",
+          `Candidate '${candidateRef.value}' was recalled by an admitted invalidating contestation; recalled knowledge has no lifecycle successor`,
+        ),
+      }
+    }
 
     if (expected.command !== args.command) {
       return {
@@ -280,7 +331,40 @@ export function eapPropose(
   })
 }
 
-export function eapPromote(
+/**
+ * The id of an existing proposal distilling EXACTLY this candidate set out of this child into this
+ * parent, or null. The comparison is on the candidate id SET, so reordering the same distillation
+ * is still the same epistemic act.
+ */
+function findEquivalentProposal(
+  state: ServerState,
+  tenantId: string,
+  childId: string,
+  parentId: string,
+  candidateIds: string[],
+): string | null {
+  const wanted = JSON.stringify([...new Set(candidateIds)].sort())
+  const rows = state.db
+    .query("SELECT id, candidates FROM proposals WHERE tenant_id = ? AND child_id = ? AND parent_id = ? ORDER BY created_at, id")
+    .all(tenantId, childId, parentId) as { id: string; candidates: string }[]
+  for (const row of rows) {
+    let stored: unknown
+    try {
+      stored = JSON.parse(row.candidates ?? "[]")
+    } catch {
+      // A proposal whose candidate list is unreadable cannot be shown to be this same distillation.
+      continue
+    }
+    if (!Array.isArray(stored)) continue
+    const ids = stored
+      .map((c) => (c && typeof c === "object" ? (c as { id?: unknown }).id : undefined))
+      .filter((id): id is string => typeof id === "string")
+    if (JSON.stringify([...new Set(ids)].sort()) === wanted) return row.id
+  }
+  return null
+}
+
+function eapPromoteGoverned(
   state: ServerState,
   args: {
     token: string
@@ -306,9 +390,8 @@ export function eapPromote(
     if (!ref.ok) return { ok: false, refusal: ref.refusal }
   }
 
-  if (args.basedOnSeq !== undefined && (!Number.isInteger(args.basedOnSeq) || args.basedOnSeq < 0)) {
-    return { ok: false, refusal: createEapRefusal("MALFORMED_CONTRACT", "basedOnSeq must be a non-negative integer") }
-  }
+  const promoteBase = validateBasedOnSeq(args.basedOnSeq)
+  if (!promoteBase.ok) return { ok: false, refusal: promoteBase.refusal }
 
   const outcome = serialTransaction(state.db, (): EapResponse & { event?: Record<string, unknown> } => {
     const services = eapServices(state, tenantId)
@@ -370,11 +453,45 @@ export function eapPromote(
       distilled.push({ id: candidateId, content: candidateId })
     }
 
+    // IDEMPOTENT BY DISTILLATION. Two identical promote calls are ONE epistemic act: the same
+    // candidates, out of the same child, into the same parent. Replaying used to mint a second
+    // proposal and burn a second child-horizon sequence, leaving the parent gate with two competing
+    // proposals for one distillation (the duplicate parent candidate was already guarded below, so
+    // no state corrupted — the defect is the duplicate proposal and the double sequence burn).
+    const replayed = findEquivalentProposal(state, tenantId, childRef.value, parentRef.value, candidateIds)
+    if (replayed) {
+      return {
+        ok: true,
+        admitted: {
+          promotionId: replayed,
+          childHorizonId: childRef.value,
+          targetParentHorizonId: parentRef.value,
+          status: "proposed",
+          seq: child.seq,
+          replayed: true,
+        },
+      }
+    }
+
+    // Same equality gate as `cognitive.propose`: the domain refuses a base BEHIND the applicable
+    // sequence, but a base AHEAD of it describes a state this host never produced and was admitted
+    // as fresh. Both directions are a rebase.
+    const applicableSeq = Math.max(child.seq, parent.seq)
+    if (args.basedOnSeq !== undefined && args.basedOnSeq !== applicableSeq) {
+      return {
+        ok: false,
+        refusal: createEapRefusal(
+          "STALE_BASE",
+          `basedOnSeq ${args.basedOnSeq} does not match current applicable seq ${applicableSeq}`,
+        ),
+      }
+    }
+
     // The one-edge rule, the stale-base rule and the proposal/event write are the domain's.
     const result = services.promotions.promote({
       childId: childRef.value,
       parentId: parentRef.value,
-      basedOnSeq: args.basedOnSeq ?? Math.max(child.seq, parent.seq),
+      basedOnSeq: args.basedOnSeq ?? applicableSeq,
       distilled,
     })
 
@@ -453,7 +570,7 @@ function unresolvedTargets(state: ServerState, tenantId: string, ids: string[]):
   return ids.filter((id) => claim.get(tenantId, id) === null && candidate.get(tenantId, id) === null)
 }
 
-export function eapContest(
+function eapContestGoverned(
   state: ServerState,
   args: {
     token: string
@@ -488,9 +605,19 @@ export function eapContest(
   // Evidence ELEMENTS, not just the array. `[null]` used to sail through a bare length check and be
   // stored as admitted evidence. `validateEvidence` is the domain's own predicate — the same one
   // `ContestationService` applies — used here so the boundary refuses before anything is resolved.
-  const evidenceRefs = Array.isArray(args.evidence)
-    ? args.evidence.filter((ref): ref is string => typeof ref === "string")
-    : []
+  // EVERY element must be a reference. Filtering the non-strings out admitted `[{a:1},'ok-ev']` as
+  // if one reference had been supplied and never told the caller part of its contract was dropped;
+  // a contract is refused whole or admitted whole.
+  const evidenceRefs: string[] = Array.isArray(args.evidence) ? (args.evidence as string[]) : []
+  if (evidenceRefs.some((ref) => typeof ref !== "string")) {
+    return {
+      ok: false,
+      refusal: createEapRefusal(
+        "EVIDENCE_REQUIRED",
+        "Every evidence element must be a non-empty reference string; the contract is refused rather than partially admitted",
+      ),
+    }
+  }
   if (!validateEvidence(evidenceRefs)) {
     return {
       ok: false,
@@ -594,7 +721,7 @@ const MAX_RECALL_BATCHES = 10_000
  * initiates the case, runs it to completion in checkpointed batches, and reports what the domain
  * actually did.
  */
-export async function eapRecall(
+async function eapRecallGoverned(
   state: ServerState,
   args: {
     token: string
@@ -629,10 +756,51 @@ export async function eapRecall(
   const recallId = initiation.recallCaseId!
   const contestation = services.contestations.getContestation(contestationRef.value)!
 
-  // Idempotent by contestation: replaying the command reports the existing case rather than
-  // burning a fresh sequence and re-degrading the same claims.
-  const existing = await services.recallRepo.get(recallId)
-  if (existing) {
+  // IDEMPOTENT BY CONTESTATION, ATOMICALLY.
+  //
+  // The read that establishes idempotency ("is there already a case for this contestation?") and
+  // the writes that satisfy it (allocate the recall sequence, create the case and its checkpoint)
+  // commit as ONE serialized unit. Previously they were separated by two `await` boundaries, so two
+  // concurrent `cognitive.recall` calls inside one process both saw no case, both burned a sequence
+  // and both drove the same closure. Everything inside this callback is synchronous by
+  // construction — that is what makes the window impossible rather than merely narrow.
+  const opened = serialTransaction(
+    state.db,
+    ():
+      | { kind: "replay" }
+      | { kind: "refused"; message: string }
+      | { kind: "created"; notice: RecallNotice; closure: string[] } => {
+      if (services.recallRepo.exists(recallId)) return { kind: "replay" }
+
+      const notice: RecallNotice = {
+        recallId,
+        contestationId: contestation.id,
+        targetClaimIds: [...contestation.targetClaimIds],
+        severity: contestation.severity,
+        contestationStatus: contestation.admitted ? "admitted" : "refused",
+        tenantId,
+        initiatedAt: new Date().toISOString(),
+        seq: allocateSequence(state.db, tenantId, "recalls"),
+      }
+
+      const created = services.recalls.initiateRecallAtomic(notice)
+      if ("refused" in created) return { kind: "refused", message: created.message }
+      return { kind: "created", notice, closure: created.closure }
+    },
+  )
+
+  if (opened.kind === "refused") {
+    return { ok: false, refusal: createEapRefusal("RECALL_UNPROVEN", opened.message) }
+  }
+
+  if (opened.kind === "replay") {
+    const existing = await services.recallRepo.get(recallId)
+    if (!existing) {
+      return {
+        ok: false,
+        refusal: createEapRefusal("RESOURCE_ABSENT", `Recall case '${recallId}' exists but carries no durable checkpoint`),
+      }
+    }
     return {
       ok: true,
       admitted: recallOutcome(existing.recallCase.id, contestationRef.value, {
@@ -651,24 +819,10 @@ export async function eapRecall(
     }
   }
 
-  const notice: RecallNotice = {
-    recallId,
-    contestationId: contestation.id,
-    targetClaimIds: [...contestation.targetClaimIds],
-    severity: contestation.severity,
-    contestationStatus: contestation.admitted ? "admitted" : "refused",
-    tenantId,
-    initiatedAt: new Date().toISOString(),
-    seq: serialTransaction(state.db, () => allocateSequence(state.db, tenantId, "recalls")),
-  }
-
-  const created = await services.recalls.initiateRecall(notice)
-  if ("refused" in created) {
-    return { ok: false, refusal: createEapRefusal("RECALL_UNPROVEN", created.message) }
-  }
+  const { notice, closure } = opened
 
   const ctx = services.recallContext()
-  const batchSize = args.batchSize ?? Math.max(1, created.closure.length)
+  const batchSize = args.batchSize ?? Math.max(1, closure.length)
   let progress: RecallProgress | null = null
   for (let i = 0; i < MAX_RECALL_BATCHES; i++) {
     progress = await services.recalls.processBatch(recallId, batchSize, ctx)
@@ -686,7 +840,7 @@ export async function eapRecall(
       recallId,
       contestationId: contestation.id,
       checkpoint: progress?.checkpoint.sequence ?? 0,
-      affectedClaimIds: created.closure,
+      affectedClaimIds: closure,
     },
   })
   for (const cellKey of progress?.suspendedCells ?? []) {
@@ -703,7 +857,7 @@ export async function eapRecall(
     admitted: recallOutcome(recallId, contestation.id, {
       status,
       seq: notice.seq!,
-      closure: created.closure,
+      closure,
       checkpointSeq: progress?.checkpoint.sequence ?? 0,
       suspendedCells: settled ? settled.checkpoint.suspendedCells : (progress?.suspendedCells ?? []),
       degraded: progress?.degradedClaims ?? [],
@@ -735,5 +889,50 @@ function recallOutcome(
     suspendedCells: detail.suspendedCells,
     degradedClaims: detail.degraded,
     ...(detail.replayed ? { replayed: true } : {}),
+  }
+}
+
+/**
+ * Durable state that cannot be READ is not a crash the client should receive as a stack trace.
+ *
+ * Every writer in `eap-repositories.ts` stringifies, but `rebuildFromJsonl` replays arbitrary
+ * on-disk JSONL into the same JSON columns, so a truncated or hand-edited mirror used to throw a
+ * raw `SyntaxError` out of the repository and through the tool boundary. It is now a typed
+ * Refusal, with the same obligation as any other resource that fails to resolve.
+ */
+function storedStateRefusal(err: unknown): EapResponse | null {
+  if (err instanceof StoredStateCorruptionError) {
+    return { ok: false, refusal: createEapRefusal("RESOURCE_ABSENT", err.message) }
+  }
+  return null
+}
+
+export function eapPromote(state: ServerState, args: Parameters<typeof eapPromoteGoverned>[1]): EapResponse {
+  try {
+    return eapPromoteGoverned(state, args)
+  } catch (err) {
+    const refusal = storedStateRefusal(err)
+    if (refusal) return refusal
+    throw err
+  }
+}
+
+export function eapContest(state: ServerState, args: Parameters<typeof eapContestGoverned>[1]): EapResponse {
+  try {
+    return eapContestGoverned(state, args)
+  } catch (err) {
+    const refusal = storedStateRefusal(err)
+    if (refusal) return refusal
+    throw err
+  }
+}
+
+export async function eapRecall(state: ServerState, args: Parameters<typeof eapRecallGoverned>[1]): Promise<EapResponse> {
+  try {
+    return await eapRecallGoverned(state, args)
+  } catch (err) {
+    const refusal = storedStateRefusal(err)
+    if (refusal) return refusal
+    throw err
   }
 }

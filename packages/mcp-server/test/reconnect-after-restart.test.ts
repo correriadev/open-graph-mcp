@@ -64,6 +64,9 @@ test("reconnect after restart: presence is gone, server.restarted is delivered, 
       s2.stop()
     }
   } finally {
-    rmSync(stateDir, { recursive: true, force: true })
+    // Windows releases the SQLite file handle asynchronously after `stop()` closes the Database, so a
+    // teardown that races the OS gets EBUSY on a dir the test is done with. Only observed under the
+    // full cross-package run, where total handle pressure is highest.
+    rmSync(stateDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   }
 })

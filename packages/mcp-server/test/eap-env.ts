@@ -9,11 +9,12 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { Database } from "bun:sqlite"
-import { openDb } from "../src/db"
+import { openDb, write } from "../src/db"
 import {
   SqliteApprovalRepository,
   SqliteCapabilityAuditRepository,
   SqliteContestationRepository,
+  SqliteObservedSequenceSource,
   SqlitePromotionRepository,
   SqliteRecallRepository,
 } from "../src/eap/eap-repositories"
@@ -28,6 +29,10 @@ export type EapEnv = {
   recalls: SqliteRecallRepository
   approvals: SqliteApprovalRepository
   audit: SqliteCapabilityAuditRepository
+  /** The durable sequence an operator approval is validated against (highest governed Horizon seq). */
+  sequences: SqliteObservedSequenceSource
+  /** Anchors that observed sequence by writing a governed horizon row at `seq`. */
+  setObservedSeq: (seq: number) => void
   /** Closes the DB handle and reopens it from disk — simulates a host process restart. */
   restart: () => EapEnv
   cleanup: () => void
@@ -46,6 +51,21 @@ function build(dir: string, tenantId: string, auditMaxEntries?: number): EapEnv 
     recalls: new SqliteRecallRepository(db, dir, tenantId),
     approvals: new SqliteApprovalRepository(db, dir, tenantId),
     audit: new SqliteCapabilityAuditRepository(db, dir, tenantId, { maxEntries: auditMaxEntries }),
+    sequences: new SqliteObservedSequenceSource(db, tenantId),
+    setObservedSeq: (seq: number) => {
+      const ts = new Date().toISOString()
+      write(db, dir, tenantId, "horizons", {
+        tenant_id: tenantId,
+        id: "hz-observed",
+        parent_id: null,
+        state: "proposed",
+        seq,
+        budget_allocated: 0,
+        budget_consumed: 0,
+        created_at: ts,
+        updated_at: ts,
+      })
+    },
     restart: () => {
       try {
         db.close()
