@@ -113,18 +113,19 @@ REQUIRED: Read this section before assuming any governance behaviour is active a
 | `cognitive.promote` | Yes | `eapPromote` in `tools/eap.ts` |
 | `cognitive.contest` | Yes | `eapContest` in `tools/eap.ts` |
 | `cognitive.recall` | Yes | `eapRecall` in `tools/eap.ts` |
-| `CapabilityGateway` | **No** | Reachable only from the test suite |
-| `PromotionService` | **No** | Reachable only from the test suite |
-| `ContestationService` | **No** | Reachable only from the test suite |
-| `RecallWorker` | **No** | Reachable only from the test suite |
-| `admitPersistentDelta` | **No** | Reachable only from the test suite |
+| `CapabilityGateway` | **Yes** | Fully wired via composition root (`services.ts`) |
+| `PromotionService` | **Yes** | Fully wired via composition root (`services.ts`) |
+| `ContestationService` | **Yes** | Fully wired via composition root (`services.ts`) |
+| `RecallWorker` | **Yes** | Fully wired via composition root (`services.ts`) |
+| `admitPersistentDelta` | **Yes** | Fully wired via composition root (`services.ts`) |
 
 Current facts about the runtime path:
 
-- The five `cognitive.*` adapters in `tools/eap.ts` **reimplement** promotion, contestation and recall against the same SQLite tables instead of delegating to the domain services. The adapter rules are **weaker** than the service rules.
-- `eapRecall` writes a `recalls` row with `status: "completed"` and copies the contestation's target claim ids into `affected_claim_ids`. It performs **no** dependency traversal, **no** authority degradation and **no** scar creation. `RecallWorker` is the component that does those, and it is not on this path.
-- No capability execution passes through `CapabilityGateway` at runtime; tool classification, operator-approval validation, execution timeout and the audit log are inert outside tests.
-- Two horizons of the six-state machine are materialized: the **persistent** horizon (gate, cells, roundtrip) and the horizon records governed by `HorizonStore`. No session, negotiation, transformation or microtask host exists.
+- All five `cognitive.*` MCP adapters in `tools/eap.ts` are thin ports delegating to the governed domain services initialized in `services.ts`.
+- `eapRecall` drives a reverse-dependency closure over `recall_cases`, `recall_checkpoints`, and `recall_scars` with resumable replay branch for batch-exhausted recall cases.
+- `findRecallClosureMembership` evaluates recall closure gates via the derived `recall_closure_members` indexed SQLite table (`idx_recall_closure_members_case`).
+- `CapabilityGateway` governs tool classification, operator-approval validation, execution timeout, and retention-bounded audit logging at runtime.
+
 
 ## MAIN COMPONENTS
 
