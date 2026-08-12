@@ -59,6 +59,10 @@ export function renderSystemMessage(state: ServerState, tenant: string, env: Eve
       return `[open-graph] Não foi possível abrir turno em [${p.cell}] — já travada por ${userName(state, tenant, p.holder as string)} (${p.csId}).`
     case "authority.flipped":
       return `[open-graph] Autoridade de [${p.cell}] mudou para "${p.to}" (por ${userName(state, tenant, p.byUser as string)}).`
+    // Mesma classe de fato que authority.flipped — a autoridade da célula mudou de dono —, só que o
+    // autor é um Recall e o destino é "suspensa": a célula repousava sobre uma premissa retirada.
+    case "TruthOwnershipSuspended":
+      return `[open-graph] Autoridade de [${p.cellKey}] foi SUSPENSA pelo recall ${p.recallId} — a verdade daquela célula repousava sobre conhecimento retirado; reabilitação exige prova nova.`
     case "server.restarted":
       return `[open-graph] Servidor reiniciou — sua presença foi resetada; redeclare foco.`
     default:

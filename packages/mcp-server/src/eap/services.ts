@@ -16,7 +16,7 @@
  * call is deliberate. Caching them per tenant would reintroduce exactly the cross-request in-memory
  * state this feature spent five retries deleting.
  */
-import { appendEvent, type ServerState } from "../state"
+import { appendEvent, pushEnvelope, type ServerState } from "../state"
 import { HorizonStore, AdmissionLedgerStore } from "./horizon-store"
 import {
   SqliteApprovalRepository,
@@ -62,14 +62,27 @@ export function eapServices(state: ServerState, tenantId: string): EapServices {
   // Knowledge, authority view, subscribers"). Bound here rather than inside the repository so the
   // repository stays a pure persistence adapter with no knowledge of the event log.
   const recallRepo = new SqliteRecallRepository(db, stateDir, tenantId, {
+    // `defer: true` inside the projection's transaction, broadcast after it commits — the mechanism
+    // `changeset.ts` already uses to pair an authority write with `authority.flipped`. Running the
+    // whole `appendEvent` after the transaction returned put the durable row in its own implicit
+    // transaction, so a failure between the two left the cell `suspended` with nothing in the
+    // append-only log a reconnecting session replays from (TL Tier 4).
     truthOwnershipSuspended(cells, recallCase) {
-      for (const cellKey of cells) {
-        appendEvent(state, tenantId, {
-          kind: "TruthOwnershipSuspended",
-          targetKind: "cell",
-          targetId: cellKey,
-          payload: { recallId: recallCase.id, cellKey, seq: recallCase.checkpoint.sequence },
-        })
+      const envelopes = cells.map((cellKey) =>
+        appendEvent(
+          state,
+          tenantId,
+          {
+            kind: "TruthOwnershipSuspended",
+            targetKind: "cell",
+            targetId: cellKey,
+            payload: { recallId: recallCase.id, cellKey, seq: recallCase.checkpoint.sequence },
+          },
+          { defer: true },
+        ),
+      )
+      return () => {
+        for (const env of envelopes) pushEnvelope(state, tenantId, env)
       }
     },
   })

@@ -48,7 +48,17 @@ export const DURABLE_TABLES = [
  *    O espelho JSONL é append-only: replayar traria de volta toda linha já evictada e o limite de
  *    memória/disco deixaria de existir. Retenção e append-only são incompatíveis por construção.
  */
-const ALL_TABLES = [...DURABLE_TABLES, "locks", "system_messages"] as const
+const ALL_TABLES = [
+  ...DURABLE_TABLES,
+  "locks",
+  "system_messages",
+  // Derived live index over `recall_cases.closure` (see eap/recall-closure.ts). NOT mirrored: it is
+  // a projection of a column that IS mirrored, so replaying it would be replaying the same fact
+  // twice. A rebuild therefore DELETES it here and the gate re-derives it on the next lookup — that
+  // is what `recall_closure_index` (the coverage marker) exists to detect.
+  "recall_closure_members",
+  "recall_closure_index",
+] as const
 
 const SCHEMA = `
 /* Qual repo cada tenant indexou. DURAVEL de proposito: sem isto, depois de um restart o servidor
@@ -275,6 +285,33 @@ CREATE TABLE IF NOT EXISTS recall_cases (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (tenant_id, id)
+);
+
+/* recall_cases era a UNICA tabela com tenant_id sem indice nenhum -- e virou a mais quente da linha
+   cognitiva: o gate de closure a consultava a cada VERIFY e uma vez POR CANDIDATO dentro da
+   transacao de promote (scan + filesort + JSON.parse por linha). Indice na chave de leitura, como
+   toda tabela por tenant aqui (idx_candidates_tenant_horizon, idx_contestations_tenant_seq,
+   idx_promotion_events_ordinal). (Sem crase neste comentario: o SCHEMA e um template literal.) */
+CREATE INDEX IF NOT EXISTS idx_recall_cases_tenant_created ON recall_cases (tenant_id, created_at, id);
+
+/* Indice DERIVADO de recall_cases.closure: uma linha por (claim, caso). E a resposta a pergunta que
+   o gate faz -- "este claim esta em alguma closure?" -- em uma busca indexada, no lugar de varrer e
+   parsear a historia inteira de recalls do tenant. SQLite-only (nao espelhado), como locks: e
+   projecao de uma coluna que ja e duravel. recall_closure_index guarda de quantos casos o indice foi
+   derivado, para que uma escrita por fora (rebuild, restore, edicao direta) seja detectada e
+   corrigida antes da proxima leitura em vez de fazer o gate falhar ABERTO. */
+CREATE TABLE IF NOT EXISTS recall_closure_members (
+  tenant_id TEXT NOT NULL,
+  claim_id TEXT NOT NULL,
+  recall_id TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, claim_id, recall_id)
+);
+CREATE INDEX IF NOT EXISTS idx_recall_closure_members_case ON recall_closure_members (tenant_id, recall_id);
+
+CREATE TABLE IF NOT EXISTS recall_closure_index (
+  tenant_id TEXT NOT NULL,
+  indexed_cases INTEGER NOT NULL,
+  PRIMARY KEY (tenant_id)
 );
 
 CREATE TABLE IF NOT EXISTS recall_checkpoints (

@@ -98,17 +98,66 @@ export class RecallWorker {
     batchSize: number = 1,
     ctx: ExecutionContext = {},
   ): Promise<RecallProgress | null> {
-    const record = await this.repo.get(recallId)
-    if (!record) return null
+    const driven = this.stepSync(recallId, batchSize, ctx)
+    for (const broadcast of driven.broadcasts) broadcast()
+    return driven.progress
+  }
+
+  /**
+   * Drives an unfinished case to completion, or to `maxBatches`, INSIDE ONE synchronous unit.
+   *
+   * WHY SYNCHRONOUS (retry #8, TL/QA: the gate's only modelled exit)
+   * ---------------------------------------------------------------
+   * `cognitive.recall` is idempotent by contestation, and its replay branch returned unconditionally
+   * for any EXISTING case — so a case that stopped at the batch cap could never be re-driven through
+   * the tool surface, while its own refusal instructed the operator to "re-drive the case with a
+   * larger batchSize". Resuming instead of replaying is the fix, and it is only safe if the decision
+   * to resume and the writes that satisfy it cannot interleave with a second caller's: every batch
+   * here is load → step → checkpoint with NO await between them, and the whole drive runs inside the
+   * caller's `serialTransaction`. Two concurrent resumes therefore cannot step separately loaded
+   * copies of the same case.
+   *
+   * Returns the broadcasts to run once the caller's transaction has committed.
+   */
+  driveSync(
+    recallId: string,
+    batchSize: number,
+    ctx: ExecutionContext,
+    maxBatches: number,
+  ): { progress: RecallProgress | null; batchLimitReached: boolean; broadcasts: Array<() => void> } {
+    const broadcasts: Array<() => void> = []
+    let progress: RecallProgress | null = null
+    let batchLimitReached = true
+    for (let i = 0; i < maxBatches; i++) {
+      const stepped = this.stepSync(recallId, batchSize, ctx)
+      broadcasts.push(...stepped.broadcasts)
+      progress = stepped.progress
+      if (!progress || progress.isComplete) {
+        batchLimitReached = false
+        break
+      }
+    }
+    return { progress, batchLimitReached, broadcasts }
+  }
+
+  /** One batch: load, step, checkpoint, complete-if-done. Synchronous by construction. */
+  private stepSync(
+    recallId: string,
+    batchSize: number,
+    ctx: ExecutionContext,
+  ): { progress: RecallProgress | null; broadcasts: Array<() => void> } {
+    const broadcasts: Array<() => void> = []
+    const record = this.repo.getSync(recallId)
+    if (!record) return { progress: null, broadcasts }
 
     const { recallCase } = record
     if (recallCase.status === "completed") {
-      return exportRecallProgress(recallCase, true)
+      return { progress: exportRecallProgress(recallCase, true), broadcasts }
     }
 
     const progress = stepRecall(recallCase, batchSize, ctx)
 
-    await this.repo.checkpoint(recallId, recallCase.checkpoint, recallCase)
+    broadcasts.push(this.repo.checkpointSync(recallId, recallCase.checkpoint, recallCase))
 
     this.emit({
       type: "RecallProgressed",
@@ -131,10 +180,10 @@ export class RecallWorker {
     }
 
     if (progress.isComplete && recallCase.scarHistory) {
-      await this.repo.complete(recallId, recallCase.scarHistory, recallCase)
+      broadcasts.push(this.repo.completeSync(recallId, recallCase.scarHistory, recallCase))
     }
 
-    return progress
+    return { progress, broadcasts }
   }
 
   async interruptAndResume(

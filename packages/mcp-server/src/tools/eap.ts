@@ -28,8 +28,8 @@ import { REFUSAL_OBLIGATIONS, type RefusalCode } from "@open-graph-mcp/graph-cor
 import type { Candidate } from "@open-graph-mcp/graph-core/eap/promotion"
 import type { RecallNotice, RecallProgress } from "@open-graph-mcp/graph-core/eap/recall"
 import { validateEvidence } from "@open-graph-mcp/graph-core/eap/contestation"
-import { StoredStateCorruptionError } from "../eap/eap-repositories"
-import { findRecallClosureMembership } from "../eap/recall-closure"
+import { StoredStateCorruptionError, type SqliteRecallRepository } from "../eap/eap-repositories"
+import { findRecallClosureMembership, findRecallClosureMemberships } from "../eap/recall-closure"
 
 export type EapRefusal = {
   code: RefusalCode
@@ -464,6 +464,12 @@ function eapPromoteGoverned(
         refusal: createEapRefusal("MALFORMED_CONTRACT", "Promotion requires at least one candidate to distil"),
       }
     }
+    // ONE closure-membership resolution FOR THE WHOLE BATCH. This used to run once per candidate,
+    // inside this transaction, against an unindexed table (TL Tier 3 / QA RESOURCE_EXHAUSTION):
+    // promoting 50 candidates re-read and re-parsed the tenant's entire recall history 50 times
+    // while holding the write lock. Membership cannot change inside this unit of work, so it is
+    // resolved once, before the loop, in a single indexed query.
+    const closureMembership = findRecallClosureMemberships(state.db, tenantId, candidateIds)
     const distilled: Candidate[] = []
     for (const candidateId of candidateIds) {
       const row = state.db
@@ -490,7 +496,7 @@ function eapPromoteGoverned(
       // Same gate as VERIFY: a candidate that was `verified` BEFORE a later recall pulled it into a
       // closure still reads `verified`, and 003 defers what it should read instead. What is not
       // deferred is that it must not be distilled into a parent horizon on that stale verification.
-      const membership = findRecallClosureMembership(state.db, tenantId, candidateId)
+      const membership = closureMembership.get(candidateId)
       if (membership) {
         return {
           ok: false,
@@ -823,51 +829,78 @@ async function eapRecallGoverned(
   const recallId = initiation.recallCaseId!
   const contestation = services.contestations.getContestation(contestationRef.value)!
 
-  // IDEMPOTENT BY CONTESTATION, ATOMICALLY.
+  // The execution context is a snapshot of the tenant's claim states, claim→cell map and cell
+  // ownership. It is read BEFORE the transaction opens, once per command, and handed to every batch.
+  const ctx = services.recallContext()
+
+  // IDEMPOTENT BY CONTESTATION, RESUMABLE, ATOMICALLY.
   //
-  // The read that establishes idempotency ("is there already a case for this contestation?") and
-  // the writes that satisfy it (allocate the recall sequence, create the case and its checkpoint)
-  // commit as ONE serialized unit. Previously they were separated by two `await` boundaries, so two
-  // concurrent `cognitive.recall` calls inside one process both saw no case, both burned a sequence
-  // and both drove the same closure. Everything inside this callback is synchronous by
-  // construction — that is what makes the window impossible rather than merely narrow.
-  const opened = serialTransaction(
+  // The read that establishes idempotency ("is there already a case for this contestation?"), the
+  // writes that satisfy it (allocate the recall sequence, create the case and its checkpoint) AND
+  // the batches that drive it commit as ONE serialized unit. Previously they were separated by
+  // `await` boundaries, so two concurrent `cognitive.recall` calls inside one process both saw no
+  // case, both burned a sequence and both drove the same closure — and once the drive itself was
+  // reachable for an EXISTING case, two callers could step separately loaded copies of it.
+  // Everything inside this callback is synchronous by construction, which is what makes the window
+  // impossible rather than merely narrow.
+  //
+  // A case that already exists is RESUMED, not replayed, unless it is already `completed`:
+  // `batchLimitReached` tells the operator to re-drive the case with a larger batchSize, and this is
+  // the tool that has to honour it. A COMPLETED case still replays, byte-identically, because
+  // idempotency by contestation is what makes a retry safe.
+  const outcome = serialTransaction(
     state.db,
     ():
-      | { kind: "replay" }
       | { kind: "refused"; message: string }
-      | { kind: "created"; notice: RecallNotice; closure: string[] } => {
-      if (services.recallRepo.exists(recallId)) return { kind: "replay" }
-
-      const notice: RecallNotice = {
-        recallId,
-        contestationId: contestation.id,
-        targetClaimIds: [...contestation.targetClaimIds],
-        severity: contestation.severity,
-        contestationStatus: contestation.admitted ? "admitted" : "refused",
-        tenantId,
-        initiatedAt: new Date().toISOString(),
-        seq: allocateSequence(state.db, tenantId, "recalls"),
+      | { kind: "absent" }
+      | { kind: "replay"; record: RecallRecord }
+      | { kind: "driven"; record: RecallRecord | null; created: boolean; batchLimitReached: boolean; progress: RecallProgress | null; broadcasts: Array<() => void> } => {
+      let created = false
+      if (!services.recallRepo.exists(recallId)) {
+        const notice: RecallNotice = {
+          recallId,
+          contestationId: contestation.id,
+          targetClaimIds: [...contestation.targetClaimIds],
+          severity: contestation.severity,
+          contestationStatus: contestation.admitted ? "admitted" : "refused",
+          tenantId,
+          initiatedAt: new Date().toISOString(),
+          seq: allocateSequence(state.db, tenantId, "recalls"),
+        }
+        const opened = services.recalls.initiateRecallAtomic(notice)
+        if ("refused" in opened) return { kind: "refused", message: opened.message }
+        created = true
       }
 
-      const created = services.recalls.initiateRecallAtomic(notice)
-      if ("refused" in created) return { kind: "refused", message: created.message }
-      return { kind: "created", notice, closure: created.closure }
+      const loaded = services.recallRepo.getSync(recallId)
+      if (!loaded) return { kind: "absent" }
+      if (!created && loaded.recallCase.status === "completed") return { kind: "replay", record: loaded }
+
+      const batchSize = args.batchSize ?? Math.max(1, loaded.recallCase.closure.length)
+      const driven = services.recalls.driveSync(recallId, batchSize, ctx, RECALL_LIMITS.maxBatches)
+      return {
+        kind: "driven",
+        record: services.recallRepo.getSync(recallId),
+        created,
+        batchLimitReached: driven.batchLimitReached,
+        progress: driven.progress,
+        broadcasts: driven.broadcasts,
+      }
     },
   )
 
-  if (opened.kind === "refused") {
-    return { ok: false, refusal: createEapRefusal("RECALL_UNPROVEN", opened.message) }
+  if (outcome.kind === "refused") {
+    return { ok: false, refusal: createEapRefusal("RECALL_UNPROVEN", outcome.message) }
+  }
+  if (outcome.kind === "absent") {
+    return {
+      ok: false,
+      refusal: createEapRefusal("RESOURCE_ABSENT", `Recall case '${recallId}' exists but carries no durable checkpoint`),
+    }
   }
 
-  if (opened.kind === "replay") {
-    const existing = await services.recallRepo.get(recallId)
-    if (!existing) {
-      return {
-        ok: false,
-        refusal: createEapRefusal("RESOURCE_ABSENT", `Recall case '${recallId}' exists but carries no durable checkpoint`),
-      }
-    }
+  if (outcome.kind === "replay") {
+    const existing = outcome.record
     return {
       ok: true,
       admitted: recallOutcome(existing.recallCase.id, contestationRef.value, {
@@ -876,11 +909,7 @@ async function eapRecallGoverned(
         closure: existing.recallCase.closure,
         checkpointSeq: existing.checkpoint.sequence,
         suspendedCells: existing.checkpoint.suspendedCells,
-        degraded: [...existing.recallCase.degradedClaimStates.entries()].map(([claimId, v]) => ({
-          claimId,
-          previousState: v.previousState,
-          newState: v.normativelyResolvedState,
-        })),
+        degraded: degradationsOf(existing),
         replayed: true,
         remainingClaimIds: existing.checkpoint.remainingClaimIds,
         batchLimitReached: false,
@@ -888,22 +917,12 @@ async function eapRecallGoverned(
     }
   }
 
-  const { notice, closure } = opened
+  // The suspensions this drive projected are durable now that the transaction has returned; this is
+  // the push to live sessions (state.ts `pushEnvelope`), never the write.
+  for (const broadcast of outcome.broadcasts) broadcast()
 
-  const ctx = services.recallContext()
-  const batchSize = args.batchSize ?? Math.max(1, closure.length)
-  let progress: RecallProgress | null = null
-  let batchLimitReached = true
-  for (let i = 0; i < RECALL_LIMITS.maxBatches; i++) {
-    progress = await services.recalls.processBatch(recallId, batchSize, ctx)
-    if (!progress || progress.isComplete) {
-      batchLimitReached = false
-      break
-    }
-  }
-
-  const settled = await services.recallRepo.get(recallId)
-  const status = settled?.recallCase.status ?? "active"
+  const settled = outcome.record
+  const closure = settled?.recallCase.closure ?? []
 
   appendEvent(state, tenantId, {
     kind: "RecallProgressed",
@@ -912,7 +931,7 @@ async function eapRecallGoverned(
     payload: {
       recallId,
       contestationId: contestation.id,
-      checkpoint: progress?.checkpoint.sequence ?? 0,
+      checkpoint: outcome.progress?.checkpoint.sequence ?? 0,
       affectedClaimIds: closure,
     },
   })
@@ -924,17 +943,33 @@ async function eapRecallGoverned(
   return {
     ok: true,
     admitted: recallOutcome(recallId, contestation.id, {
-      status,
-      seq: notice.seq!,
+      status: settled?.recallCase.status ?? "active",
+      seq: settled?.recallCase.notice.seq ?? contestation.seq ?? 0,
       closure,
-      checkpointSeq: progress?.checkpoint.sequence ?? 0,
-      suspendedCells: settled ? settled.checkpoint.suspendedCells : (progress?.suspendedCells ?? []),
-      degraded: progress?.degradedClaims ?? [],
+      checkpointSeq: outcome.progress?.checkpoint.sequence ?? 0,
+      suspendedCells: settled ? settled.checkpoint.suspendedCells : (outcome.progress?.suspendedCells ?? []),
+      // THE WHOLE CASE, NOT THE LAST BATCH. This used to report `progress.degradedClaims`, which is
+      // the degradations of the FINAL batch only: a drive at batchSize 1 over a four-claim closure
+      // reported one degraded claim, while replaying the very same case reported four. Both branches
+      // now read the same durable field, so they cannot disagree about the same case.
+      degraded: settled ? degradationsOf(settled) : [],
       replayed: false,
+      resumed: !outcome.created,
       remainingClaimIds: settled?.checkpoint.remainingClaimIds ?? [],
-      batchLimitReached,
+      batchLimitReached: outcome.batchLimitReached,
     }),
   }
+}
+
+type RecallRecord = NonNullable<ReturnType<SqliteRecallRepository["getSync"]>>
+
+/** The case's cumulative degradations, from the durable state both branches read. */
+function degradationsOf(record: RecallRecord): Array<{ claimId: string; previousState: string; newState: string }> {
+  return [...record.recallCase.degradedClaimStates.entries()].map(([claimId, v]) => ({
+    claimId,
+    previousState: v.previousState,
+    newState: v.normativelyResolvedState,
+  }))
 }
 
 function recallOutcome(
@@ -948,6 +983,8 @@ function recallOutcome(
     suspendedCells: string[]
     degraded: Array<{ claimId: string; previousState: string; newState: string }>
     replayed: boolean
+    /** The case already existed and this command ADVANCED it, rather than opening it. */
+    resumed?: boolean
     remainingClaimIds: string[]
     batchLimitReached: boolean
   }
@@ -968,6 +1005,9 @@ function recallOutcome(
     suspendedCells: detail.suspendedCells,
     degradedClaims: detail.degraded,
     ...(detail.replayed ? { replayed: true } : {}),
+    // Distinct from `replayed`: the case existed and was UNFINISHED, and this command drove it
+    // further. It is the audit trail of the remedy `batchLimitReached` names.
+    ...(detail.resumed ? { resumed: true } : {}),
     // Distinct, actionable: the drive loop stopped because it hit its own batch cap, not because
     // the closure was exhausted. The recall is durably checkpointed and unfinished; finishing it
     // requires an operator-driven run (a larger `batchSize` shortens it), not a retry of this call,

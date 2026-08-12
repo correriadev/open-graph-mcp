@@ -23,6 +23,8 @@
 import type { Database } from "bun:sqlite"
 import { allocateSequence, serialTransaction, write } from "../db"
 import { projectRecallToReadModel } from "./recall-projection"
+import { indexRecallClosure, markRecallClosureIndexed } from "./recall-closure"
+import { StoredStateCorruptionError } from "./stored-state"
 import type {
   Candidate,
   Horizon,
@@ -47,26 +49,12 @@ import {
 const nowIso = () => new Date().toISOString()
 
 /**
- * A stored JSON column that does not parse.
- *
- * Every writer in this file stringifies, so this is unreachable from client input — but
- * `rebuildFromJsonl` replays arbitrary on-disk JSONL into exactly these columns, so a truncated or
- * hand-edited mirror turned a governed read into an unhandled `SyntaxError` escaping the repository
- * boundary. The tool adapters map this to a typed Refusal: durable state that cannot be read is a
- * resource that does not resolve, not a crash. `dependency-query.ts` models the same discipline for
- * the columns where an empty result is the honest answer; here the row IS the aggregate, so the
- * only honest answer is a refusal.
+ * A stored JSON column that does not parse — defined in `stored-state.ts` and re-exported here,
+ * where every importer already expects it. `dependency-query.ts` models the same discipline for the
+ * columns where an empty result is the honest answer; here the row IS the aggregate, so the only
+ * honest answer is a refusal.
  */
-export class StoredStateCorruptionError extends Error {
-  constructor(
-    readonly table: string,
-    readonly column: string,
-    readonly rowId: string,
-  ) {
-    super(`Stored ${table}.${column} for '${rowId}' is not readable JSON; durable state is corrupt`)
-    this.name = "StoredStateCorruptionError"
-  }
-}
+export { StoredStateCorruptionError } from "./stored-state"
 
 function parseStored<T>(raw: unknown, table: string, column: string, rowId: string, fallback?: string): T {
   const text = raw === null || raw === undefined ? (fallback ?? "null") : String(raw)
@@ -255,17 +243,29 @@ function serializeRecallState(c: RecallCase): SerializedRecallState {
   }
 }
 
+/** Pushes already-durable events onto the live session bus. Runs only after the unit of work
+ *  that wrote them has COMMITTED. */
+export type Broadcast = () => void
+const NO_BROADCAST: Broadcast = () => {}
+
 /**
- * Publishes the read model's own domain events, AFTER the unit of work that produced them commits.
+ * Publishes the read model's own domain events.
  *
  * The write model and the durable read model already committed together; the notification channel
  * was left out of that unit (TL Tier 3). This is the port that puts it back in: the repository
  * hands over exactly what the projection changed, and the composition root (`services.ts`) binds it
  * to `appendEvent`. It is optional so that the pure-persistence tests can construct a repository
  * with no server state; production always supplies it.
+ *
+ * CONTRACT (retry #8, TL Tier 4). This is called INSIDE the transaction that wrote the suspension,
+ * and it must WRITE the durable `events` row there — `appendEvent(..., { defer: true })`, exactly
+ * as `changeset.ts` does for `authority.flipped`. It returns the broadcast, which the repository
+ * runs only once the transaction has returned. Running the whole `appendEvent` afterwards, as this
+ * used to, put the events row in its own implicit transaction: a failure between the two left
+ * `authority` at `suspended` with no row in the append-only log a reconnecting session replays from.
  */
 export interface RecallReadModelPublisher {
-  truthOwnershipSuspended(cells: string[], recallCase: RecallCase): void
+  truthOwnershipSuspended(cells: string[], recallCase: RecallCase): Broadcast
 }
 
 export class SqliteRecallRepository {
@@ -277,13 +277,14 @@ export class SqliteRecallRepository {
   ) {}
 
   /**
-   * Announces a projection's suspensions once the transaction has RETURNED (i.e. committed).
+   * Writes the announcement in the SAME unit of work as the suspension it describes, and returns
+   * the push to live sessions for the caller to run once that unit has RETURNED (i.e. committed).
    * Publishing inside the unit would let a subscriber observe an ownership change a rollback then
-   * erases — the same ordering `eapPromote`/`eapContest` already use for their events.
+   * erases; writing the event outside it would let the ownership change outlive its own audit row.
    */
-  private announce(cells: string[], recallCase: RecallCase): void {
-    if (cells.length === 0 || !this.publisher) return
-    this.publisher.truthOwnershipSuspended(cells, recallCase)
+  private announce(cells: string[], recallCase: RecallCase): Broadcast {
+    if (cells.length === 0 || !this.publisher) return NO_BROADCAST
+    return this.publisher.truthOwnershipSuspended(cells, recallCase)
   }
 
   async create(recallCase: RecallCase): Promise<void> {
@@ -298,17 +299,23 @@ export class SqliteRecallRepository {
   createSync(recallCase: RecallCase): void {
     serialTransaction(this.db, () => {
       const ts = nowIso()
+      const closure = JSON.stringify(recallCase.closure)
       write(this.db, this.stateDir, this.tenantId, "recall_cases", {
         tenant_id: this.tenantId,
         id: recallCase.id,
         contestation_id: recallCase.notice.contestationId,
         status: recallCase.status,
         notice: JSON.stringify(recallCase.notice),
-        closure: JSON.stringify(recallCase.closure),
+        closure,
         state: JSON.stringify(serializeRecallState(recallCase)),
         created_at: ts,
         updated_at: ts,
       })
+      // The closure gate's index, in the SAME unit as the closure it indexes: a case that commits is
+      // gateable, a case that rolls back leaves no index row behind. The closure is immutable after
+      // creation, so this is the only place that has to maintain it.
+      indexRecallClosure(this.db, this.tenantId, recallCase.id, closure)
+      markRecallClosureIndexed(this.db, this.tenantId)
       this.writeCheckpoint(recallCase.checkpoint)
     })
   }
@@ -323,7 +330,20 @@ export class SqliteRecallRepository {
   }
 
   async checkpoint(recallId: string, checkpoint: RecallCheckpoint, recallCase?: RecallCase): Promise<void> {
-    const suspended = serialTransaction(this.db, (): string[] => {
+    this.checkpointSync(recallId, checkpoint, recallCase)()
+  }
+
+  /**
+   * Synchronous checkpoint, returning the post-commit broadcast.
+   *
+   * The synchronous face exists so a caller can LOAD a case, step it and check it back inside ONE
+   * `serialTransaction`. While every step was reachable only through `async` methods, the load and
+   * the write were separated by microtask boundaries, so two callers driving the same case each
+   * stepped a separately loaded copy and the second overwrote the first (see `RecallWorker.driveSync`).
+   */
+  checkpointSync(recallId: string, checkpoint: RecallCheckpoint, recallCase?: RecallCase): Broadcast {
+    let broadcast: Broadcast = NO_BROADCAST
+    serialTransaction(this.db, (): string[] => {
       if (recallCase) {
         const existing = this.db
           .query("SELECT created_at FROM recall_cases WHERE tenant_id = ? AND id = ?")
@@ -342,13 +362,14 @@ export class SqliteRecallRepository {
         // SAME UNIT OF WORK as the checkpoint: the read model can never lag the case state it is
         // derived from, not even by one failed transaction. See recall-projection.ts.
         const projected = projectRecallToReadModel(this.db, this.stateDir, this.tenantId, recallCase)
+        broadcast = this.announce(projected.suspendedCells, recallCase)
         this.writeCheckpoint(checkpoint)
         return projected.suspendedCells
       }
       this.writeCheckpoint(checkpoint)
       return []
     })
-    if (recallCase) this.announce(suspended, recallCase)
+    return broadcast
   }
 
   private writeCheckpoint(checkpoint: RecallCheckpoint): void {
@@ -361,7 +382,13 @@ export class SqliteRecallRepository {
   }
 
   async complete(recallId: string, scar: RecallScarRecord, recallCase?: RecallCase): Promise<void> {
-    const suspended = serialTransaction(this.db, (): string[] => {
+    this.completeSync(recallId, scar, recallCase)()
+  }
+
+  /** Synchronous completion, returning the post-commit broadcast. See `checkpointSync`. */
+  completeSync(recallId: string, scar: RecallScarRecord, recallCase?: RecallCase): Broadcast {
+    let broadcast: Broadcast = NO_BROADCAST
+    serialTransaction(this.db, (): void => {
       write(this.db, this.stateDir, this.tenantId, "recall_scars", {
         tenant_id: this.tenantId,
         recall_id: recallId,
@@ -383,7 +410,9 @@ export class SqliteRecallRepository {
           created_at: existing?.created_at ?? nowIso(),
           updated_at: nowIso(),
         })
-        return projectRecallToReadModel(this.db, this.stateDir, this.tenantId, recallCase).suspendedCells
+        const projected = projectRecallToReadModel(this.db, this.stateDir, this.tenantId, recallCase)
+        broadcast = this.announce(projected.suspendedCells, recallCase)
+        return
       } else {
         // The caller did not hand us the case, but completion still has to travel the SAME durable
         // path. The old raw UPDATE touched SQLite only: the append-only JSONL mirror never saw the
@@ -408,12 +437,16 @@ export class SqliteRecallRepository {
           updated_at: nowIso(),
         })
       }
-      return []
     })
-    if (recallCase) this.announce(suspended, recallCase)
+    return broadcast
   }
 
   async get(recallId: string): Promise<{ recallCase: RecallCase; checkpoint: RecallCheckpoint } | null> {
+    return this.getSync(recallId)
+  }
+
+  /** Synchronous load, so a caller can load-decide-write inside one transaction. See `checkpointSync`. */
+  getSync(recallId: string): { recallCase: RecallCase; checkpoint: RecallCheckpoint } | null {
     const row = this.db
       .query("SELECT id, status, notice, closure, state FROM recall_cases WHERE tenant_id = ? AND id = ?")
       .get(this.tenantId, recallId) as Record<string, unknown> | null
@@ -425,7 +458,7 @@ export class SqliteRecallRepository {
 
     const checkpoint = parseStored<RecallCheckpoint>(cpRow.checkpoint, "recall_checkpoints", "checkpoint", recallId)
     const state = parseStored<SerializedRecallState>(row.state, "recall_cases", "state", recallId)
-    const scar = await this.getScar(recallId)
+    const scar = this.getScarSync(recallId)
 
     const recallCase: RecallCase = {
       id: String(row.id),
@@ -443,6 +476,10 @@ export class SqliteRecallRepository {
   }
 
   async getScar(recallId: string): Promise<RecallScarRecord | null> {
+    return this.getScarSync(recallId)
+  }
+
+  getScarSync(recallId: string): RecallScarRecord | null {
     const row = this.db
       .query("SELECT scar FROM recall_scars WHERE tenant_id = ? AND recall_id = ?")
       .get(this.tenantId, recallId) as { scar: string } | null
