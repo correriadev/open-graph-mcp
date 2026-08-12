@@ -234,7 +234,11 @@ export function matchOne(f: Filter, e: EventEnvelope): boolean {
 
 /** Kinds que ignoram filtro de sessão — sempre chegam a todo conectado do tenant (Fase 3 §6.1).
  *  `user.joined` é "broadcast geral p/ contagem da topbar atualizar" por definição da tabela §6.1. */
-const ALWAYS_BROADCAST_KINDS = new Set<string>(["authority.flipped", "user.joined"])
+/** `TruthOwnershipSuspended` joins them for the same reason as `authority.flipped`: it IS an
+ *  authority-table write (graph → suspended), and 003 §Events names the authority view among its
+ *  consumers. A session filtered to one changeset still has to learn the graph stopped owning a
+ *  truth it is rendering. */
+const ALWAYS_BROADCAST_KINDS = new Set<string>(["authority.flipped", "user.joined", "TruthOwnershipSuspended"])
 
 /** OR dentro de um filtro, AND entre filtros. Vazio = tudo (spec §4.4). authority.flipped ignora filtro. */
 export function matches(filters: Filter[], e: EventEnvelope): boolean {

@@ -31,15 +31,35 @@
  *    directly rewritten"; committed claims are append-only and `state.claimsCache` is built on that
  *    invariant. Truth ownership of the claim's cell is the read-model consequence of a recall, and
  *    that is what is projected.
+ *
+ * WHAT THE PROJECTION REPORTS (retry #7, TL Tier 3)
+ * ------------------------------------------------
+ * Every other writer to the `authority` table pairs the write with an event that `state.ts` lists as
+ * ALWAYS_BROADCAST, precisely because an ownership change is something every connected session must
+ * learn. This projection wrote `suspended` and announced nothing; the only `TruthOwnershipSuspended`
+ * emissions on the tool path came from the LAST batch's progress, so with any `batchSize` smaller
+ * than the closure, cells suspended in earlier batches were durably suspended and announced nowhere.
+ *
+ * The projection now RETURNS the cells it newly suspended, so the caller (`SqliteRecallRepository`)
+ * can publish one event per cell once the unit of work has COMMITTED — a live session and the
+ * `authority` table cannot disagree, and no subscriber ever observes a suspension a rollback erases.
  */
 import type { Database } from "bun:sqlite"
 import type { RecallCase } from "@open-graph-mcp/graph-core/eap/recall"
 import { write } from "../db"
 import { canonicalCell } from "../cell"
 
+/** What this projection call actually changed, for the caller to announce after the commit. */
+export interface RecallProjectionResult {
+  /** Cells this call moved from graph-owned to `suspended`. Empty on a re-applied batch. */
+  suspendedCells: string[]
+}
+
 /**
  * Applies `recallCase`'s durable degradation and suspension to the read model. Idempotent: it is
- * called once per checkpointed batch and re-applies the same terminal values.
+ * called once per checkpointed batch and re-applies the same terminal values — which is also why
+ * `suspendedCells` is the NEWLY suspended set and not the case's whole suspension history: a cell
+ * already at `suspended` is skipped, so re-projection announces nothing twice.
  *
  * MUST be called from inside a `serialTransaction` — it is part of the checkpoint's unit of work,
  * never a separate one.
@@ -49,7 +69,7 @@ export function projectRecallToReadModel(
   stateDir: string,
   tenantId: string,
   recallCase: RecallCase,
-): void {
+): RecallProjectionResult {
   const now = new Date().toISOString()
 
   // 1. Directly recalled claims lose their admitted lifecycle state.
@@ -76,6 +96,7 @@ export function projectRecallToReadModel(
   // 2. Suspended cells lose graph truth ownership. `last_flip_seq` keeps the sequence of the flip
   // that made the cell graph-owned — the recall suspends the ownership, it does not re-flip it —
   // and `last_flip_by` records which recall case did the suspending.
+  const newlySuspended: string[] = []
   for (const rawCell of recallCase.suspendedCells) {
     const cell = canonicalCell(rawCell)
     const existing = db
@@ -89,5 +110,8 @@ export function projectRecallToReadModel(
       last_flip_seq: existing?.last_flip_seq ?? 0,
       last_flip_by: `recall:${recallCase.id}`,
     })
+    newlySuspended.push(cell)
   }
+
+  return { suspendedCells: newlySuspended }
 }

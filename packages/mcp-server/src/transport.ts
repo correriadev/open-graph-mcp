@@ -167,30 +167,97 @@ const TOOLS = [
     description: "Drain (return and clear) system.message text queued for the caller since their last poll. Stateless — safe to call from a fresh process with no live SSE connection.",
     inputSchema: { type: "object", required: ["token"], properties: { token: { type: "string" } } },
   },
+  // ── EAP cognitive binding ────────────────────────────────────────────────────
+  //
+  // THE ADVERTISED SCHEMA IS THE INTERFACE (retry #7, QA MALFORMED_CONTRACT).
+  // For an MCP server whose consumer is an agent, `tools/list` is the ONLY machine-readable
+  // description of the reachable surface. These schemas used to omit fields the handlers REQUIRE:
+  // a client driven purely by `tools/list` sent the advertised `cognitive.propose` contract and got
+  // EVIDENCE_REQUIRED, sent the advertised `cognitive.promote` contract and got MALFORMED_CONTRACT,
+  // and could not send `basedOnSeq` at all — the whole optimistic-concurrency contract was
+  // advertised on no tool. Anything `tools/eap.ts` validates is now advertised, and anything it
+  // requires is in `required`.
   {
     name: "cognitive.initiate",
-    description: "Initiate an Epistemic Horizon under EAP.",
-    inputSchema: { type: "object", required: ["token", "horizonId"], properties: { token: { type: "string" }, horizonId: { type: "string" }, parentId: { type: "string" } } },
+    description: "Initiate an Epistemic Horizon under EAP. `parentId` declares the immediate topological parent edge (the horizon must already exist). `budget.limit` is the Horizon Budget allocation (default 100).",
+    inputSchema: {
+      type: "object",
+      required: ["token", "horizonId"],
+      properties: {
+        token: { type: "string" },
+        horizonId: { type: "string" },
+        parentId: { type: "string" },
+        seed: {
+          type: "object",
+          properties: { provenance: { type: "array", items: { type: "string" } }, references: { type: "array", items: { type: "string" } } },
+        },
+        budget: { type: "object", properties: { limit: { type: "integer", minimum: 0 } } },
+      },
+    },
   },
   {
     name: "cognitive.propose",
-    description: "Submit or advance an Epistemic Lifecycle proposal.",
-    inputSchema: { type: "object", required: ["token", "horizonId", "candidateId", "command"], properties: { token: { type: "string" }, horizonId: { type: "string" }, candidateId: { type: "string" }, command: { type: "string" } } },
+    description:
+      "Submit or advance an Epistemic Lifecycle proposal. The ladder is proposed -> DELIBERATE -> deliberated -> ADMIT -> admitted -> CONCRETIZE -> concretized -> VERIFY -> verified; any other command for the candidate's current state is refused ILLEGAL_TRANSITION. " +
+      "`evidence` is REQUIRED and must be a non-empty array — EVIDENCE_REQUIRED is terminal, there is no bypass. `basedOnSeq`, when supplied, must EQUAL the horizon's current seq (both a stale and a future base are refused STALE_BASE). " +
+      "VERIFY is refused REHAB_WITHOUT_PROOF for a candidate inside a Recall closure.",
+    inputSchema: {
+      type: "object",
+      required: ["token", "horizonId", "candidateId", "command", "evidence"],
+      properties: {
+        token: { type: "string" },
+        horizonId: { type: "string" },
+        candidateId: { type: "string" },
+        command: { type: "string", enum: ["DELIBERATE", "ADMIT", "CONCRETIZE", "VERIFY"] },
+        evidence: { type: "array", items: { type: "string" }, minItems: 1 },
+        basedOnSeq: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+      },
+    },
   },
   {
     name: "cognitive.promote",
-    description: "Promote knowledge across immediate topological parent edge.",
-    inputSchema: { type: "object", required: ["token", "childHorizonId", "targetParentHorizonId"], properties: { token: { type: "string" }, childHorizonId: { type: "string" }, targetParentHorizonId: { type: "string" } } },
+    description:
+      "Promote knowledge across the immediate topological parent edge. `candidateIds` is REQUIRED and non-empty: every id must exist in the child horizon and be `verified`, and none may sit inside a Recall closure. " +
+      "Idempotent by distillation — the same candidate SET out of the same child into the same parent replays the original promotionId with `replayed:true`. `basedOnSeq`, when supplied, must EQUAL max(child.seq, parent.seq).",
+    inputSchema: {
+      type: "object",
+      required: ["token", "childHorizonId", "targetParentHorizonId", "candidateIds"],
+      properties: {
+        token: { type: "string" },
+        childHorizonId: { type: "string" },
+        targetParentHorizonId: { type: "string" },
+        candidateIds: { type: "array", items: { type: "string" }, minItems: 1 },
+        basedOnSeq: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+      },
+    },
   },
   {
     name: "cognitive.contest",
-    description: "Submit evidence-backed contestation against admitted claims.",
-    inputSchema: { type: "object", required: ["token", "targetClaimIds", "severity", "evidence"], properties: { token: { type: "string" }, targetClaimIds: { type: "array" }, severity: { type: "string" }, evidence: { type: "array" } } },
+    description:
+      "Submit an evidence-backed contestation against admitted claims. Every `targetClaimIds` entry must resolve to a committed claim or an admitted-or-beyond candidate OF THE CALLER'S TENANT, and every `evidence` element must be a non-empty reference string — the contract is refused whole, never partially admitted.",
+    inputSchema: {
+      type: "object",
+      required: ["token", "targetClaimIds", "severity", "evidence"],
+      properties: {
+        token: { type: "string" },
+        targetClaimIds: { type: "array", items: { type: "string" }, minItems: 1 },
+        severity: { type: "string", enum: ["informative", "blocking", "invalidating"] },
+        evidence: { type: "array", items: { type: "string" }, minItems: 1 },
+        sourceHorizonId: { type: "string" },
+        reason: { type: "string" },
+      },
+    },
   },
   {
     name: "cognitive.recall",
-    description: "Initiate resumable recall from an admitted invalidating contestation.",
-    inputSchema: { type: "object", required: ["token", "contestationId"], properties: { token: { type: "string" }, contestationId: { type: "string" } } },
+    description:
+      "Initiate resumable recall from an admitted invalidating contestation. Idempotent by contestation: a second call replays the durable case with `replayed:true`. `batchSize` bounds one degradation batch (default: the whole closure). " +
+      "Resumption is driven by the DURABLE checkpoint, not by a caller-named one — a `checkpoint` argument is refused MALFORMED_CONTRACT rather than silently discarded.",
+    inputSchema: {
+      type: "object",
+      required: ["token", "contestationId"],
+      properties: { token: { type: "string" }, contestationId: { type: "string" }, batchSize: { type: "integer", minimum: 1 } },
+    },
   },
 ]
 

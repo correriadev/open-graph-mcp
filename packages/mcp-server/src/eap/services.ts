@@ -16,7 +16,7 @@
  * call is deliberate. Caching them per tenant would reintroduce exactly the cross-request in-memory
  * state this feature spent five retries deleting.
  */
-import type { ServerState } from "../state"
+import { appendEvent, type ServerState } from "../state"
 import { HorizonStore, AdmissionLedgerStore } from "./horizon-store"
 import {
   SqliteApprovalRepository,
@@ -58,7 +58,21 @@ export function eapServices(state: ServerState, tenantId: string): EapServices {
 
   const promotionRepo = new SqlitePromotionRepository(db, stateDir, tenantId)
   const contestationRepo = new SqliteContestationRepository(db, stateDir, tenantId)
-  const recallRepo = new SqliteRecallRepository(db, stateDir, tenantId)
+  // The read model's notification port (003 §Events: `TruthOwnershipSuspended` → "Persistent
+  // Knowledge, authority view, subscribers"). Bound here rather than inside the repository so the
+  // repository stays a pure persistence adapter with no knowledge of the event log.
+  const recallRepo = new SqliteRecallRepository(db, stateDir, tenantId, {
+    truthOwnershipSuspended(cells, recallCase) {
+      for (const cellKey of cells) {
+        appendEvent(state, tenantId, {
+          kind: "TruthOwnershipSuspended",
+          targetKind: "cell",
+          targetId: cellKey,
+          payload: { recallId: recallCase.id, cellKey, seq: recallCase.checkpoint.sequence },
+        })
+      }
+    },
+  })
   const approvalRepo = new SqliteApprovalRepository(db, stateDir, tenantId)
   const auditRepo = new SqliteCapabilityAuditRepository(db, stateDir, tenantId)
 

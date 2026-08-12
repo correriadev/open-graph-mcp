@@ -29,6 +29,7 @@ import type { Candidate } from "@open-graph-mcp/graph-core/eap/promotion"
 import type { RecallNotice, RecallProgress } from "@open-graph-mcp/graph-core/eap/recall"
 import { validateEvidence } from "@open-graph-mcp/graph-core/eap/contestation"
 import { StoredStateCorruptionError } from "../eap/eap-repositories"
+import { findRecallClosureMembership } from "../eap/recall-closure"
 
 export type EapRefusal = {
   code: RefusalCode
@@ -46,7 +47,8 @@ export type EapResponse<T = any> =
  * Without it in this union the fallback below would treat a recalled candidate as `proposed` and
  * happily re-admit it (QA: invalidated knowledge kept climbing the lifecycle).
  */
-export type CandidateState = "proposed" | "deliberated" | "admitted" | "concretized" | "verified" | "recalled"
+export const CANDIDATE_STATES = ["proposed", "deliberated", "admitted", "concretized", "verified", "recalled"] as const
+export type CandidateState = (typeof CANDIDATE_STATES)[number]
 
 const CONTESTATION_SEVERITIES = ["informative", "blocking", "invalidating"] as const
 type ContestationSeverity = (typeof CONTESTATION_SEVERITIES)[number]
@@ -76,7 +78,9 @@ const MAX_SEQUENCE = Number.MAX_SAFE_INTEGER
  */
 function validateBasedOnSeq(value: unknown): { ok: true } | { ok: false; refusal: EapRefusal } {
   if (value === undefined) return { ok: true }
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > MAX_SEQUENCE) {
+  // `Number.isSafeInteger(-0)` is true and `-0 < 0` is false, so `-0` used to be admitted as a
+  // sequence. No allocator produces it and no canonical JSON round trip preserves it.
+  if (typeof value !== "number" || Object.is(value, -0) || !Number.isSafeInteger(value) || value < 0 || value > MAX_SEQUENCE) {
     return {
       ok: false,
       refusal: createEapRefusal(
@@ -184,7 +188,7 @@ export function eapInitiate(
   }
 }
 
-export function eapPropose(
+function eapProposeGoverned(
   state: ServerState,
   args: {
     token: string
@@ -253,6 +257,21 @@ export function eapPropose(
       .query("SELECT state, seq, created_at FROM candidates WHERE tenant_id = ? AND horizon_id = ? AND candidate_id = ?")
       .get(tenantId, horizonRef.value, candidateRef.value) as { state: string; seq: number; created_at: string } | null
 
+    // FAIL CLOSED ON AN UNRECOGNIZED STATE.
+    // The fallback below used to be `nextStateMap[state] ?? { command: 'DELIBERATE', next:
+    // 'deliberated' }`, so ANY value outside the union — a directly corrupted column, or a
+    // `rebuildFromJsonl` replay of a mirror written by a future or foreign schema version — was
+    // silently read as the START of the lifecycle and rewritten to `deliberated` (QA reproduced it
+    // with 'weird-state'). A lifecycle gate does not get to guess.
+    if (candRow !== null && !CANDIDATE_STATES.includes(candRow.state as CandidateState)) {
+      return {
+        ok: false,
+        refusal: createEapRefusal(
+          "ILLEGAL_TRANSITION",
+          `Candidate '${candidateRef.value}' holds unrecognized lifecycle state '${candRow.state}'; no transition can be derived from a state outside the epistemic lifecycle`,
+        ),
+      }
+    }
     const currentCandState: CandidateState = (candRow?.state as CandidateState) ?? "proposed"
 
     const nextStateMap: Record<CandidateState, { command: string; next: CandidateState }> = {
@@ -264,7 +283,7 @@ export function eapPropose(
       recalled: { command: "", next: "recalled" },
     }
 
-    const expected = nextStateMap[currentCandState] ?? { command: "DELIBERATE", next: "deliberated" }
+    const expected = nextStateMap[currentCandState]
 
     if (currentCandState === "recalled") {
       return {
@@ -283,6 +302,24 @@ export function eapPropose(
           "ILLEGAL_TRANSITION",
           `Cannot transition candidate '${candidateRef.value}' from '${currentCandState}' via '${args.command}'. Expected '${expected.command}'`
         ),
+      }
+    }
+
+    // THE RECALL-CLOSURE GATE (see eap/recall-closure.ts).
+    // A candidate the domain swept into a recall closure rests on a retracted premise. 003 defers
+    // the destination STATUS of an indirect dependent, so nothing here assigns one — but completing
+    // the lifecycle is rehabilitation, and rehabilitation travels the normal verification path with
+    // new proof (ADR §Correção, PRD FR-C4), never a VERIFY on the strength of the old admission.
+    if (args.command === "VERIFY") {
+      const membership = findRecallClosureMembership(state.db, tenantId, candidateRef.value)
+      if (membership) {
+        return {
+          ok: false,
+          refusal: createEapRefusal(
+            "REHAB_WITHOUT_PROOF",
+            `Candidate '${candidateRef.value}' is inside the recall closure of case '${membership.recallId}' (contestation '${membership.contestationId}'); its final status is undecided, but it cannot complete its lifecycle without new proof`,
+          ),
+        }
       }
     }
 
@@ -447,6 +484,19 @@ function eapPromoteGoverned(
           refusal: createEapRefusal(
             "ILLEGAL_TRANSITION",
             `Candidate '${candidateId}' is '${row.state}' in horizon '${childRef.value}'; only a verified candidate can be promoted`,
+          ),
+        }
+      }
+      // Same gate as VERIFY: a candidate that was `verified` BEFORE a later recall pulled it into a
+      // closure still reads `verified`, and 003 defers what it should read instead. What is not
+      // deferred is that it must not be distilled into a parent horizon on that stale verification.
+      const membership = findRecallClosureMembership(state.db, tenantId, candidateId)
+      if (membership) {
+        return {
+          ok: false,
+          refusal: createEapRefusal(
+            "REHAB_WITHOUT_PROOF",
+            `Candidate '${candidateId}' is inside the recall closure of case '${membership.recallId}' (contestation '${membership.contestationId}'); it cannot be distilled into a parent horizon without new proof`,
           ),
         }
       }
@@ -707,8 +757,13 @@ function mapContestationRefusal(code: string): RefusalCode {
   }
 }
 
-/** Bound on recall batches driven by one command; the closure is finite, this only stops a loop bug. */
-const MAX_RECALL_BATCHES = 10_000
+/**
+ * Bound on recall batches driven by one command; the closure is finite, so this only stops a loop
+ * bug. Held in a mutable record rather than a bare `const` so the exhaustion PATH — which is
+ * otherwise reachable only with a closure of 10k+ claims — is testable without a 10k-claim fixture.
+ * Nothing in production writes it.
+ */
+export const RECALL_LIMITS = { maxBatches: 10_000 }
 
 /**
  * Drives the governed `RecallWorker`.
@@ -735,8 +790,20 @@ async function eapRecallGoverned(
   const contestationRef = validateIdentifier(args.contestationId, "contestationId")
   if (!contestationRef.ok) return { ok: false, refusal: contestationRef.refusal }
 
-  if (args.checkpoint !== undefined && typeof args.checkpoint === "number" && (!Number.isInteger(args.checkpoint) || args.checkpoint < 0)) {
-    return { ok: false, refusal: createEapRefusal("MALFORMED_CONTRACT", "checkpoint must be a non-negative integer") }
+  // VALIDATED AND DISCARDED IS WORSE THAN UNSUPPORTED.
+  // `checkpoint` was range-checked here and then never read anywhere in the function: resumption is
+  // driven entirely by the DURABLE checkpoint, so a client naming a resumption point silently got a
+  // normal run and had every reason to believe it had resumed from the point it named. 003 lists
+  // large-closure batching limits among the boundaries implementation must stop at rather than
+  // decide, so the honest answer is a refusal, not a fabricated resumption semantics.
+  if (args.checkpoint !== undefined) {
+    return {
+      ok: false,
+      refusal: createEapRefusal(
+        "MALFORMED_CONTRACT",
+        "checkpoint is not a supported input: recall resumes from its own durable checkpoint, so a caller-named resumption point cannot be honoured. Omit it.",
+      ),
+    }
   }
   if (args.batchSize !== undefined && (!Number.isInteger(args.batchSize) || args.batchSize < 1)) {
     return { ok: false, refusal: createEapRefusal("MALFORMED_CONTRACT", "batchSize must be a positive integer") }
@@ -815,6 +882,8 @@ async function eapRecallGoverned(
           newState: v.normativelyResolvedState,
         })),
         replayed: true,
+        remainingClaimIds: existing.checkpoint.remainingClaimIds,
+        batchLimitReached: false,
       }),
     }
   }
@@ -824,9 +893,13 @@ async function eapRecallGoverned(
   const ctx = services.recallContext()
   const batchSize = args.batchSize ?? Math.max(1, closure.length)
   let progress: RecallProgress | null = null
-  for (let i = 0; i < MAX_RECALL_BATCHES; i++) {
+  let batchLimitReached = true
+  for (let i = 0; i < RECALL_LIMITS.maxBatches; i++) {
     progress = await services.recalls.processBatch(recallId, batchSize, ctx)
-    if (!progress || progress.isComplete) break
+    if (!progress || progress.isComplete) {
+      batchLimitReached = false
+      break
+    }
   }
 
   const settled = await services.recallRepo.get(recallId)
@@ -843,14 +916,10 @@ async function eapRecallGoverned(
       affectedClaimIds: closure,
     },
   })
-  for (const cellKey of progress?.suspendedCells ?? []) {
-    appendEvent(state, tenantId, {
-      kind: "TruthOwnershipSuspended",
-      targetKind: "cell",
-      targetId: cellKey,
-      payload: { recallId, cellKey, seq: progress?.checkpoint.sequence ?? 0 },
-    })
-  }
+  // `TruthOwnershipSuspended` is NOT emitted here any more. It used to be emitted from the LAST
+  // batch's `progress`, so with any batchSize smaller than the closure, cells suspended in earlier
+  // batches were durably suspended and announced nowhere. The read-model projection now publishes
+  // one event per cell at the moment it is projected (recall-projection.ts → services.ts).
 
   return {
     ok: true,
@@ -862,6 +931,8 @@ async function eapRecallGoverned(
       suspendedCells: settled ? settled.checkpoint.suspendedCells : (progress?.suspendedCells ?? []),
       degraded: progress?.degradedClaims ?? [],
       replayed: false,
+      remainingClaimIds: settled?.checkpoint.remainingClaimIds ?? [],
+      batchLimitReached,
     }),
   }
 }
@@ -877,18 +948,38 @@ function recallOutcome(
     suspendedCells: string[]
     degraded: Array<{ claimId: string; previousState: string; newState: string }>
     replayed: boolean
+    remainingClaimIds: string[]
+    batchLimitReached: boolean
   }
 ): Record<string, unknown> {
+  const complete = detail.status === "completed"
   return {
     recallId,
     contestationId,
     status: detail.status,
+    // `status: 'active'` used to be the ONLY hint that a recall had not finished, and it rode on an
+    // `ok: true` payload otherwise identical to a completed one. `complete` says it in one field,
+    // and `remainingClaimIds` names exactly what the closure still owes.
+    complete,
+    remainingClaimIds: detail.remainingClaimIds,
     affectedClaimIds: detail.closure,
     checkpoint: detail.checkpointSeq,
     seq: detail.seq,
     suspendedCells: detail.suspendedCells,
     degradedClaims: detail.degraded,
     ...(detail.replayed ? { replayed: true } : {}),
+    // Distinct, actionable: the drive loop stopped because it hit its own batch cap, not because
+    // the closure was exhausted. The recall is durably checkpointed and unfinished; finishing it
+    // requires an operator-driven run (a larger `batchSize` shortens it), not a retry of this call,
+    // which is idempotent by contestation and will replay this same partial case.
+    ...(detail.batchLimitReached
+      ? {
+          batchLimitReached: true,
+          maxBatches: RECALL_LIMITS.maxBatches,
+          obligation:
+            "Recall is durably checkpointed but INCOMPLETE: the batch cap was reached before the closure was exhausted. Re-drive the case with a larger batchSize; do not treat these degradations as the final closure.",
+        }
+      : {}),
   }
 }
 
@@ -905,6 +996,18 @@ function storedStateRefusal(err: unknown): EapResponse | null {
     return { ok: false, refusal: createEapRefusal("RESOURCE_ABSENT", err.message) }
   }
   return null
+}
+
+/** `eapPropose` reads `recall_cases.closure` for the closure gate, so it too can meet a corrupt
+ *  stored column, and a corrupt column on a gate must be a typed Refusal, never a stack trace. */
+export function eapPropose(state: ServerState, args: Parameters<typeof eapProposeGoverned>[1]): EapResponse {
+  try {
+    return eapProposeGoverned(state, args)
+  } catch (err) {
+    const refusal = storedStateRefusal(err)
+    if (refusal) return refusal
+    throw err
+  }
 }
 
 export function eapPromote(state: ServerState, args: Parameters<typeof eapPromoteGoverned>[1]): EapResponse {
