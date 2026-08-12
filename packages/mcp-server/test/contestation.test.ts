@@ -1,14 +1,18 @@
-import { describe, expect, test, beforeEach } from 'bun:test'
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { ContestationService } from '../src/eap/contestation-service'
-import { canInitiateRecall, validateEvidence } from '@open-graph-mcp/graph-core/eap/contestation'
+import { createEapEnv, type EapEnv } from './eap-env'
 
 describe('Task 08 — Contestation Admission (EAP)', () => {
+  let env: EapEnv
   let service: ContestationService
 
   beforeEach(() => {
-    service = new ContestationService([
-      { id: 'claim-101', content: 'Original admitted knowledge A', status: 'admitted' },
-    ])
+    env = createEapEnv()
+    service = new ContestationService(env.contestations)
+  })
+
+  afterEach(() => {
+    env.cleanup()
   })
 
   test('A contestation cannot directly edit an admitted claim', () => {
@@ -33,6 +37,23 @@ describe('Task 08 — Contestation Admission (EAP)', () => {
     }
   })
 
+  test('An empty target claim set is refused before any durable write', () => {
+    const outcome = service.contestKnowledge({
+      sourceHorizonId: 'horizon-alpha',
+      targetClaimIds: [],
+      evidenceRefs: ['proof'],
+      severity: 'blocking',
+    })
+    expect(outcome.status).toBe('REFUSED')
+    if (outcome.status === 'REFUSED') {
+      expect(outcome.refusal.code).toBe('INVALID_TARGET_CLAIM')
+    }
+    const rows = env.db
+      .query('SELECT COUNT(*) AS n FROM contestations WHERE tenant_id = ?')
+      .get(env.tenantId) as { n: number }
+    expect(rows.n).toBe(0)
+  })
+
   test('Only admitted invalidating contestations can initiate recall', () => {
     const contestationResult = service.contestKnowledge({
       id: 'contest-inv-1',
@@ -46,5 +67,33 @@ describe('Task 08 — Contestation Admission (EAP)', () => {
 
     const recallResult = service.initiateRecall('contest-inv-1')
     expect(recallResult.status).toBe('INITIATED')
+  })
+
+  test('A blocking contestation cannot initiate recall', () => {
+    service.contestKnowledge({
+      id: 'contest-blk-1',
+      sourceHorizonId: 'horizon-beta',
+      targetClaimIds: ['claim-101'],
+      evidenceRefs: ['proof-url-999'],
+      severity: 'blocking',
+    })
+
+    const recallResult = service.initiateRecall('contest-blk-1')
+    expect(recallResult.status).toBe('REFUSED')
+    expect(recallResult.refusal?.code).toBe('RECALL_UNPROVEN')
+  })
+
+  test('An admitted contestation identifier cannot be overwritten', () => {
+    const req = {
+      id: 'contest-dup',
+      sourceHorizonId: 'horizon-beta',
+      targetClaimIds: ['claim-101'],
+      evidenceRefs: ['proof'],
+      severity: 'invalidating' as const,
+    }
+    expect(service.contestKnowledge(req).status).toBe('ADMITTED')
+    const second = service.contestKnowledge({ ...req, targetClaimIds: ['claim-999'] })
+    expect(second.status).toBe('REFUSED')
+    expect(service.getContestation('contest-dup')?.targetClaimIds).toEqual(['claim-101'])
   })
 })

@@ -1,6 +1,10 @@
 /**
- * Promotion Service Adapter
- * Scope: packages/mcp-server/src/eap/promotion-service.ts
+ * Promotion Service Adapter — Task 06 (One-Edge Promotion).
+ *
+ * Retry#5 / REWORK-LOG defect 1: this service used to own a `PromotionStore` of in-memory `Map`s
+ * (horizons, proposals, events). It now owns NOTHING. Every read and write goes through
+ * `SqlitePromotionRepository`, which is the same durable table set the MCP tool adapters write to,
+ * so the two layers can no longer disagree and nothing is lost on restart.
  */
 
 import {
@@ -13,44 +17,39 @@ import {
   Sequence,
   promoteKnowledge,
 } from '@open-graph-mcp/graph-core/eap/promotion'
-
-export interface PromotionStore {
-  horizons: Map<HorizonId, Horizon>
-  proposals: Map<string, ParentProposal>
-  events: PromotionProposedEvent[]
-}
+import type { SqlitePromotionRepository } from './eap-repositories'
 
 export class PromotionService {
-  private store: PromotionStore = {
-    horizons: new Map(),
-    proposals: new Map(),
-    events: [],
+  constructor(private readonly repo: SqlitePromotionRepository) {
+    if (!repo) {
+      throw new Error('PromotionService requires a durable promotion repository')
+    }
   }
 
   public registerHorizon(horizon: Horizon): void {
     if (!horizon.id || horizon.id.trim() === '') {
       throw new Error('HorizonId must be non-empty')
     }
-    this.store.horizons.set(horizon.id, { ...horizon })
+    this.repo.saveHorizon({ ...horizon })
   }
 
   public getHorizon(id: HorizonId): Horizon | undefined {
-    return this.store.horizons.get(id)
+    return this.repo.getHorizon(id)
   }
 
   public updateSequence(id: HorizonId, seq: Sequence): void {
-    const horizon = this.store.horizons.get(id)
+    const horizon = this.repo.getHorizon(id)
     if (!horizon) {
       throw new Error(`Horizon '${id}' not found`)
     }
     if (seq < horizon.currentSeq) {
       throw new Error(`Sequence cannot decrease for horizon '${id}'`)
     }
-    horizon.currentSeq = seq
+    this.repo.saveHorizon({ ...horizon, currentSeq: seq })
   }
 
   public promote(request: PromotionRequest): PromotionResult {
-    const childHorizon = this.store.horizons.get(request.childId)
+    const childHorizon = this.repo.getHorizon(request.childId)
     if (!childHorizon) {
       return {
         success: false,
@@ -60,7 +59,7 @@ export class PromotionService {
       }
     }
 
-    const parentHorizon = this.store.horizons.get(request.parentId)
+    const parentHorizon = this.repo.getHorizon(request.parentId)
     if (!parentHorizon) {
       return {
         success: false,
@@ -75,20 +74,19 @@ export class PromotionService {
     const result = promoteKnowledge(childHorizon, request, currentApplicableSeq)
 
     if (result.success) {
-      this.store.proposals.set(result.proposal.id, result.proposal)
-      this.store.events.push(result.event)
+      // Proposal and its event commit as one durable unit: a promotion that is observable as an
+      // event but absent from the parent's proposal set is exactly the divergence this rework closes.
+      this.repo.saveProposalWithEvent(result.proposal, result.event)
     }
 
     return result
   }
 
   public getProposalsForParent(parentId: HorizonId): ParentProposal[] {
-    return Array.from(this.store.proposals.values()).filter(
-      (p) => p.parentId === parentId
-    )
+    return this.repo.getProposalsForParent(parentId)
   }
 
   public getEvents(): PromotionProposedEvent[] {
-    return [...this.store.events]
+    return this.repo.getEvents()
   }
 }

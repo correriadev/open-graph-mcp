@@ -1,0 +1,59 @@
+{
+  "featureId": "F001",
+  "score": 0.10,
+  "passedAdversarial": false,
+  "hasHighCriticalVuln": true,
+  "isCrashing": false,
+  "vulnerabilities": [
+    {
+      "type": "AUTH_BYPASS",
+      "severity": "HIGH",
+      "description": "packages/mcp-server/src/eap/eap-repositories.ts:354 SqliteApprovalRepository.registerApproval performs an unconditional INSERT OR REPLACE keyed on (tenant_id, id) and writes `consumed: approval.consumed ? 1 : 0`. Re-registering an approval id that was already consumed resets consumed to 0, defeating the single-use guarantee that consumeAuthorization enforces. Reproduced: registerApproval('ap1') -> consumeAuthorization('ap1') = {success:true} -> consumeAuthorization('ap1') = APPROVAL_ALREADY_USED -> registerApproval('ap1') again -> getApproval reports consumed:false -> consumeAuthorization('ap1') = {success:true}. The irreversible capability is then executable a second time on a spent authorization. Violates test-scenarios 2.1 'Should reject reused irreversible authorization when consumption is attempted twice' and 3.1 'Should execute an irreversible Capability ... consumes the authorization'. registerApproval must refuse (or no-op) when a row for that id already exists, and consumption must be terminal."
+    },
+    {
+      "type": "AUTH_BYPASS",
+      "severity": "HIGH",
+      "description": "packages/graph-core/src/eap/capabilities.ts:109 validateOperatorApproval computes `const expiresAtMs = typeof approval.expiresAt === 'string' ? Date.parse(approval.expiresAt) : approval.expiresAt` and then tests `if (now > expiresAtMs)`. For any unparseable expiry string Date.parse returns NaN and every comparison against NaN is false, so the approval is treated as NOT expired - permanently. Reproduced end-to-end: registerApproval({id:'ap2', scope:'sc', expiresAt:'not-a-date', basedOnSeq:3}) then CapabilityGateway.execute of an irreversible capability returned {status:'COMPLETED'} instead of APPROVAL_EXPIRED. Also note SqliteApprovalRepository.getApproval round-trips the value through TEXT and only restores a number when String(Number(raw)) === raw, so a malformed expiry survives storage unchanged. Violates test-scenarios 1.2 'Should reject Operator Approval when scope, expiry, or Sequence does not match' and 3.2 'Should refuse stale or out-of-scope Operator Approval'. Expiry must be rejected as MALFORMED at registration and Number.isNaN(expiresAtMs) must fail closed at validation."
+    },
+    {
+      "type": "RACE_CONDITION",
+      "severity": "HIGH",
+      "description": "packages/mcp-server/src/eap/capability-gateway.ts:100-197 CapabilityGateway.execute is a check-then-act across an await. It reads `this.audit.findByIdempotencyKey(request.idempotencyKey)` at the top, then awaits the provider, then calls `this.audit.record(...)` at the end. Nothing reserves the idempotency key between the read and the write, so concurrent requests carrying the same key all miss the cache and all invoke the external effect. Reproduced: three concurrent execute() calls with idempotencyKey 'SAME' produced 3 provider invocations (expected 1). Violates test-scenarios 2.3 'Should avoid duplicate effects when the Capability Provider receives the same idempotency key'. The key must be reserved durably (a UNIQUE row inserted inside serialTransaction before the provider call, later completed) rather than checked optimistically. Note the irreversible path is partly shielded because consumeAuthorization serializes, but every reversible capability is fully exposed."
+    },
+    {
+      "type": "DATA_INTEGRITY",
+      "severity": "HIGH",
+      "description": "packages/mcp-server/src/eap/eap-repositories.ts:300-304 SqliteRecallRepository.complete(), when called without the optional recallCase argument, marks the case finished with a raw `this.db.query(\"UPDATE recall_cases SET status = 'completed' ...\").run(...)`. That statement bypasses write() and therefore never reaches the append-only per-tenant JSONL mirror, which db.ts declares to be the authoritative durable copy. Reproduced: create(rec1) -> complete('rec1', scar) -> SQLite shows status 'completed' -> rebuildFromJsonl(db, dir, tenant) -> SQLite shows status 'in_progress' again, while the recall_scars row persists. After any rebuild or disaster restore a finished recall is resurrected as unfinished and will be reprocessed, applying degradation to the same affected set twice. Violates test-scenarios 1.1 'Should preserve the same affected set when recall resumes from a checkpoint' (no degradation applied twice) and 2.1 'Should rebuild identical persistent state when SQLite is derived from durable JSONL'. This is inside REWORK-LOG defect class 1, reported as closed."
+    },
+    {
+      "type": "VALIDATION_BYPASS",
+      "severity": "MEDIUM",
+      "description": "packages/mcp-server/src/tools/eap.ts:425-448 eapContest checks only `Array.isArray(args.evidence) && args.evidence.length > 0` and never inspects the elements, then writes the row with a hard-coded `status: 'admitted'`. Reproduced: eapContest with `evidence: [null]`, severity 'invalidating' and targetClaimIds ['victim-claim-does-not-exist','../../etc/passwd','<script>x</script>'] returned ok:true with status 'admitted' and seq 1. No target claim is checked for existence or admitted status either. Because the row is stamped 'admitted' by the transport, the status guard added to eapRecall (line 496) can never fire for anything created through this tool. Violates test-scenarios 1.3 'Should refuse Contestation when required evidence is missing' (terminal evidence Refusal) and 1.3 'Should admit Contestation ... targeting admitted claims'. Evidence elements must be non-empty strings and targets must resolve to admitted claims of the caller's tenant."
+    },
+    {
+      "type": "VALIDATION_BYPASS",
+      "severity": "MEDIUM",
+      "description": "packages/mcp-server/src/tools/eap.ts:366-380 eapPromote iterates args.candidateIds and inserts each one into the parent horizon as a 'proposed' candidate without ever reading the candidates table for the CHILD horizon. It never verifies the candidate exists in the child, and never verifies it reached state 'verified'. Reproduced: a horizon pair root/child with no candidates at all accepted eapPromote({candidateIds:['c1']}) with ok:true, and 'c1' was created in root. An agent client can therefore inject arbitrary identifiers into a parent horizon's admission queue. Violates test-scenarios 1.1 Promotion 'Given verified distilled knowledge in a child Horizon' and 3.1 'Should govern knowledge from Horizon initiation through parent proposal'. The parent-existence and HORIZON_SKIP checks added in retry #5 are correct; the missing piece is the child-side verified-state precondition."
+    },
+    {
+      "type": "MISSING_CONTROL",
+      "severity": "LOW",
+      "description": "The Horizon Budget Ledger is stored but never enforced. packages/mcp-server/src/tools/eap.ts writes budget_allocated on eapInitiate and nothing anywhere increments budget_consumed or compares the two; HorizonStore.saveTransition only accepts a budgetConsumed override that no caller passes. Reproduced: eapInitiate with budget {limit: 0} followed by three eapPropose DELIBERATE calls all returned ok:true, and the horizons row still reads budget_allocated 0 / budget_consumed 0 after seq advanced to 3. HorizonBudgetExhausted is never recorded and no escalation occurs. Test-scenarios 1.1 'Should escalate without promotion when the Horizon budget is exhausted' has no implementation on the reachable path."
+    },
+    {
+      "type": "MISSING_CONTROL",
+      "severity": "LOW",
+      "description": "packages/mcp-server/src/tools/eap.ts:539-553 eapRecall writes the recall row with a literal `status: 'completed'` and `affected_claim_ids` copied verbatim from the contestation's target list. It performs no reverse-dependency closure, degrades nothing, suspends no graph-owned cell, emits no TruthOwnershipSuspended, and stores checkpoint as a client-supplied integer that no worker consumes. The real traversal logic in packages/mcp-server/src/eap/recall-worker.ts is never invoked from this path. Reproduced: recall of a freshly created contestation returned status 'completed' with checkpoint 1 and zero side effects. Test-scenarios 1.1 Recall Case (deterministic traversal, scar preservation) and 3.1 'Should execute resumable Recall' are unmet on the reachable path."
+    }
+  ],
+  "edgeCasesMissed": [
+    "Test-scenarios 2.3 / 3.1 (Capability Gateway execution, idempotency reconciliation, provider-unavailable, irreversible single-use execution through MCP) have NO reachable path: packages/mcp-server/src/transport.ts registers only cognitive.initiate/propose/promote/contest/recall. CapabilityGateway, PromotionService, ContestationService, RecallWorker and admitPersistentDelta are never constructed outside the test suite, so every capability and delta scenario is exercised only by directly importing the library.",
+    "REWORK-LOG defect class 1 (state divergence) is only half closed. The services are now repository-backed, but the MCP tool adapters in tools/eap.ts still reimplement contestation, promotion and recall against the same tables with different rules - eapContest hard-codes status 'admitted' while ContestationService.contestKnowledge runs validateEvidence first; eapRecall writes the `recalls` table while SqliteRecallRepository writes `recall_cases`/`recall_checkpoints`/`recall_scars`. Two writers, two schemas, no reconciliation.",
+    "Unguarded JSON.parse on stored columns produces an untyped SyntaxError instead of a typed Refusal: tools/eap.ts:531 and :540 (affected_claim_ids, target_claim_ids), eap-repositories.ts:134 (toProposal candidates), :181-182 (contestation target_claim_ids/evidence), :318-319 (recall notice/closure/state), :548 (audit outcome). Reproduced by hand-corrupting one contestations row and calling eapRecall, which threw SyntaxError out of the tool boundary. Not reachable from client input today because every writer stringifies, but rebuildFromJsonl replays arbitrary on-disk JSONL into these same columns.",
+    "Test-scenarios 1.2 'Should reject Sequence when it is negative or decreases within its scope': basedOnSeq accepts any value Number.isInteger admits, including 1e308, which passes the `basedOnSeq < horizon.seq` staleness floor forever. No upper bound is applied even though MAX_IDENTIFIER_LENGTH bounds strings (3.3 'Should reject oversized or out-of-range contract values').",
+    "eapPromote is not idempotent and has no in-flight guard: two identical promote calls produced prom_child_to_root_1 and prom_child_to_root_2 and burned two child-horizon sequence numbers. Compare eapRecall, which is explicitly idempotent by contestation id.",
+    "Test-scenarios 1.1 Horizon 'Should retain horizon-local authority when assignment to another Horizon is attempted': no code path rejects an attempt to assign Relative Authority across horizons; promotion is the only edge modelled and it does not carry an authority-assignment refusal.",
+    "packages/client/src/eap.ts:176 defaults `basedOnSeq: input.basedOnSeq ?? 0`, which the host refuses with STALE_BASE against any horizon whose seq has advanced. The adapter should omit the field rather than send a value it knows is stale.",
+    "Concurrency is still proven only in-process against a single bun:sqlite handle. serialTransaction/BEGIN IMMEDIATE is the right primitive and the sequence-reuse tests pass, but no test opens two connections or two processes, so cross-connection SQLITE_BUSY handling remains unverified - as REWORK-LOG itself reports honestly."
+  ]
+}

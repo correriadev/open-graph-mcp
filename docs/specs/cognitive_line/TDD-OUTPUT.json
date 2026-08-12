@@ -1,0 +1,218 @@
+{
+  "featureId": "F001",
+  "domain": "cognitive_line",
+  "status": "SUCCESS",
+  "retry": 5,
+  "maxReworks": 5,
+  "generatedAt": "2026-08-11",
+  "tasksCompleted": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"],
+  "taskNotes": {
+    "01": "Contract types unchanged; added CLIENT_OBLIGATIONS as the normative name of the closed code->obligation map (graph-core/src/eap/refusals.ts). Legacy claim status migration remains explicitly undecided.",
+    "02": "Lifecycle aggregate unchanged; the MCP adapter now validates identifiers and sequence bounds before reaching it.",
+    "03": "Horizon aggregate unchanged.",
+    "04": "Horizon persistence unchanged apart from a parent_id nullability fix; new EAP tables added to the same durable path (db.ts).",
+    "05": "incrementalGate now returns { ok, refusals } with typed EAP refusal codes and client obligations alongside the legacy reasons/warnings.",
+    "06": "PromotionService is now repository-backed; eapPromote persists a proposed parent candidate row and aborts on a failed transition.",
+    "07": "admitPersistentDelta is one atomic durable unit and evaluates candidates against a per-batch roundtrip index.",
+    "08": "ContestationService is now repository-backed with durable atomic sequence allocation.",
+    "09": "RecallWorker writes through SqliteRecallRepository; checkpoints and scars survive restart.",
+    "10": "CapabilityGateway validates stored approvals, enforces an execution timeout with AbortSignal cancellation, records a retention-bounded durable audit log, and applies an authorization projection filter.",
+    "11": "cognitive.* adapters run in serialized transactions with atomic sequence allocation and boundary validation.",
+    "12": "ExternalAgentClientAdapter forwards the session token and the caller's real evidence under the host's 'evidence' field; it never fabricates evidence and never self-admits.",
+    "13": "eap-conformance.test.ts replaced: it was a table of hardcoded verified:true literals and is now a black-box profile driven over the real MCP transport, with ADR-deferred questions listed as explicit exclusions."
+  },
+  "filesCreated": [
+    "packages/mcp-server/src/eap/eap-repositories.ts",
+    "packages/mcp-server/test/eap-env.ts",
+    "packages/mcp-server/test/f001-retry5-durability.test.ts",
+    "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+    "packages/client/test/eap-client.test.ts",
+    "packages/mcp-server/tsconfig.check.json"
+  ],
+  "filesModified": [
+    "packages/mcp-server/src/db.ts",
+    "packages/mcp-server/src/gates.ts",
+    "packages/mcp-server/src/tools/eap.ts",
+    "packages/mcp-server/src/eap/capability-gateway.ts",
+    "packages/mcp-server/src/eap/contestation-service.ts",
+    "packages/mcp-server/src/eap/promotion-service.ts",
+    "packages/mcp-server/src/eap/recall-worker.ts",
+    "packages/mcp-server/src/eap/persistent-delta.ts",
+    "packages/mcp-server/src/eap/horizon-store.ts",
+    "packages/graph-core/src/eap/refusals.ts",
+    "packages/graph-core/src/eap/capabilities.ts",
+    "packages/client/src/eap.ts",
+    "packages/mcp-server/test/promotion.test.ts",
+    "packages/mcp-server/test/contestation.test.ts",
+    "packages/mcp-server/test/capability-governance.test.ts",
+    "packages/mcp-server/test/eap-conformance.test.ts",
+    "packages/mcp-server/test/legacy-cell-spelling-migration.test.ts"
+  ],
+  "testsAdded": {
+    "total": 40,
+    "byFile": {
+      "packages/mcp-server/test/f001-retry5-durability.test.ts": 12,
+      "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts": 14,
+      "packages/client/test/eap-client.test.ts": 5,
+      "packages/mcp-server/test/contestation.test.ts": 3,
+      "packages/mcp-server/test/capability-governance.test.ts": 4,
+      "packages/mcp-server/test/eap-conformance.test.ts": 2
+    },
+    "note": "contestation/capability-governance/eap-conformance counts are NEW tests added to files that already existed; promotion.test.ts gained no new test cases, only stronger assertions plus a durable repository fixture."
+  },
+  "testResults": {
+    "framework": "bun test",
+    "commands": [
+      "cd packages/mcp-server && bun test --timeout 30000",
+      "cd packages/client && bun test --timeout 30000",
+      "cd packages/graph-core && bun test --timeout 30000"
+    ],
+    "packages": {
+      "mcp-server": { "files": 88, "ran": 406, "pass": 405, "fail": 0, "todo": 1, "expectCalls": 2020, "durationSec": 40.05 },
+      "client": { "files": 10, "ran": 71, "pass": 71, "fail": 0, "todo": 0, "expectCalls": 20, "durationSec": 13.36 },
+      "graph-core": { "files": 10, "ran": 72, "pass": 72, "fail": 0, "todo": 0, "expectCalls": 545, "durationSec": 2.26 }
+    },
+    "totals": { "ran": 549, "pass": 548, "fail": 0, "todo": 1 },
+    "rawSummary": "mcp-server: 405 pass / 1 todo / 0 fail / 2020 expect() calls / 406 tests across 88 files [40.05s]\nclient: 71 pass / 0 fail / 20 expect() calls / 71 tests across 10 files [13.36s]\ngraph-core: 72 pass / 0 fail / 545 expect() calls / 72 tests across 10 files [2.26s]",
+    "baselineBeforeThisRetry": "mcp-server: 366 pass / 3 fail / 1 module-load error (test/eap-refusals.test.ts could not import CLIENT_OBLIGATIONS)",
+    "coverage": null,
+    "coverageNote": "Not measured. No coverage tooling or threshold is configured in this repository, and none was added; reporting a number would be fabricated."
+  },
+  "buildResult": {
+    "status": "PASS",
+    "bundle": {
+      "command": "bun build packages/mcp-server/src/index.ts --target=bun --outdir <scratch>",
+      "result": "Bundled 142 modules in 491ms, exit 0",
+      "clientCommand": "bun build packages/client/src/index.ts packages/client/src/eap.ts --target=bun",
+      "clientResult": "Bundled 6 modules, exit 0"
+    },
+    "typecheck": {
+      "client": "bunx tsc -p packages/client/tsconfig.build.json --noEmit -> 0 errors",
+      "mcpServer": "packages/mcp-server/tsconfig.json is PRE-EXISTING BROKEN (extends '@tsconfig/bun', which is not installed anywhere in the monorepo; documented in that file's own header comment). A working ad-hoc config, packages/mcp-server/tsconfig.check.json, was added to make the package checkable at all.",
+      "mcpServerResult": "bunx tsc -p packages/mcp-server/tsconfig.check.json -> 24 errors, ALL in files not touched by this retry (graph-core/src/verify.ts, src/agent-registry.ts, src/doctor.ts, src/index.ts, test/cell-key-canonicalization.test.ts, test/changeset-extend.test.ts, test/claim-covers.test.ts, test/claim-level.test.ts, test/fixtures/fresh/*, test/sdk-client-compliance.test.ts). Zero errors in any file created or modified by this retry; two pre-existing errors in src/eap/horizon-store.ts were additionally fixed.",
+      "honestCaveat": "These 24 pre-existing errors are NOT resolved. They predate this feature and were out of scope; they are reported rather than hidden."
+    }
+  },
+  "reworkFindingsAddressed": {
+    "1_durability_state_divergence": {
+      "status": "RESOLVED",
+      "summary": "PromotionService, ContestationService, RecallWorker, CapabilityGateway and the approval store no longer own any in-memory aggregate state. All five take a SQLite-backed repository writing through the project's existing durable path (write() = SQLite + per-tenant append-only JSONL). The domain services and the MCP tool adapters now read and write the SAME rows, so they cannot diverge.",
+      "implementation": [
+        "packages/mcp-server/src/eap/eap-repositories.ts (new: SqlitePromotionRepository, SqliteContestationRepository, SqliteRecallRepository, SqliteApprovalRepository, SqliteCapabilityAuditRepository)",
+        "packages/mcp-server/src/db.ts (new durable tables: operator_approvals, promotion_events, recall_cases, recall_checkpoints, recall_scars; plus eap_sequences and capability_executions, deliberately SQLite-only with the reason documented in ALL_TABLES)",
+        "packages/mcp-server/src/eap/promotion-service.ts",
+        "packages/mcp-server/src/eap/contestation-service.ts",
+        "packages/mcp-server/src/eap/recall-worker.ts",
+        "packages/mcp-server/src/eap/capability-gateway.ts"
+      ],
+      "tests": [
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'PromotionService proposals and events survive a host process restart'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'ContestationService contestations survive a host process restart'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'ContestationService allocates monotonic sequences from durable storage, not a reset counter'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'RecallWorker checkpoints survive a restart and resume to the same affected set'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'operator approvals and their consumed flag survive a restart'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'capability execution outcomes are durable and idempotency survives a restart'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'a promotion admitted through the MCP tool is visible to PromotionService — no cross-layer divergence'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'a contestation admitted through the MCP tool is visible to ContestationService'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'PromotionService keeps no in-memory aggregate store'",
+        "packages/mcp-server/test/eap-env.ts (fixture: closes and reopens the DB from disk to simulate a host restart)"
+      ]
+    },
+    "2_unbounded_memory_growth": {
+      "status": "RESOLVED",
+      "summary": "CapabilityGateway.executedOutcomes and .auditLog are deleted; idempotency and audit live in capability_executions with an explicit retention bound (DEFAULT_AUDIT_MAX_ENTRIES = 10000, configurable) enforced in the same transaction as each append. ApprovalRepository's Map is replaced by the operator_approvals table. RecallWorker's event array is a bounded ring (DEFAULT_MAX_RETAINED_EVENTS = 500) with durable progress in SQLite. The only remaining in-process Map is CapabilityGateway.classificationMap, which is static host configuration bounded by the number of registered capabilities, not accumulating state.",
+      "implementation": [
+        "packages/mcp-server/src/eap/eap-repositories.ts (SqliteCapabilityAuditRepository.record enforces retention; SqliteApprovalRepository)",
+        "packages/mcp-server/src/eap/capability-gateway.ts",
+        "packages/mcp-server/src/eap/recall-worker.ts (DEFAULT_MAX_RETAINED_EVENTS)"
+      ],
+      "tests": [
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'CapabilityGateway keeps no unbounded in-memory outcome or audit collections'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'audit retention policy evicts oldest entries beyond the configured bound'",
+        "packages/mcp-server/test/f001-retry5-durability.test.ts :: 'ApprovalRepository stores approvals in SQLite rather than an unbounded Map'"
+      ]
+    },
+    "3_concurrency_and_sequence_races": {
+      "status": "RESOLVED",
+      "summary": "Every 'SELECT COALESCE(MAX(seq),0)+1' is gone. db.ts adds allocateSequence() (a single UPSERT ... RETURNING against eap_sequences) and serialTransaction() (BEGIN IMMEDIATE, so the read-decide-write section is serialized between writers instead of racing on a DEFERRED snapshot). eapPropose, eapPromote, eapContest and eapRecall all run inside serialTransaction; allocation and the write consuming it commit as one unit. eapPromote no longer forces a sequence increment: a failed saveTransition returns STALE_BASE and aborts, and eapRecall is idempotent per contestation so a replay returns the existing case rather than burning a fresh sequence.",
+      "implementation": [
+        "packages/mcp-server/src/db.ts (serialTransaction, allocateSequence, eap_sequences table)",
+        "packages/mcp-server/src/tools/eap.ts (all five adapters)",
+        "packages/mcp-server/src/eap/eap-repositories.ts (repositories allocate sequences the same way)"
+      ],
+      "tests": [
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'eapContest sequences are unique, monotonic, and never reused after row deletion' (purges the table and proves the allocator does not reissue — the exact behaviour max(seq)+1 got wrong)",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'eapContest identifiers are unique even when the id shape collides with a purged row'",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'eapRecall allocates its sequence durably and refuses replay of a completed recall'",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'eapPromote does not advance the child horizon sequence or write a proposal when refused'",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'eapPromote rolls back the horizon transition when the durable write fails' (uses injectMirrorAppendFailure to fault the unit mid-way)",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'eapPromote persists a proposed parent candidate row alongside the proposal'"
+      ],
+      "honestCaveat": "The serialization is proven structurally (BEGIN IMMEDIATE + atomic UPSERT ... RETURNING) and behaviourally via the sequence-reuse and fault-injection tests. It is NOT proven by a true multi-process concurrent load test: the host is single-threaded Bun and this repository has no multi-process harness for the cognitive tools. A cross-process stress test remains the strongest evidence that was not produced here."
+    },
+    "4_authorization_and_validation_gaps": {
+      "status": "RESOLVED",
+      "summary": "CapabilityGateway no longer trusts the client-supplied approval object: a request may only NAME an approval id, and scope, expiry, basedOnSeq and the consumed flag are read from the operator's stored grant. An id no operator registered is APPROVAL_MISSING and the provider is never invoked. getAuditLog now requires an authenticated principal (throws without one) and returns a tagged projection — full entries only for a principal holding 'audit:read', redacted (no contractRef, no provider outcome) otherwise. eapRecall checks presence, status === 'admitted' and severity === 'invalidating' as three separate explicit conditions. eapPromote verifies the parent horizon exists as a governed horizon of the same tenant and writes the parent proposal row plus proposed candidate rows durably. ExternalAgentClientAdapter forwards the session token (refusing locally if absent) and the caller's real evidence under the host's 'evidence' field, and never substitutes a fabricated ['evidence-default'].",
+      "implementation": [
+        "packages/mcp-server/src/eap/capability-gateway.ts (stored-approval validation, AUDIT_READ_SCOPE, CapabilityAuditProjection)",
+        "packages/mcp-server/src/tools/eap.ts (validateIdentifier, severity closed-union check, explicit recall status/severity checks, parent existence, parent candidate rows)",
+        "packages/client/src/eap.ts (token required, evidence never fabricated, no self-admission without a transport)",
+        "packages/graph-core/src/eap/capabilities.ts (providerAction receives an AbortSignal)"
+      ],
+      "tests": [
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'CapabilityGateway refuses a client-supplied approval that is not registered by an operator'",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'CapabilityGateway validates the stored approval, not the client-supplied copy'",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'getAuditLog applies an authorization projection filter'",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: \"eapRecall refuses a contestation whose status is not 'admitted'\"",
+        "packages/mcp-server/test/capability-governance.test.ts :: tests 3-6 (expired approval not consumed, single-use reuse refused, reversible path, unclassified defaults to irreversible)",
+        "packages/client/test/eap-client.test.ts :: all 5 tests",
+        "packages/mcp-server/test/eap-conformance.test.ts :: black-box boundary and cross-tenant assertions"
+      ]
+    },
+    "5_transactional_recovery_of_admitPersistentDelta": {
+      "status": "RESOLVED",
+      "summary": "Admission is now ONE durableTransaction covering gate evaluation, changeset open, cs_deltas staging and changesetCommit (durableTransaction is re-entrant, so the nested commit joins the same unit). A refusal or failure unwinds via a typed sentinel, so no orphaned cs_deltas rows and no held cell locks survive. The compensating changesetAbort calls — themselves a third transaction that could fail — are gone. Also fixed a latent ReferenceError: the refusal branch pushed onto an undeclared 'reasons' variable and would have thrown on any refused candidate.",
+      "implementation": ["packages/mcp-server/src/eap/persistent-delta.ts"],
+      "tests": [
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'a refused candidate returns typed reasons without throwing'",
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'a failing commit leaves no orphaned cs_deltas rows and no held cell locks'"
+      ]
+    },
+    "6_per_candidate_claim_snapshot_reparse": {
+      "status": "RESOLVED",
+      "summary": "incrementalGate accepted only ClaimSnapshot[] and re-projected the entire tenant claim set to RoundtripClaim[] on every call, so an N-candidate batch did N full-tenant projections. gates.ts now exports buildRoundtripIndex(); IncrementalCtx accepts a prebuilt existingRoundtrip, and admitPersistentDelta builds it ONCE per batch alongside the single readClaims() snapshot load.",
+      "implementation": [
+        "packages/mcp-server/src/gates.ts (buildRoundtripIndex, IncrementalCtx.existingRoundtrip)",
+        "packages/mcp-server/src/eap/persistent-delta.ts"
+      ],
+      "tests": [
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'candidate evaluation does not rebuild the tenant claim snapshot per candidate' (instruments db.query and bounds the claim-snapshot reads for a 25-candidate batch)"
+      ],
+      "honestCaveat": "The test bounds the number of claim SELECTs, and the projection is provably built once. It does NOT benchmark a 100k-claim tenant; the asymptotic claim (O(claims) instead of O(N x claims)) rests on reading the code, not on a measured load run."
+    },
+    "7_capability_execution_timeout_and_cancellation": {
+      "status": "RESOLVED",
+      "summary": "CapabilityGateway.execute takes an explicit timeoutMs (DEFAULT_CAPABILITY_TIMEOUT_MS = 5000), creates an AbortController, passes its signal to providerAction, aborts the controller BEFORE rejecting on timeout, and clears the timer in a finally block. A timed-out execution is never recorded as a CapabilityExecuted outcome.",
+      "implementation": [
+        "packages/mcp-server/src/eap/capability-gateway.ts",
+        "packages/graph-core/src/eap/capabilities.ts (providerAction signature widened to accept the signal)"
+      ],
+      "tests": [
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: 'CapabilityGateway times out a hanging provider and cancels it via AbortSignal' (asserts the observed signal is aborted and that the audit table stays empty)"
+      ],
+      "honestCaveat": "Cancellation is cooperative. The gateway signals abort and stops awaiting, but a provider that ignores its AbortSignal cannot be forcibly killed from here. No circuit breaker was added — repeated provider failure still costs one timeout per call."
+    }
+  },
+  "additionalFixesNotInReworkLog": [
+    "packages/mcp-server/test/eap-refusals.test.ts could not even load at baseline: it imports CLIENT_OBLIGATIONS, which refusals.ts never exported, and it expects incrementalGate to return { ok, refusals }, which it never did. Both are now implemented, so Task 05's own test file runs for the first time.",
+    "packages/mcp-server/test/eap-conformance.test.ts (Task 13) asserted a hardcoded array of { verified: true } literals — a tautology that proved nothing. Replaced with a black-box profile over the real MCP transport plus an explicit exclusions list for ADR-deferred questions.",
+    "packages/mcp-server/test/legacy-cell-spelling-migration.test.ts failed at baseline on Windows because rmSync of the temp dir threw EBUSY while SQLite WAL handles were still held. Cleanup is now best effort; no assertion was weakened."
+  ],
+  "knownLimitations": [
+    "No coverage measurement exists in this repository and none was added.",
+    "24 pre-existing TypeScript errors remain in mcp-server files unrelated to this feature; packages/mcp-server/tsconfig.json remains broken upstream (missing @tsconfig/bun dependency) and was not modified, since installing a dependency is a user action.",
+    "Concurrency correctness is argued structurally and tested via sequence-reuse plus fault injection, not via a multi-process load test.",
+    "Provider cancellation is cooperative; there is no circuit breaker.",
+    "packages/mcp-server/tsconfig.check.json is a diagnostic aid added by this retry, not a CI gate: it still reports the 24 pre-existing errors."
+  ]
+}

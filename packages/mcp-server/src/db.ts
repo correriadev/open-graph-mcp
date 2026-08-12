@@ -32,8 +32,23 @@ export const DURABLE_TABLES = [
   "recalls",
   "candidates",
   "proposals",
+  "promotion_events",
+  "recall_cases",
+  "recall_checkpoints",
+  "recall_scars",
+  "operator_approvals",
 ] as const
-/** Todas as tabelas com tenant_id (durables + índice live). */
+/**
+ * Todas as tabelas com tenant_id (durables + índice live).
+ *
+ * `eap_sequences` e `capability_executions` estão FORA das duas listas de propósito (como `tokens`):
+ *  - `eap_sequences` é o alocador monotônico de sequência. Espelhá-lo no JSONL append-only e
+ *    replayá-lo é inofensivo, mas APAGÁ-LO num rebuild permitiria reemitir uma sequência já usada —
+ *    exatamente o que o alocador existe para impedir. Fica só no SQLite e nunca é zerado.
+ *  - `capability_executions` é log de auditoria com POLÍTICA DE RETENÇÃO (DELETE dos mais antigos).
+ *    O espelho JSONL é append-only: replayar traria de volta toda linha já evictada e o limite de
+ *    memória/disco deixaria de existir. Retenção e append-only são incompatíveis por construção.
+ */
 const ALL_TABLES = [...DURABLE_TABLES, "locks", "system_messages"] as const
 
 const SCHEMA = `
@@ -196,7 +211,96 @@ CREATE TABLE IF NOT EXISTS proposals (
   PRIMARY KEY (tenant_id, id)
 );
 CREATE INDEX IF NOT EXISTS idx_proposals_tenant_parent ON proposals (tenant_id, parent_id);
+
+/* Alocador de sequencia monotonico por (tenant, nome). Substitui todo COALESCE(MAX(seq),0)+1:
+   aquele padrao le e escreve em dois passos, entao duas chamadas concorrentes leem o mesmo maximo e
+   emitem a MESMA sequencia; e reusa uma sequencia assim que a linha mais alta e removida. Aqui a
+   alocacao e um unico UPSERT ... RETURNING dentro de uma transacao IMMEDIATE, indivisivel. */
+CREATE TABLE IF NOT EXISTS eap_sequences (
+  tenant_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  value INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (tenant_id, name)
+);
+
+/* Aprovacoes de operador. Duravel: o gateway de capability valida a aprovacao ARMAZENADA, nunca a
+   copia enviada pelo cliente, e o flag consumed precisa sobreviver a restart para que uma aprovacao
+   de uso unico continue sendo de uso unico. */
+CREATE TABLE IF NOT EXISTS operator_approvals (
+  tenant_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  approver TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  based_on_seq INTEGER NOT NULL,
+  consumed INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  consumed_at TEXT,
+  PRIMARY KEY (tenant_id, id)
+);
+
+/* Auditoria append-only de execucoes de capability + indice de idempotencia. ordinal e monotonico
+   por tenant e define a ordem de eviccao da politica de retencao. */
+CREATE TABLE IF NOT EXISTS capability_executions (
+  tenant_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  execution_id TEXT NOT NULL,
+  classification TEXT NOT NULL,
+  contract_ref TEXT NOT NULL,
+  capability_id TEXT NOT NULL,
+  approval_id TEXT,
+  outcome TEXT,
+  ts INTEGER NOT NULL,
+  PRIMARY KEY (tenant_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_capability_executions_ordinal ON capability_executions (tenant_id, ordinal);
+
+CREATE TABLE IF NOT EXISTS promotion_events (
+  tenant_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  payload TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_promotion_events_ordinal ON promotion_events (tenant_id, ordinal);
+
+CREATE TABLE IF NOT EXISTS recall_cases (
+  tenant_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  contestation_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  notice TEXT NOT NULL,
+  closure TEXT NOT NULL,
+  state TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS recall_checkpoints (
+  tenant_id TEXT NOT NULL,
+  recall_id TEXT NOT NULL,
+  checkpoint TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, recall_id)
+);
+
+CREATE TABLE IF NOT EXISTS recall_scars (
+  tenant_id TEXT NOT NULL,
+  recall_id TEXT NOT NULL,
+  scar TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, recall_id)
+);
 `
+
+/** ALTER TABLE idempotente: só adiciona a coluna se o PRAGMA não a listar. */
+function addColumnIfMissing(db: Database, table: string, column: string, type: string): void {
+  const cols = db.query(`PRAGMA table_info(${table})`).all() as { name: string }[]
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`)
+}
 
 export function openDb(sqlitePath: string): Database {
   if (sqlitePath !== ":memory:") mkdirSync(path.dirname(sqlitePath), { recursive: true })
@@ -212,6 +316,10 @@ export function openDb(sqlitePath: string): Database {
   if (!claimsCols.some((c) => c.name === "covers")) {
     db.exec("ALTER TABLE claims ADD COLUMN covers TEXT")
   }
+  // Mesmo motivo do `covers` acima: um STATE_DIR criado antes da linha cognitiva tem `contestations`
+  // sem as colunas de proveniencia, e `CREATE TABLE IF NOT EXISTS` no-opa silenciosamente.
+  addColumnIfMissing(db, "contestations", "source_horizon_id", "TEXT")
+  addColumnIfMissing(db, "contestations", "reason", "TEXT")
   // Canonicalize legacy numeric levels once so cell pagination can use equality and the full
   // (tenant, domain, level, seq) index instead of an IN predicate plus a tenant-scale sort.
   try {
@@ -339,12 +447,12 @@ export function write(db: Database, stateDir: string, tenant: string, table: str
 /** SQLite transaction plus rollbackable synchronous mirror batch. The mirror flush runs before the
  * SQLite transaction returns; an append failure truncates every touched file to its original size,
  * then the thrown error rolls SQLite back as well. */
-export function durableTransaction<T>(db: Database, fn: () => T): T {
+export function durableTransaction<T>(db: Database, fn: () => T, opts?: { serialized?: boolean }): T {
   if (mirrorUnits.has(db)) return fn()
   const pending: PendingMirror[] = []
   mirrorUnits.set(db, pending)
   try {
-    return db.transaction(() => {
+    const tx = db.transaction(() => {
       const result = fn()
       const originals = new Map<string, number | null>()
       try {
@@ -362,10 +470,48 @@ export function durableTransaction<T>(db: Database, fn: () => T): T {
         throw error
       }
       return result
-    })()
+    })
+    return opts?.serialized ? tx.immediate() : tx()
   } finally {
     mirrorUnits.delete(db)
   }
+}
+
+/**
+ * serialTransaction — `durableTransaction` com BEGIN IMMEDIATE.
+ *
+ * O BEGIN default do SQLite é DEFERRED: a transação só toma o write lock na primeira ESCRITA, então
+ * duas transações podem LER o mesmo estado, decidir com base nele, e só então competir pela escrita —
+ * a segunda vê `SQLITE_BUSY` ou, pior, grava em cima de uma decisão tomada sobre um snapshot já
+ * obsoleto. É essa a janela que produzia colisão de sequência em `eapContest`/`eapRecall`/`eapPromote`
+ * (ler `MAX(seq)`, decidir, escrever). IMMEDIATE toma o write lock no BEGIN: a seção read-decide-write
+ * inteira fica serializada entre escritores, que é o que o alocador de sequência exige.
+ */
+export function serialTransaction<T>(db: Database, fn: () => T): T {
+  return durableTransaction(db, fn, { serialized: true })
+}
+
+/**
+ * allocateSequence — reserva a próxima sequência de `(tenant, name)` num único UPSERT atômico.
+ *
+ * Substitui `SELECT COALESCE(MAX(seq),0)+1`: aquele padrão (a) colide sob concorrência, porque duas
+ * chamadas leem o mesmo máximo, e (b) REUSA uma sequência assim que a linha mais alta é apagada ou
+ * expurgada — sequência reusada quebra ordenação de auditoria e dedup por seq. O contador é durável e
+ * nunca regride, mesmo que a tabela de destino fique vazia.
+ *
+ * Deve ser chamado dentro de `serialTransaction` (ou de uma transação já serializada) para que a
+ * reserva e a escrita que a consome commitem juntas.
+ */
+export function allocateSequence(db: Database, tenant: string, name: string): number {
+  const row = db
+    .query(
+      `INSERT INTO eap_sequences (tenant_id, name, value) VALUES (?, ?, 1)
+       ON CONFLICT(tenant_id, name) DO UPDATE SET value = value + 1
+       RETURNING value`,
+    )
+    .get(tenant, name) as { value: number } | null
+  if (!row) throw new Error(`failed to allocate sequence '${name}' for tenant '${tenant}'`)
+  return Number(row.value)
 }
 
 /**

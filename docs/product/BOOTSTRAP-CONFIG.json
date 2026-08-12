@@ -3,5 +3,8 @@
   "scoreThresholdAdv": 0.70,
   "maxReworks": 5,
   "domain": "cognitive_line",
-  "featureId": "F001"
+  "featureId": "F001",
+  "cycleCounter": {
+    "completedCycles": 1
+  }
 }

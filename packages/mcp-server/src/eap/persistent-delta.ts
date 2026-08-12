@@ -1,14 +1,28 @@
 /**
- * persistent-delta.ts — Persistent Delta Envelope and Admission Service.
- * Implements Task 07 of Feature F001 (Domain: cognitive_line).
+ * persistent-delta.ts — Persistent Delta Envelope and Admission Service (Task 07, Feature F001).
+ *
+ * Retry#5 / REWORK-LOG, two findings closed here:
+ *
+ *  TRANSACTIONAL RECOVERY — the old flow opened a changeset and inserted `cs_deltas` in one SQLite
+ *  transaction, then called `changesetCommit` in a SECOND one. If the commit failed (or threw), the
+ *  first transaction had already committed: the tenant was left with orphaned `cs_deltas` rows and
+ *  cell locks nobody could release, and the compensating `changesetAbort` was itself a third
+ *  transaction that could fail on its own. Admission is now ONE `durableTransaction`: open, stage,
+ *  and commit succeed together or the whole unit — SQLite rows and JSONL mirror alike — rolls back.
+ *
+ *  PER-CANDIDATE SNAPSHOT COST — the incremental gate rebuilt its roundtrip projection of the FULL
+ *  tenant claim set on every candidate, so a 100-candidate delta against a 100k-claim tenant did
+ *  10 million claim projections and blocked the event loop for the duration. The projection is now
+ *  built ONCE per batch and handed to the gate.
  */
 import type { ServerState } from "../state"
 import type { Delta } from "../gates"
 import { requireToken } from "../tools/session"
-import { claimOrOpenCs, changesetCommit, changesetAbort } from "../tools/changeset"
-import { incrementalGate, cellOfClaim } from "../gates"
+import { claimOrOpenCs, changesetCommit } from "../tools/changeset"
+import { incrementalGate, cellOfClaim, buildRoundtripIndex } from "../gates"
 import { readClaims, makeReadFile } from "../store"
 import { appendEvent } from "../state"
+import { durableTransaction } from "../db"
 
 export type RollbackSemantics = "all_or_nothing" | "rollback_on_required_failure"
 
@@ -53,6 +67,13 @@ export function disassemblePersistentDelta(envelope: PersistentDelta): Candidate
   }))
 }
 
+/** Sentinel thrown to unwind the single admission transaction with a typed refusal payload. */
+class AdmissionRollback extends Error {
+  constructor(readonly result: PersistentDeltaAdmissionResult) {
+    super("persistent delta admission rolled back")
+  }
+}
+
 export function admitPersistentDelta(
   state: ServerState,
   args: { token: string; delta: PersistentDelta }
@@ -91,75 +112,118 @@ export function admitPersistentDelta(
     }
   }
 
-  const admittedClaimIds: string[] = []
-  const refusedCandidateIds: string[] = []
-  const existingClaims = readClaims(state, tenant)
-  const readFile = makeReadFile(state)
+  // The hot caches (`graphs`, `claimsCache`) are mutated by the nested commit path but are NOT part
+  // of the SQLite transaction, so a rollback must restore them explicitly or the process keeps
+  // serving claims that no longer exist on disk.
+  const graphsBefore = structuredClone(state.graphs)
+  const claimsCacheBefore = structuredClone(state.claimsCache)
 
-  for (const cand of candidates) {
-    const isRequired = cand.required !== false
-    const candCell = cand.delta.kind === "authority.flip" ? cand.delta.payload?.cell : cellOfClaim(cand.delta.payload ?? {})
-
-    const gateRes = incrementalGate(cand.delta, {
-      lockedCells: [candCell],
-      existingClaims,
-      readFile,
-    })
-
-    if (gateRes.reasons.length > 0) {
-      if (cand.id) refusedCandidateIds.push(cand.id)
-      reasons.push(...gateRes.reasons.map((r) => `Candidate ${cand.id || "unnamed"}: ${r}`))
-      if (isRequired || envelope.rollback === "all_or_nothing") {
-        return {
-          ok: false,
-          deltaId: envelope.id,
-          reasons,
-          refusedCandidateIds,
-          __tenant: tenant,
-        }
-      }
-    } else if (cand.delta.kind === "claim.add" && cand.delta.payload?.id) {
-      admittedClaimIds.push(cand.delta.payload.id)
-    }
-  }
-
-  let csId: string
   try {
-    const openRes = state.db.transaction(() => {
-      const opened = claimOrOpenCs(state, tenant, userId, name, cells, intent, [])
-      if (!opened.ok) {
-        throw new Error(`Lock contention: ${opened.hint}`)
-      }
-      csId = opened.csId
+    return durableTransaction(state.db, (): PersistentDeltaAdmissionResult => {
+      const admittedClaimIds: string[] = []
+      const refusedCandidateIds: string[] = []
+      const reasons: string[] = []
 
-      let seq = (state.db.query("SELECT COALESCE(MAX(seq),0) AS m FROM cs_deltas WHERE tenant_id = ? AND cs_id = ?").get(tenant, csId) as { m: number }).m
-      const nowTs = new Date().toISOString()
+      // ONE snapshot read and ONE roundtrip projection for the whole batch. Both were previously
+      // recomputed per candidate.
+      const existingClaims = readClaims(state, tenant)
+      const roundtripIndex = buildRoundtripIndex(existingClaims)
+      const readFile = makeReadFile(state)
 
       for (const cand of candidates) {
-        seq++
-        state.db.query(
-          "INSERT INTO cs_deltas (tenant_id, cs_id, seq, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-        ).run(tenant, csId, seq, cand.delta.kind, JSON.stringify(cand.delta.payload), nowTs)
+        const isRequired = cand.required !== false
+        const candCell =
+          cand.delta.kind === "authority.flip" ? cand.delta.payload?.cell : cellOfClaim(cand.delta.payload ?? {})
+
+        const gateRes = incrementalGate(cand.delta, {
+          lockedCells: [candCell],
+          existingClaims,
+          existingRoundtrip: roundtripIndex,
+          readFile,
+        })
+
+        if (gateRes.reasons.length > 0) {
+          if (cand.id) refusedCandidateIds.push(cand.id)
+          reasons.push(...gateRes.reasons.map((r) => `Candidate ${cand.id || "unnamed"}: ${r}`))
+          if (isRequired || envelope.rollback === "all_or_nothing") {
+            throw new AdmissionRollback({
+              ok: false,
+              deltaId: envelope.id,
+              reasons,
+              refusedCandidateIds,
+              __tenant: tenant,
+            })
+          }
+        } else if (cand.delta.kind === "claim.add" && cand.delta.payload?.id) {
+          admittedClaimIds.push(cand.delta.payload.id)
+        }
       }
 
-      return { ok: true, csId }
-    })()
+      const opened = claimOrOpenCs(state, tenant, userId, name, cells, intent, [])
+      if (!opened.ok) {
+        throw new AdmissionRollback({
+          ok: false,
+          deltaId: envelope.id,
+          reasons: [`Lock contention: ${opened.hint}`],
+          refusedCandidateIds: candidates.map((c) => c.id).filter(Boolean) as string[],
+          __tenant: tenant,
+        })
+      }
+      const csId = opened.csId
 
-    csId = openRes.csId
-  } catch (err) {
-    return {
-      ok: false,
-      deltaId: envelope.id,
-      reasons: [(err as Error).message],
-      __tenant: tenant,
-    }
-  }
+      let seq = (
+        state.db
+          .query("SELECT COALESCE(MAX(seq),0) AS m FROM cs_deltas WHERE tenant_id = ? AND cs_id = ?")
+          .get(tenant, csId) as { m: number }
+      ).m
+      const nowTs = new Date().toISOString()
+      const insertDelta = state.db.query(
+        "INSERT INTO cs_deltas (tenant_id, cs_id, seq, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+      )
+      for (const cand of candidates) {
+        seq++
+        insertDelta.run(tenant, csId, seq, cand.delta.kind, JSON.stringify(cand.delta.payload), nowTs)
+      }
 
-  let commitRes: any
-  try {
-    commitRes = changesetCommit(state, { token: args.token, csId, intent })
+      // Same transaction: `changesetCommit` nests into this durable unit (durableTransaction is
+      // re-entrant), so a refused or throwing commit unwinds the staged deltas and the cell locks
+      // acquired above instead of stranding them.
+      const commitRes = changesetCommit(state, { token: args.token, csId, intent })
+      if (!commitRes.ok) {
+        throw new AdmissionRollback({
+          ok: false,
+          deltaId: envelope.id,
+          reasons: commitRes.reasons,
+          refusedCandidateIds: candidates.map((c) => c.id).filter(Boolean) as string[],
+          __tenant: tenant,
+        })
+      }
+
+      appendEvent(state, tenant, {
+        kind: "PersistentDeltaAdmitted",
+        targetKind: "persistent_delta",
+        targetId: envelope.id,
+        byUser: userId,
+        payload: {
+          deltaId: envelope.id,
+          admittedClaimIds,
+          seq: commitRes.admitSeq,
+        },
+      })
+
+      return {
+        ok: true,
+        deltaId: envelope.id,
+        admittedClaimIds,
+        seq: commitRes.admitSeq!,
+        csId,
+        __tenant: tenant,
+      }
+    })
   } catch (err) {
-    changesetAbort(state, { token: args.token, csId })
+    state.graphs = graphsBefore
+    state.claimsCache = claimsCacheBefore
+    if (err instanceof AdmissionRollback) return err.result
     return {
       ok: false,
       deltaId: envelope.id,
@@ -167,37 +231,5 @@ export function admitPersistentDelta(
       refusedCandidateIds: candidates.map((c) => c.id).filter(Boolean) as string[],
       __tenant: tenant,
     }
-  }
-
-  if (!commitRes.ok) {
-    changesetAbort(state, { token: args.token, csId })
-    return {
-      ok: false,
-      deltaId: envelope.id,
-      reasons: commitRes.reasons,
-      refusedCandidateIds: candidates.map((c) => c.id).filter(Boolean) as string[],
-      __tenant: tenant,
-    }
-  }
-
-  appendEvent(state, tenant, {
-    kind: "PersistentDeltaAdmitted",
-    targetKind: "persistent_delta",
-    targetId: envelope.id,
-    byUser: userId,
-    payload: {
-      deltaId: envelope.id,
-      admittedClaimIds,
-      seq: commitRes.admitSeq,
-    },
-  })
-
-  return {
-    ok: true,
-    deltaId: envelope.id,
-    admittedClaimIds,
-    seq: commitRes.admitSeq,
-    csId,
-    __tenant: tenant,
   }
 }

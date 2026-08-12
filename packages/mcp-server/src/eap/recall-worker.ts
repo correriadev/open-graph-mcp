@@ -1,5 +1,11 @@
 /**
- * recall-worker.ts — Worker and Repository for Resumable Recall (Task 09, Feature F001)
+ * recall-worker.ts — Worker for Resumable Recall (Task 09, Feature F001).
+ *
+ * Retry#5 / REWORK-LOG defect 1 and 2: `InMemoryRecallRepository` kept cases, checkpoints and scars
+ * in volatile `Map`s, so a host restart mid-recall lost the checkpoint entirely — the exact failure
+ * a *resumable* recall exists to prevent — and the worker's `events` array grew without bound.
+ * The worker now writes through `SqliteRecallRepository`, reloads the case from durable state on
+ * every batch, and keeps only a bounded observation ring in memory.
  */
 
 import {
@@ -9,7 +15,6 @@ import {
   exportRecallProgress,
   type RecallNotice,
   type RecallCase,
-  type RecallCheckpoint,
   type RecallScarRecord,
   type RecallProgress,
   type RecallRefusal,
@@ -17,75 +22,48 @@ import {
   type ExecutionContext,
   InMemoryDependencyQuery,
 } from "@open-graph-mcp/graph-core/eap/recall"
+import type { SqliteRecallRepository } from "./eap-repositories"
 
 export interface EventEnvelope {
   type: "KnowledgeContested" | "RecallProgressed" | "TruthOwnershipSuspended"
   payload: Record<string, unknown>
 }
 
-export class InMemoryRecallRepository {
-  private cases = new Map<string, RecallCase>()
-  private checkpoints = new Map<string, RecallCheckpoint>()
-  private scars = new Map<string, RecallScarRecord>()
-
-  async create(recallCase: RecallCase): Promise<void> {
-    this.cases.set(recallCase.id, recallCase)
-    this.checkpoints.set(recallCase.id, recallCase.checkpoint)
-  }
-
-  async checkpoint(recallId: string, checkpoint: RecallCheckpoint): Promise<void> {
-    this.checkpoints.set(recallId, checkpoint)
-    const c = this.cases.get(recallId)
-    if (c) {
-      c.checkpoint = checkpoint
-    }
-  }
-
-  async complete(recallId: string, scar: RecallScarRecord): Promise<void> {
-    this.scars.set(recallId, scar)
-    const c = this.cases.get(recallId)
-    if (c) {
-      c.status = "completed"
-      c.scarHistory = scar
-    }
-  }
-
-  async get(recallId: string): Promise<{ recallCase: RecallCase; checkpoint: RecallCheckpoint } | null> {
-    const recallCase = this.cases.get(recallId)
-    const checkpoint = this.checkpoints.get(recallId)
-    if (!recallCase || !checkpoint) return null
-    return { recallCase, checkpoint }
-  }
-
-  async getScar(recallId: string): Promise<RecallScarRecord | null> {
-    return this.scars.get(recallId) ?? null
-  }
-}
+/** Observation ring bound. Durable recall progress lives in SQLite; this is a debug tail only. */
+export const DEFAULT_MAX_RETAINED_EVENTS = 500
 
 export class RecallWorker {
-  private repo: InMemoryRecallRepository
-  private depQuery: DependencyQuery
   private events: EventEnvelope[] = []
+  private readonly maxRetainedEvents: number
 
-  constructor(repo?: InMemoryRecallRepository, depQuery?: DependencyQuery) {
-    this.repo = repo ?? new InMemoryRecallRepository()
-    this.depQuery = depQuery ?? new InMemoryDependencyQuery()
+  constructor(
+    private readonly repo: SqliteRecallRepository,
+    private depQuery: DependencyQuery = new InMemoryDependencyQuery(),
+    opts?: { maxRetainedEvents?: number },
+  ) {
+    if (!repo) throw new Error("RecallWorker requires a durable recall repository")
+    this.maxRetainedEvents = opts?.maxRetainedEvents ?? DEFAULT_MAX_RETAINED_EVENTS
+  }
+
+  private emit(event: EventEnvelope): void {
+    this.events.push(event)
+    if (this.events.length > this.maxRetainedEvents) {
+      this.events.splice(0, this.events.length - this.maxRetainedEvents)
+    }
   }
 
   getEmittedEvents(): EventEnvelope[] {
-    return this.events
+    return [...this.events]
   }
 
-  async initiateRecall(
-    notice: RecallNotice
-  ): Promise<RecallCase | RecallRefusal> {
+  async initiateRecall(notice: RecallNotice): Promise<RecallCase | RecallRefusal> {
     const result = createRecallCase(notice, this.depQuery)
     if ("refused" in result) {
       return result
     }
 
     await this.repo.create(result)
-    this.events.push({
+    this.emit({
       type: "KnowledgeContested",
       payload: {
         contestationId: notice.contestationId,
@@ -96,20 +74,28 @@ export class RecallWorker {
     return result
   }
 
+  /**
+   * Loads the case from durable state, applies one batch, and checkpoints it back. Reloading per
+   * batch is what makes the worker restart-safe: nothing about the case is cached across calls.
+   */
   async processBatch(
     recallId: string,
     batchSize: number = 1,
-    ctx: ExecutionContext = {}
+    ctx: ExecutionContext = {},
   ): Promise<RecallProgress | null> {
     const record = await this.repo.get(recallId)
     if (!record) return null
 
     const { recallCase } = record
+    if (recallCase.status === "completed") {
+      return exportRecallProgress(recallCase, true)
+    }
+
     const progress = stepRecall(recallCase, batchSize, ctx)
 
-    await this.repo.checkpoint(recallId, recallCase.checkpoint)
+    await this.repo.checkpoint(recallId, recallCase.checkpoint, recallCase)
 
-    this.events.push({
+    this.emit({
       type: "RecallProgressed",
       payload: {
         recallId: recallCase.id,
@@ -119,7 +105,7 @@ export class RecallWorker {
     })
 
     for (const cellKey of progress.suspendedCells) {
-      this.events.push({
+      this.emit({
         type: "TruthOwnershipSuspended",
         payload: {
           recallId: recallCase.id,
@@ -130,7 +116,7 @@ export class RecallWorker {
     }
 
     if (progress.isComplete && recallCase.scarHistory) {
-      await this.repo.complete(recallId, recallCase.scarHistory)
+      await this.repo.complete(recallId, recallCase.scarHistory, recallCase)
     }
 
     return progress
@@ -139,7 +125,7 @@ export class RecallWorker {
   async interruptAndResume(
     recallId: string,
     batchSize: number = 1,
-    ctx: ExecutionContext = {}
+    ctx: ExecutionContext = {},
   ): Promise<{ uninterrupted: RecallProgress; resumed: RecallProgress }> {
     const record = await this.repo.get(recallId)
     if (!record) throw new Error(`Recall case ${recallId} not found`)
@@ -148,17 +134,17 @@ export class RecallWorker {
       record.checkpoint,
       record.recallCase.notice,
       record.recallCase.closure,
-      record.recallCase.scarHistory
+      record.recallCase.scarHistory,
     )
 
     let lastProgress: RecallProgress = exportRecallProgress(resumedCase, resumedCase.status === "completed")
     while (resumedCase.status !== "completed") {
       lastProgress = stepRecall(resumedCase, batchSize, ctx)
-      await this.repo.checkpoint(recallId, resumedCase.checkpoint)
+      await this.repo.checkpoint(recallId, resumedCase.checkpoint, resumedCase)
     }
 
     if (resumedCase.scarHistory) {
-      await this.repo.complete(recallId, resumedCase.scarHistory)
+      await this.repo.complete(recallId, resumedCase.scarHistory, resumedCase)
     }
 
     return {

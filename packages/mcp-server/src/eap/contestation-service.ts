@@ -1,5 +1,11 @@
 /**
- * Epistemic Admission Protocol (EAP) — Contestation Service
+ * Epistemic Admission Protocol (EAP) — Contestation Service (Task 08).
+ *
+ * Retry#5 / REWORK-LOG defect 1 and 3: contestations and their sequence counter used to live in a
+ * volatile `Map` plus a `currentSeq` field that reset to 1 on every process start — so a restart
+ * both lost every admitted contestation and began re-issuing sequences that had already been used.
+ * State now lives in `SqliteContestationRepository`, and the sequence comes from the durable atomic
+ * allocator rather than an in-process counter or `MAX(seq)+1`.
  */
 
 import {
@@ -11,6 +17,7 @@ import {
   canInitiateRecall,
   validateEvidence,
 } from '@open-graph-mcp/graph-core/eap/contestation'
+import type { SqliteContestationRepository } from './eap-repositories'
 
 export interface ContestKnowledgeRequest {
   id?: string
@@ -21,20 +28,10 @@ export interface ContestKnowledgeRequest {
   reason?: string
 }
 
-export interface MockClaim {
-  id: string
-  content: string
-  status: string
-}
-
 export class ContestationService {
-  private contestations: Map<string, Contestation> = new Map()
-  private claims: Map<string, MockClaim> = new Map()
-  private currentSeq: number = 1
-
-  constructor(initialClaims: MockClaim[] = []) {
-    for (const claim of initialClaims) {
-      this.claims.set(claim.id, { ...claim })
+  constructor(private readonly repo: SqliteContestationRepository) {
+    if (!repo) {
+      throw new Error('ContestationService requires a durable contestation repository')
     }
   }
 
@@ -62,8 +59,19 @@ export class ContestationService {
     }
 
     const id = request.id || `contestation-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
-    const seq = this.currentSeq++
-    const contestation: Contestation = {
+
+    if (this.repo.exists(id)) {
+      return {
+        status: 'REFUSED',
+        refusal: {
+          code: 'CONTESTATION_REFUSED',
+          clientObligation: 'Use a fresh contestation identifier; admitted records are append-only.',
+          reason: `Contestation '${id}' already exists and cannot be overwritten.`,
+        },
+      }
+    }
+
+    const contestation = this.repo.save({
       id,
       sourceHorizonId: request.sourceHorizonId,
       targetClaimIds: [...request.targetClaimIds],
@@ -71,11 +79,8 @@ export class ContestationService {
       severity: request.severity,
       reason: request.reason,
       submittedAt: new Date().toISOString(),
-      seq,
       admitted: true,
-    }
-
-    this.contestations.set(id, contestation)
+    })
 
     const event: KnowledgeContestedEvent = {
       type: 'KnowledgeContested',
@@ -85,7 +90,7 @@ export class ContestationService {
       severity: contestation.severity,
       evidenceRefs: [...contestation.evidenceRefs],
       timestamp: contestation.submittedAt,
-      seq,
+      seq: contestation.seq!,
     }
 
     return {
@@ -107,7 +112,7 @@ export class ContestationService {
   }
 
   public initiateRecall(contestationId: string): RecallInitiationResult {
-    const contestation = this.contestations.get(contestationId)
+    const contestation = this.repo.get(contestationId)
 
     if (!contestation) {
       return {
@@ -151,10 +156,6 @@ export class ContestationService {
   }
 
   public getContestation(id: string): Contestation | undefined {
-    return this.contestations.get(id)
-  }
-
-  public getClaim(id: string): MockClaim | undefined {
-    return this.claims.get(id)
+    return this.repo.get(id)
   }
 }

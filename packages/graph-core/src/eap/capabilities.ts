@@ -27,7 +27,12 @@ export interface CapabilityExecutionRequest {
   contract: ChangeContract
   currentSeq: number
   approval?: OperatorApproval
-  providerAction?: () => Promise<unknown> | unknown
+  /**
+   * The external effect. Receives the gateway's `AbortSignal`: a provider that outlives the
+   * gateway's execution timeout must be cancellable, otherwise a hung call keeps a socket or worker
+   * alive for as long as the remote side wants it to.
+   */
+  providerAction?: (signal?: AbortSignal) => Promise<unknown> | unknown
 }
 
 export type CapabilityRefusalCode =

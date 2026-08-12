@@ -16,7 +16,19 @@ import { openDb, rebuildFromJsonl } from "../src/db"
 
 function tempDir(): { dir: string; cleanup: () => void } {
   const dir = mkdtempSync(path.join(tmpdir(), "og-mig-"))
-  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+  return {
+    dir,
+    cleanup: () => {
+      // Best effort. On Windows the SQLite WAL/SHM handles can still be held for a moment after
+      // `db.close()` returns, and `rmSync` then throws EBUSY — failing the test on temp-directory
+      // housekeeping rather than on anything it asserts. The OS temp reaper collects the leftovers.
+      try {
+        rmSync(dir, { recursive: true, force: true })
+      } catch {
+        /* ignore */
+      }
+    },
+  }
 }
 
 test("boot canonicaliza lock e authority gravados na grafia antiga", () => {

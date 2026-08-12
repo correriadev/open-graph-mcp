@@ -62,6 +62,14 @@ export const REFUSAL_OBLIGATIONS: Record<RefusalCode, string> = {
   BOUNDARY_COMMAND_REJECTED: "Submit boundary commands (PROMOTE, CONTEST, INITIATE) to their dedicated boundary endpoints, not as lifecycle state transitions.",
 }
 
+/**
+ * Nome normativo do mapa código → obrigação do cliente na especificação do protocolo (Task 05).
+ * `REFUSAL_OBLIGATIONS` é o mesmo objeto sob o nome herdado da implementação; os dois são exportados
+ * de propósito para que nem o contrato publicado nem os call sites existentes precisem mentir sobre
+ * o outro. Congelado: a obrigação é parte do contrato, não estado mutável do processo.
+ */
+export const CLIENT_OBLIGATIONS: Readonly<Record<RefusalCode, string>> = Object.freeze(REFUSAL_OBLIGATIONS)
+
 export interface Refusal {
   code: RefusalCode
   obligation: string

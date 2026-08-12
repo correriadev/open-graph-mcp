@@ -15,6 +15,7 @@ import { canFlip } from "@open-graph-mcp/graph-core/authority"
 import { excerptCheck } from "@open-graph-mcp/graph-core/extract"
 import { normalizeClaimLevel, type CanonicalClaimLevel } from "./claim-level"
 import { canonicalCell } from "./cell"
+import { reasonToRefusal, type Refusal } from "@open-graph-mcp/graph-core/eap/refusals"
 
 export type ClaimSnapshot = { id: string; subject?: string; domain?: string; level?: CanonicalClaimLevel; refs: string[]; covers?: string[]; anchor?: string; file?: string }
 export type NodeSnapshot = { id: string; domain: string | null; level: number; file: string; anchor: string }
@@ -63,6 +64,19 @@ export function blastRadius(deltas: readonly Delta[], declaredCells: readonly st
 export { canonicalCell } from "./cell"
 const toRoundtrip = (c: ClaimSnapshot): RoundtripClaim => ({ id: c.id, level: c.level, refs: c.refs ?? [] })
 
+/**
+ * Projeta um snapshot de claims para a visão de roundtrip UMA vez, para reuso por um lote inteiro de
+ * candidatos. Ver `IncrementalCtx.existingRoundtrip`.
+ */
+export function buildRoundtripIndex(claims: readonly ClaimSnapshot[]): readonly RoundtripClaim[] {
+  return claims.map(toRoundtrip)
+}
+
+/** Fecha o resultado do gate incremental: `ok` + projeção tipada dos motivos na taxonomia EAP. */
+function sealIncremental(reasons: string[], warnings: string[]): IncrementalResult {
+  return { reasons, warnings, ok: reasons.length === 0, refusals: reasons.map(reasonToRefusal) }
+}
+
 /** Nós da célula "domain:level" (level numérico) — level do nó é "P<n>" no grafo.
  *  Exportado: node.editing/node.idle (changeset.ts/sweeper.ts) precisam listar os nós de uma
  *  célula trancada/destrancada pra projeção "em edição por X" no nível do nó (F1). */
@@ -91,9 +105,25 @@ export type IncrementalCtx = {
   lockedCells: string[]
   existingClaims: ClaimSnapshot[]
   readFile: (f: string) => string | undefined
+  /**
+   * Pre-projected roundtrip view of `existingClaims`, built once by the caller.
+   *
+   * The quick roundtrip check needs `existingClaims` as `RoundtripClaim[]`. Projecting it inside the
+   * gate means a batch of N candidates re-projects the entire tenant claim set N times — O(N·claims)
+   * of pure garbage on the hot path, which is what made a 100-candidate Persistent Delta against a
+   * large tenant an event-loop stall. Pass `buildRoundtripIndex(existingClaims)` once per batch.
+   */
+  existingRoundtrip?: readonly RoundtripClaim[]
 }
 
-export type IncrementalResult = { reasons: string[]; warnings: string[] }
+export type IncrementalResult = {
+  reasons: string[]
+  warnings: string[]
+  /** false when any blocking reason was produced. */
+  ok: boolean
+  /** Typed EAP projection of `reasons`: closed code + client obligation, never free text alone. */
+  refusals: Refusal[]
+}
 
 /**
  * Gate incremental (§5.2). BLOQUEIA em structure/scope/anchor; o quick roundtrip é ADVISORY ("avisa
@@ -112,17 +142,17 @@ export function incrementalGate(delta: Delta, ctx: IncrementalCtx): IncrementalR
     // como "out of turn scope" — o caller tinha a trava e ouvia que não tinha.
     else if (!ctx.lockedCells.some((locked) => canonicalCell(locked) === canonicalCell(cell)))
       reasons.push(`authority.flip out of turn scope: ${cell} not locked by this changeset`)
-    return { reasons, warnings }
+    return sealIncremental(reasons, warnings)
   }
   // claim.add — refs pode ser vazio (claim-raiz no extremo da escada); o roundtrip valida a integridade.
   const c = delta.payload as ClaimSnapshot
   if (!c || !c.id || !c.subject || !c.domain) {
     reasons.push("claim.add: missing required fields (id/subject/domain)")
-    return { reasons, warnings }
+    return sealIncremental(reasons, warnings)
   }
   if (!normalizeClaimLevel(c.level).ok || typeof c.level !== "number") {
     reasons.push("claim.add: invalid level")
-    return { reasons, warnings }
+    return sealIncremental(reasons, warnings)
   }
   c.refs = c.refs ?? []
   const cell = cellOfClaim(c)
@@ -133,9 +163,9 @@ export function incrementalGate(delta: Delta, ctx: IncrementalCtx): IncrementalR
     if (content === undefined || !excerptCheck(content, c.anchor)) reasons.push(`anchor not found verbatim in ${c.file}`)
   }
   // quick roundtrip local (ADVISORY): nova claim + solera existente, escopo na raiz nova.
-  const set = [...ctx.existingClaims.map(toRoundtrip), toRoundtrip(c)]
+  const set = [...(ctx.existingRoundtrip ?? buildRoundtripIndex(ctx.existingClaims)), toRoundtrip(c)]
   for (const v of roundtripScoped(set, c.id).violations) warnings.push(`roundtrip ${v.kind}: ${v.detail}`)
-  return { reasons, warnings }
+  return sealIncremental(reasons, warnings)
 }
 
 export type FinalCtx = {

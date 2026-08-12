@@ -43,3 +43,51 @@
 - eapRecall fails to verify that contestation.status === 'admitted'
 - eapPromote returns promotion status 'proposed' without durably persisting the parent proposal candidate row
 - CapabilityGateway exposes full audit log entries via getAuditLog() without authorization projection filters
+
+## Retry #5 — Resolution
+
+Full detail, including which test resolves which finding, is in `TDD-OUTPUT.json` (`reworkFindingsAddressed`).
+
+| Defect class | Resolution | Primary evidence |
+|---|---|---|
+| 1. Durability / state divergence | All five services are now repository-backed; new `packages/mcp-server/src/eap/eap-repositories.ts` writes through the existing SQLite + JSONL durable path. Services own no aggregate state. | `test/f001-retry5-durability.test.ts` (closes and reopens the DB from disk between write and read) |
+| 2. Unbounded memory growth | `executedOutcomes` and `auditLog` deleted; audit lives in `capability_executions` with a retention bound enforced per append. Approvals moved to `operator_approvals`. Recall event tail is a bounded ring. | `test/f001-retry5-durability.test.ts` retention and no-in-memory-collection tests |
+| 3. Concurrency / sequence races | `MAX(seq)+1` removed everywhere. `db.ts` adds `serialTransaction` (BEGIN IMMEDIATE) and `allocateSequence` (atomic `UPSERT ... RETURNING`). A failed `saveTransition` aborts instead of forcing an increment. | `test/f001-retry5-concurrency-authz.test.ts` sequence-reuse and `injectMirrorAppendFailure` rollback tests |
+| 4. Authorization / validation gaps | Gateway validates the STORED approval, not the client copy; `getAuditLog` requires a principal and returns a tagged full/redacted projection; `eapRecall` checks status, severity and presence separately; `eapPromote` verifies the parent and persists proposed parent candidates; the client adapter forwards the real token and evidence and fabricates neither. | `test/f001-retry5-concurrency-authz.test.ts`, `packages/client/test/eap-client.test.ts`, `test/eap-conformance.test.ts` |
+| Transactional recovery | `admitPersistentDelta` is one `durableTransaction`; no orphaned `cs_deltas` or held locks on failure. A latent `ReferenceError` on the refusal path was also fixed. | `test/f001-retry5-concurrency-authz.test.ts` transactional-recovery tests |
+| Per-candidate snapshot re-parse | `buildRoundtripIndex` built once per batch and passed to `incrementalGate` via `IncrementalCtx.existingRoundtrip`. | `test/f001-retry5-concurrency-authz.test.ts` snapshot-read bound test |
+| Execution timeout | Explicit `timeoutMs` plus `AbortSignal` handed to `providerAction`; abort fires before rejection; timer cleared. | `test/f001-retry5-concurrency-authz.test.ts` timeout test |
+
+### Reported honestly as NOT closed
+
+- Concurrency is proven structurally and by sequence-reuse / fault-injection tests, not by a multi-process load test.
+- Provider cancellation is cooperative; no circuit breaker was added.
+- The per-batch indexing win is not benchmarked against a 100k-claim tenant.
+- 24 pre-existing TypeScript errors remain in unrelated mcp-server files; `packages/mcp-server/tsconfig.json` is still broken upstream (missing `@tsconfig/bun`), which is a dependency install and therefore a user action.
+- No coverage tooling exists in this repository; no coverage figure is reported.
+
+## Retry #5 Validation Audit — TERMINAL (maxReworks reached)
+
+### Open Points (The Grumpy Tech Lead — Score: 0.30)
+- CRITICAL — `transport.ts` registers only eapInitiate/Propose/Promote/Contest/Recall; capability-gateway.ts, recall-worker.ts, promotion-service.ts, contestation-service.ts and persistent-delta.ts are imported by nothing outside tests. The governed domain services are unreachable in production; two parallel recall implementations exist.
+- CRITICAL — `eapRecall` (tools/eap.ts:544) writes a `recalls` row with status 'completed' and affectedClaimIds copied verbatim, computing no reverse-dependency closure, checkpoint, degradation or scar, while SqliteRecallRepository uses the disjoint recall_cases/recall_checkpoints/recall_scars tables. The "same rows" durability claim is false.
+- HIGH — `validateOperatorApproval` (graph-core/src/eap/capabilities.ts:121) still compares stored basedOnSeq against caller-supplied `request.currentSeq`, and `now > Date.parse(expiresAt)` is false for any unparseable timestamp (fails open).
+- HIGH — `admitPersistentDelta` (eap/persistent-delta.ts:118) structuredClones state.graphs and state.claimsCache per call; `incrementalGate` (gates.ts:165) still spreads the whole roundtrip index per candidate. No asymptotic win for a 100k-claim tenant.
+- MEDIUM — `eapInitiate` never enters serialTransaction; HorizonStore.create does read-then-INSERT-OR-REPLACE in a DEFERRED transaction; persistent-delta.ts:176 still computes COALESCE(MAX(seq),0) for cs_deltas in a DEFERRED unit.
+- MEDIUM — PromotionService.getEvents(), getProposalsForParent() and SqliteCapabilityAuditRepository.list() materialize entire tenant tables with no pagination; promotion_events has no retention; no adapter emits KnowledgeContested / PromotionProposed / RecallProgressed / TruthOwnershipSuspended. Unbounded growth moved from heap to disk.
+
+### Edge Cases Missed (Adversarial QA — Score: 0.10, hasHighCriticalVuln: true, isCrashing: false)
+- HIGH AUTH_BYPASS — SqliteApprovalRepository.registerApproval (eap-repositories.ts:354) does unconditional INSERT OR REPLACE, resetting `consumed` to 0. A spent single-use irreversible authorization can be re-armed and re-executed. Reproduced end-to-end.
+- HIGH AUTH_BYPASS — Malformed `expiresAt` yields NaN from Date.parse; every comparison is false, so the approval never expires. Reproduced: irreversible capability returned COMPLETED instead of APPROVAL_EXPIRED.
+- HIGH RACE_CONDITION — CapabilityGateway.execute checks findByIdempotencyKey before an await and records only after; the key is never reserved. Three concurrent calls with the same key produced 3 provider invocations.
+- HIGH DATA_INTEGRITY — SqliteRecallRepository.complete() without a recallCase argument issues a raw UPDATE that bypasses write() and the JSONL mirror; after rebuildFromJsonl a completed recall reverts to in_progress and is reprocessed.
+- MEDIUM VALIDATION_BYPASS — eapContest never inspects evidence elements and hard-codes status 'admitted'; `evidence: [null]` with non-existent/path-traversal target ids returned ok:true. This makes the eapRecall admitted-status guard unreachable.
+- MEDIUM VALIDATION_BYPASS — eapPromote never reads the child horizon's candidates table; arbitrary candidate ids can be injected into a parent horizon with no verified-state precondition.
+- LOW MISSING_CONTROL — Horizon Budget Ledger stored but never enforced; budget_consumed is never incremented; HorizonBudgetExhausted never recorded.
+- LOW MISSING_CONTROL — eapRecall performs no traversal, degradation, suspension or scar; recall-worker.ts is never invoked from the reachable path.
+- Unguarded JSON.parse on stored columns throws SyntaxError out of the tool boundary instead of a typed Refusal (tools/eap.ts:531,540; eap-repositories.ts:134,181,318,548) — reachable via rebuildFromJsonl replay.
+- basedOnSeq accepts 1e308 (no upper bound); eapPromote is not idempotent and burns two child sequences on duplicate calls; client/src/eap.ts:176 defaults basedOnSeq to 0, guaranteeing STALE_BASE.
+- Concurrency still unproven across connections/processes (self-reported).
+
+### Root cause across all five retries
+The MCP transport adapters in `packages/mcp-server/src/tools/eap.ts` are a second, weaker implementation of the domain services rather than a thin port over them. Each retry hardened the domain layer; the reachable surface kept its own rules. Recommended remediation before any further attempt: register the governed aggregates in `transport.ts` and reduce the tool adapters to delegation, then re-run validation.

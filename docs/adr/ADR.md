@@ -1,3 +1,12 @@
+---
+doc_type: adr
+domain: opengraph
+stack: [TypeScript, Bun, SQLite, MCP]
+node_id: "adr:adr"
+tags: [eap, autoridade, horizontes, conformidade, recusas]
+edges: []
+updated: 2026-08-11
+---
 # ADR — OpenGraph v1.0
 
 **Architecture Decision Records · derivados do Working Paper v1.0-rc4 · 10 de agosto de 2026**
@@ -1635,3 +1644,47 @@ O código sempre tratou `suspended` como valor do tipo `Authority` — a coorden
 ### B2 — As recusas do gate ainda são texto livre *(dívida contra ADR-0006)*
 
 A taxonomia fechada de recusas (ADR-0006) exige códigos com obrigação de cliente associada. As recusas emitidas hoje pelo gate são mensagens de texto — o que significa que a métrica *Refusal Taxonomy Coverage* nasce perto de zero e que o item correspondente do checklist L2 **hoje não passa**, apesar de o gate em si ser [B]. É dívida de conformidade conhecida, não defeito descoberto: o mecanismo existe e o vocabulário é que falta.
+
+**Estado atual da dívida.** O vocabulário passou a existir: `packages/graph-core/src/eap/refusals.ts` declara `REFUSAL_CODES` e o mapa congelado `CLIENT_OBLIGATIONS`, e `incrementalGate` (`packages/mcp-server/src/gates.ts`) retorna `{ ok, refusals }` com códigos tipados **ao lado** das razões textuais legadas, que não foram removidas. A dívida deixou de ser ausência de vocabulário e passou a ser dupla emissão: enquanto as duas formas coexistirem, *Refusal Taxonomy Coverage* mede a nova e o log ainda carrega a antiga.
+
+---
+
+# Apêndice C — Decisões de implementação do plano epistêmico *[B]*
+
+Quatro decisões arquiteturais tomadas ao materializar o domínio `cognitive_line` no host de referência. São **[B]** no sentido estrito do vocabulário deste documento: têm código no repositório e teste de regressão identificável. Nenhuma delas altera a máquina recursiva nem a semântica dos operadores — todas ficam **ao redor** dela, no substrato de persistência, e portanto passam em [G0]. A documentação de módulo correspondente está em [`./docs/feature/cognitive_line.md`](../feature/cognitive_line.md).
+
+### C1 — Repositórios SQLite substituem agregados em memória
+
+`PromotionService`, `ContestationService`, `RecallWorker`, `CapabilityGateway` e o armazenamento de aprovações não possuem estado de agregado em processo. Todos escrevem por `packages/mcp-server/src/eap/eap-repositories.ts` (`SqlitePromotionRepository`, `SqliteContestationRepository`, `SqliteRecallRepository`, `SqliteApprovalRepository`, `SqliteCapabilityAuditRepository`), sobre o caminho durável já existente do projeto — SQLite mais espelho JSONL append-only por tenant.
+
+**Alternativa rejeitada:** `Map` em processo com flush periódico. Perdeu por duas razões independentes: o estado epistêmico não sobrevive a reinício do host, e serviços e adaptadores MCP passariam a ler conjuntos diferentes de linhas — divergência entre camadas sobre o mesmo fato admitido é a forma de persistência da patologia que I6 pagou.
+
+**Consequência desconfortável:** crescimento ilimitado deixou de ser risco de memória e virou risco de disco. Só `capability_executions` tem política de retenção; as demais tabelas crescem sem limite declarado.
+
+### C2 — `serialTransaction` + `allocateSequence` substituem `MAX(seq)+1`
+
+`packages/mcp-server/src/db.ts` expõe `serialTransaction` (`BEGIN IMMEDIATE`, que serializa a seção ler-decidir-escrever entre escritores em vez de disputá-la sobre um snapshot `DEFERRED`) e `allocateSequence` (um único `UPSERT ... RETURNING` contra `eap_sequences`). Os cinco adaptadores `cognitive.*` executam dentro de `serialTransaction`; alocação e escrita que a consome confirmam como uma unidade.
+
+**Alternativa rejeitada:** manter `SELECT COALESCE(MAX(seq),0)+1`. Perdeu porque **reemite** um número após remoção de linha — uma sequência que reusa valores não é uma sequência, e `seq` é a coordenada que `based_on_seq` e `APPROVAL_STALE_SEQ` pressupõem monotônica.
+
+**Limite honesto:** a serialização é provada estruturalmente e por testes de reuso de sequência e injeção de falha, não por um teste de carga multiprocesso. O host é Bun single-threaded e o repositório não tem harness multiprocesso para estas ferramentas.
+
+### C3 — Retenção explícita no log de auditoria de capacidades
+
+`SqliteCapabilityAuditRepository.record` aplica `DEFAULT_AUDIT_MAX_ENTRIES` (10000, configurável) na mesma transação do append, evictando as entradas mais antigas.
+
+**Alternativa rejeitada:** auditoria ilimitada. Perdeu porque um log que cresce sem limite acaba desligado em produção, e um log desligado é pior que um log truncado — a §17 depende de evidência por log do host.
+
+**Consequência desconfortável:** o log de capacidades é, por construção, uma janela e não um arquivo. Qualquer alegação de auditoria completa sobre execuções antigas é falsa.
+
+### C4 — `eap_sequences` e `capability_executions` são SQLite-only, sem espelho JSONL
+
+As duas tabelas estão declaradas fora de `DURABLE_TABLES` em `db.ts`, com a razão registrada no próprio arquivo.
+
+**Por quê:** retenção é incompatível com um espelho append-only — o JSONL não tem como representar uma eviction. E `rebuildFromJsonl` reconstrói o estado a partir do espelho; se o alocador monotônico estivesse ali, um rebuild o reiniciaria e reemitiria sequências já usadas, que é exatamente o defeito que C2 fecha.
+
+**Consequência desconfortável:** o espelho JSONL deixou de ser uma representação completa do estado do tenant. Um rebuild restaura o conteúdo epistêmico e **não** restaura o alocador nem a auditoria de execuções — quem ler o espelho como fonte única estará lendo um subconjunto.
+
+### C5 — Estado de fiação, para não ser inferido errado
+
+`packages/mcp-server/src/transport.ts` registra apenas as cinco ferramentas `cognitive.*`. `CapabilityGateway`, `PromotionService`, `ContestationService`, `RecallWorker` e `admitPersistentDelta` **não** estão ligados ao transporte e são alcançáveis somente pelo suite de testes. Os adaptadores em `src/tools/eap.ts` reimplementam contestação, promoção e recall contra as mesmas tabelas, com regras mais fracas que as dos serviços; `eapRecall` grava uma linha `completed` sem percorrer dependências, sem degradar autoridade e sem criar cicatriz. **A camada de governança existe no repositório e não está ativa em runtime.**

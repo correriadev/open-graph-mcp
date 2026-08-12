@@ -1,8 +1,10 @@
-import { describe, expect, it, beforeEach } from "bun:test"
-import { promoteKnowledge, Horizon, PromotionRequest } from "@open-graph-mcp/graph-core/eap/promotion"
+import { describe, expect, it, beforeEach, afterEach } from "bun:test"
+import { Horizon, PromotionRequest } from "@open-graph-mcp/graph-core/eap/promotion"
 import { PromotionService } from "../src/eap/promotion-service"
+import { createEapEnv, type EapEnv } from "./eap-env"
 
 describe("One-Edge Promotion (Task 06)", () => {
+  let env: EapEnv
   let service: PromotionService
 
   const parentHorizon: Horizon = {
@@ -18,9 +20,14 @@ describe("One-Edge Promotion (Task 06)", () => {
   }
 
   beforeEach(() => {
-    service = new PromotionService()
+    env = createEapEnv()
+    service = new PromotionService(env.promotions)
     service.registerHorizon(parentHorizon)
     service.registerHorizon(childHorizon)
+  })
+
+  afterEach(() => {
+    env.cleanup()
   })
 
   it("returns HORIZON_SKIP when Promotion targets a non-parent Horizon", () => {
@@ -36,6 +43,7 @@ describe("One-Edge Promotion (Task 06)", () => {
     if (!result.success) {
       expect(result.refusalCode).toBe("HORIZON_SKIP")
     }
+    expect(service.getProposalsForParent("horizon-other-99")).toHaveLength(0)
   })
 
   it("returns STALE_BASE when basedOnSeq precedes current applicable Sequence", () => {
@@ -51,6 +59,7 @@ describe("One-Edge Promotion (Task 06)", () => {
     if (!result.success) {
       expect(result.refusalCode).toBe("STALE_BASE")
     }
+    expect(service.getProposalsForParent(parentHorizon.id)).toHaveLength(0)
   })
 
   it("creates a parent proposal in proposed status when Promotion succeeds", () => {
@@ -65,6 +74,7 @@ describe("One-Edge Promotion (Task 06)", () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.proposal.status).toBe("proposed")
+      expect(service.getProposalsForParent(parentHorizon.id).map((p) => p.id)).toContain(result.proposal.id)
     }
   })
 })

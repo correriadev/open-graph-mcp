@@ -126,14 +126,53 @@ export class ExternalAgentClientAdapter {
     this.mcpClient = config.mcpClient
   }
 
+  /**
+   * Submits an Intermediator/Executor recommendation as a PROPOSAL.
+   *
+   * Two guards here exist because of the retry#5 rework findings:
+   *
+   *  - The session token is REQUIRED and forwarded verbatim. It used to fall back to `""`, which
+   *    made the adapter submit anonymously; the host then rejected it with an opaque transport
+   *    error instead of a typed refusal, and the client could not tell "not authenticated" from
+   *    "refused by the gate".
+   *  - Evidence is the caller's, or the proposal never leaves. It used to substitute a literal
+   *    `["evidence-default"]` when the caller had none — the adapter FABRICATING the very evidence
+   *    the Admission Gate exists to demand. An LLM-backed role with nothing to show must be refused
+   *    here, not laundered into a well-formed submission.
+   */
   async submitProposal(input: ProposalInput): Promise<ProposalOutcome> {
+    if (typeof input.token !== "string" || input.token.trim() === "") {
+      return {
+        status: "refused",
+        refusal: {
+          code: "DIRECT_EDIT_FORBIDDEN",
+          reason: "A session token is required: the host admits proposals only from an authenticated agent client",
+          obligation: "SUBMIT_PROPOSAL",
+        },
+      }
+    }
+
+    const evidence = (input.evidenceRefs ?? []).filter((ref) => typeof ref === "string" && ref.trim().length > 0)
+    if (evidence.length === 0) {
+      return {
+        status: "refused",
+        refusal: {
+          code: "EVIDENCE_REQUIRED",
+          reason: "Proposal carries no evidence reference; the adapter never fabricates evidence on the caller's behalf",
+          obligation: "PROVIDE_EVIDENCE",
+        },
+      }
+    }
+
     const payload = {
-      token: input.token ?? "",
+      token: input.token,
       horizonId: input.horizonId,
       role: input.role,
       candidateId: input.candidateId ?? `cand_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       command: "DELIBERATE",
-      evidence: input.evidenceRefs && input.evidenceRefs.length > 0 ? input.evidenceRefs : ["evidence-default"],
+      // Field name matches the host's `cognitive.propose` contract exactly. Sending `evidenceRefs`
+      // meant the host saw NO evidence and refused every proposal with EVIDENCE_REQUIRED.
+      evidence,
       basedOnSeq: input.basedOnSeq ?? 0,
       submittedAs: "proposal",
     }
@@ -141,7 +180,9 @@ export class ExternalAgentClientAdapter {
     if (this.mcpClient) {
       try {
         const result = (await this.mcpClient.callTool("cognitive.propose", payload)) as any
-        if (result?.status === "refused") {
+        // The host answers `{ ok: false, refusal }`; older transports answered `{ status: "refused" }`.
+        // Both are a refusal, and neither is authority to retry — `handleRefusal` decides that.
+        if (result?.ok === false || result?.status === "refused") {
           return {
             status: "refused",
             refusal: {
@@ -169,10 +210,16 @@ export class ExternalAgentClientAdapter {
       }
     }
 
+    // No transport configured: the adapter has no authority to admit anything on its own. Reporting
+    // "admitted" here would be the client claiming host authority — the exact boundary the protocol
+    // draws around LLM-backed roles.
     return {
-      status: "admitted",
-      proposalId: payload.candidateId,
-      outcome: { payload },
+      status: "refused",
+      refusal: {
+        code: "DIRECT_EDIT_FORBIDDEN",
+        reason: "No MCP transport configured: only the deterministic host may admit a proposal",
+        obligation: "SUBMIT_PROPOSAL",
+      },
     }
   }
 

@@ -104,7 +104,7 @@ export class HorizonStore {
       write(this.db, this.stateDir, record.tenantId, "horizons", {
         tenant_id: record.tenantId,
         id: record.id,
-        parent_id: record.parentId,
+        parent_id: record.parentId ?? null,
         state: record.state,
         seq: record.seq,
         budget_allocated: record.budgetAllocated,
@@ -155,7 +155,7 @@ export class HorizonStore {
       write(this.db, this.stateDir, tenantId, "horizons", {
         tenant_id: updated.tenantId,
         id: updated.id,
-        parent_id: updated.parentId,
+        parent_id: updated.parentId ?? null,
         state: updated.state,
         seq: updated.seq,
         budget_allocated: updated.budgetAllocated,
