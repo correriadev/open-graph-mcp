@@ -1,8 +1,21 @@
 {
-  "version": 1,
-  "task": "F002 task 06 — Annotate the Existing EAP Corpus",
+  "version": 2,
+  "task": "F002 task 06 — Annotate the Existing EAP Corpus (re-headed by task 07)",
   "generatedFrom": ".verification/annotations.jsonl (one full `bun run verify` run, sink truncated first)",
-  "policy": "The gap ledger required by task 06 acceptance 3. It is NOT held in docs/verification/scenario-register.json, and that is a mechanical constraint rather than a choice: `serializeRegister` in scripts/verification/register-scenarios.ts emits a fixed key set (version, policy, source, scenarios[id, area, section, group, heading, status, retired?]) and drops everything else, while `register-scenarios.test.ts` pins `serializeRegister(regenerated) === committedRaw()` byte for byte. Any gap field written into the register is therefore erased on the next regeneration and fails that test. Widening the serializer means editing scripts/verification/* (task 06 may only read it) and weakening the byte-identity test (forbidden outright). This file is the committed record instead: a scenario with no annotating test is listed here rather than silently absent. Task 07's reconciler should read it alongside the register; whether the ledger is folded back into the register is an architect decision recorded against task 07, not something task 06 may take unilaterally.",
+  "supersededForGapTruth": {
+    "by": "docs/verification/traceability-map.json",
+    "statement": "SUPERSEDED FOR GAP TRUTH. This file is no longer authoritative for WHICH scenarios are Traceability Gaps, which test cases are unclaimed, or how many links of each kind exist. That is now derived, in one place, by scripts/verification/reconcile-traceability.ts into docs/verification/traceability-map.json, which 003 §Section 1 makes the aggregate that owns gap truth in both directions. Task 06's `counts` block and its gap MEMBERSHIP lists were removed here so two artefacts can never disagree.",
+    "whatThisFileStillOwns": "The prose the map cannot derive: WHY each gap is a gap (`gapRationales`), WHICH clause of a partially covered scenario is still unproven (`partialCoverageRationales`), the reviewed quarantine-adjacent candidates and the reasoning that none was committed (`quarantineReport`), the classification of the deliberately unannotated cases (`outOfScopeTestCases`), and task 06's before/after suite baseline. Membership in every one of those lists is re-derived by the map; if a rationale here names a scenario the map no longer reports as a gap, the map is right and this rationale is stale.",
+    "reconciledAtGeneration": {
+      "note": "Every count task 06 measured was reproduced independently by the task 07 reconciler from the register, the deduplicated sink and the runner's executed-test inventory. No figure was adjusted to match.",
+      "scenariosWithAssertsLink": 34,
+      "scenariosCoveredPartiallyOnly": 24,
+      "unlinkedScenarios": 13,
+      "unclaimedTestCases": 21,
+      "committedLinksIntoQuarantine": 0
+    }
+  },
+  "policy": "ANNEX, NOT A LEDGER. Originally task 06's gap ledger, written here because docs/verification/scenario-register.json mechanically rejects extra fields: `serializeRegister` in scripts/verification/register-scenarios.ts emits a fixed key set and drops everything else, and register-scenarios.test.ts pins `serializeRegister(regenerated) === committedRaw()` byte for byte. That constraint still holds and the register is still byte-unchanged. Task 07 resolved the open architect question the other way round: the gap ledger was NOT folded into the register, because 003 §Section 1 gives gap truth to the derived Traceability Map, not to the identity store. See `supersededForGapTruth`.",
   "corpus": {
     "eapTestFiles": 21,
     "note": "003 task 06 says '17 EAP test files'. The measured set is 21: 16 in packages/mcp-server/test, 2 in packages/client/test, 3 in packages/graph-core/test. The 21 file paths named in the task brief were each verified to exist; the count 17 in 003 is stale and is reported here rather than forced.",
@@ -14,19 +27,25 @@
   },
   "suiteBaselineUnchanged": {
     "claim": "Annotating changed no assertion (task 06 acceptance 2).",
-    "before": { "pass": 841, "todo": 1, "fail": 0, "expectCalls": 3952, "tests": 842, "files": 140 },
-    "after": { "pass": 841, "todo": 1, "fail": 0, "expectCalls": 3952, "tests": 842, "files": 140 },
+    "before": {
+      "pass": 841,
+      "todo": 1,
+      "fail": 0,
+      "expectCalls": 3952,
+      "tests": 842,
+      "files": 140
+    },
+    "after": {
+      "pass": 841,
+      "todo": 1,
+      "fail": 0,
+      "expectCalls": 3952,
+      "tests": 842,
+      "files": 140
+    },
     "independentCheck": "bun scripts/verification/assertion-fingerprint.ts --check → PASS, 7 f001-* file(s) match the committed baseline, every hash unchanged. Known limitation carried from task 12: matcher ARGUMENTS are outside the fingerprint, so this proves nothing was dropped, not that nothing was weakened. The unchanged whole-suite expect() total is the second, independent leg of that claim."
   },
-  "counts": {
-    "proposedScenarios": 71,
-    "withAssertsLink": 34,
-    "coversPartiallyOnly": 24,
-    "gaps": 13,
-    "declaredUntestable": 7,
-    "committedLinksIntoQuarantine": 0
-  },
-  "gaps": [
+  "gapRationales": [
     {
       "id": "EAP-ADMS-001",
       "heading": "Should produce one admitted outcome when a candidate satisfies the Admission Gate",
@@ -93,33 +112,129 @@
       "reason": "No case feeds prompt-injected content through the client adapter and shows the host treats it as untrusted proposal input. The adapter's local guards (token, evidence) are tested but are a different obligation."
     }
   ],
-  "coversPartiallyOnly": {
+  "partialCoverageRationales": {
     "note": "003 §Section 2: a `covers-partially` link alone can never promote a scenario to `evidenced`. These 24 are therefore NOT evidenced by this corpus; each is listed so task 09 reports them as unpromoted with a reason rather than as silent absences. `partialLinks` is the number of partial links.",
     "scenarios": [
-      { "id": "EAP-HRZN-001", "partialLinks": 1, "missing": "Negotiation Seed provenance, Budget Ledger validity, and 'starts without inherited Relative Authority' are unproven; only the declared-parent clause is covered." },
-      { "id": "EAP-HRZN-003", "partialLinks": 1, "missing": "`HorizonBudgetExhausted` is never read back — only the escalation outcome and its reason." },
-      { "id": "EAP-ADMS-002", "partialLinks": 2, "missing": "'exactly one' Refusal, and the explicit client obligation on it." },
-      { "id": "EAP-VOBJ-007", "partialLinks": 4, "missing": "All four links are producing-side (an allocator never emits a decreasing Sequence). `createSequence` and `validateSequenceAdvance` are imported by eap-types.test.ts and never called, so the REJECTION the scenario states is untested." },
-      { "id": "EAP-VOBJ-009", "partialLinks": 3, "missing": "All three prove the converse — every listed code HAS an obligation. Constructing a Refusal from an unmapped code and observing the failure is untested." },
-      { "id": "EAP-SVCS-003", "partialLinks": 2, "missing": "`HorizonInitiated` and its seedRef/budgetRef payload." },
-      { "id": "EAP-SVCS-004", "partialLinks": 2, "missing": "`PersistentDeltaAdmitted` and the recorded Sequence." },
-      { "id": "EAP-SVCS-006", "partialLinks": 4, "missing": "No single case pairs 'KnowledgeContested is recorded' with 'the target claims are not directly edited or deleted'; the corpus splits the two clauses across cases." },
-      { "id": "EAP-SVCS-008", "partialLinks": 1, "missing": "The append-only audit reference for the reversible path." },
-      { "id": "EAP-SVCS-009", "partialLinks": 2, "missing": "`CapabilityExecuted` is never read back; only the consumed flag and the reuse refusal." },
-      { "id": "EAP-SVCS-010", "partialLinks": 1, "missing": "No case runs `AssessConformance` or produces independent host and client verdicts. The two files NAMED eap-conformance report exclusions and adapter invariants instead." },
-      { "id": "EAP-EVNT-001", "partialLinks": 1, "missing": "Only `TruthOwnershipSuspended` of the eleven governed events the scenario enumerates has its minimum payload checked." },
-      { "id": "EAP-PERS-001", "partialLinks": 4, "missing": "Every link observes a restart or a rebuild over recall/promotion state, never the claims + ownership + Sequence triple the scenario states." },
-      { "id": "EAP-PERS-007", "partialLinks": 1, "missing": "The Given is a corrupt `refs` column, not the 'no registered reverse-dependency edges' the scenario states." },
-      { "id": "EAP-XPRT-002", "partialLinks": 4, "missing": "The client obligation on the refusal is never read back, and three of the four links arise from corrupt durable state rather than a violated host rule." },
-      { "id": "EAP-XPRT-003", "partialLinks": 1, "missing": "The MCP client is a stub; 'only the deterministic MCP host may admit or persist it' is unexercised." },
-      { "id": "EAP-FUNC-002", "partialLinks": 1, "missing": "Atomic commit is shown; the monotonic Sequence advance and the observable event are not." },
-      { "id": "EAP-FUNC-003", "partialLinks": 6, "missing": "No single link performs the scenario's whole When — Recall requested, interrupted, THEN resumed — with all three Then clauses. The six links each carry one fragment." },
-      { "id": "EAP-FUNC-004", "partialLinks": 2, "missing": "`CapabilityExecuted` is not read back in either link." },
-      { "id": "EAP-ERRP-001", "partialLinks": 3, "missing": "Two links are client-adapter-side; the host-side link never verifies that no mutation occurred." },
-      { "id": "EAP-ERRP-003", "partialLinks": 3, "missing": "No link pairs the absent-resource outcome with the 'without leaking another tenant's state' clause in the same case." },
-      { "id": "EAP-ERRP-004", "partialLinks": 5, "missing": "'approval does not waive evidence requirements' is asserted by none of the five." },
-      { "id": "EAP-SEC-001", "partialLinks": 3, "missing": "The scenario's Given spans an invalid CellKey, an empty HorizonId AND a cross-tenant identifier; the corpus splits these across three cases and covers no CellKey arm at a governed boundary." },
-      { "id": "EAP-SEC-003", "partialLinks": 1, "missing": "The single link replays a COMMAND. The scenario's Given is a captured EVENT (`KnowledgeVerified`, `PromotionProposed`, `CapabilityExecuted`) replayed as though it were a command — untested." }
+      {
+        "id": "EAP-HRZN-001",
+        "partialLinks": 1,
+        "missing": "Negotiation Seed provenance, Budget Ledger validity, and 'starts without inherited Relative Authority' are unproven; only the declared-parent clause is covered."
+      },
+      {
+        "id": "EAP-HRZN-003",
+        "partialLinks": 1,
+        "missing": "`HorizonBudgetExhausted` is never read back — only the escalation outcome and its reason."
+      },
+      {
+        "id": "EAP-ADMS-002",
+        "partialLinks": 2,
+        "missing": "'exactly one' Refusal, and the explicit client obligation on it."
+      },
+      {
+        "id": "EAP-VOBJ-007",
+        "partialLinks": 4,
+        "missing": "All four links are producing-side (an allocator never emits a decreasing Sequence). `createSequence` and `validateSequenceAdvance` are imported by eap-types.test.ts and never called, so the REJECTION the scenario states is untested."
+      },
+      {
+        "id": "EAP-VOBJ-009",
+        "partialLinks": 3,
+        "missing": "All three prove the converse — every listed code HAS an obligation. Constructing a Refusal from an unmapped code and observing the failure is untested."
+      },
+      {
+        "id": "EAP-SVCS-003",
+        "partialLinks": 2,
+        "missing": "`HorizonInitiated` and its seedRef/budgetRef payload."
+      },
+      {
+        "id": "EAP-SVCS-004",
+        "partialLinks": 2,
+        "missing": "`PersistentDeltaAdmitted` and the recorded Sequence."
+      },
+      {
+        "id": "EAP-SVCS-006",
+        "partialLinks": 4,
+        "missing": "No single case pairs 'KnowledgeContested is recorded' with 'the target claims are not directly edited or deleted'; the corpus splits the two clauses across cases."
+      },
+      {
+        "id": "EAP-SVCS-008",
+        "partialLinks": 1,
+        "missing": "The append-only audit reference for the reversible path."
+      },
+      {
+        "id": "EAP-SVCS-009",
+        "partialLinks": 2,
+        "missing": "`CapabilityExecuted` is never read back; only the consumed flag and the reuse refusal."
+      },
+      {
+        "id": "EAP-SVCS-010",
+        "partialLinks": 1,
+        "missing": "No case runs `AssessConformance` or produces independent host and client verdicts. The two files NAMED eap-conformance report exclusions and adapter invariants instead."
+      },
+      {
+        "id": "EAP-EVNT-001",
+        "partialLinks": 1,
+        "missing": "Only `TruthOwnershipSuspended` of the eleven governed events the scenario enumerates has its minimum payload checked."
+      },
+      {
+        "id": "EAP-PERS-001",
+        "partialLinks": 4,
+        "missing": "Every link observes a restart or a rebuild over recall/promotion state, never the claims + ownership + Sequence triple the scenario states."
+      },
+      {
+        "id": "EAP-PERS-007",
+        "partialLinks": 1,
+        "missing": "The Given is a corrupt `refs` column, not the 'no registered reverse-dependency edges' the scenario states."
+      },
+      {
+        "id": "EAP-XPRT-002",
+        "partialLinks": 4,
+        "missing": "The client obligation on the refusal is never read back, and three of the four links arise from corrupt durable state rather than a violated host rule."
+      },
+      {
+        "id": "EAP-XPRT-003",
+        "partialLinks": 1,
+        "missing": "The MCP client is a stub; 'only the deterministic MCP host may admit or persist it' is unexercised."
+      },
+      {
+        "id": "EAP-FUNC-002",
+        "partialLinks": 1,
+        "missing": "Atomic commit is shown; the monotonic Sequence advance and the observable event are not."
+      },
+      {
+        "id": "EAP-FUNC-003",
+        "partialLinks": 6,
+        "missing": "No single link performs the scenario's whole When — Recall requested, interrupted, THEN resumed — with all three Then clauses. The six links each carry one fragment."
+      },
+      {
+        "id": "EAP-FUNC-004",
+        "partialLinks": 2,
+        "missing": "`CapabilityExecuted` is not read back in either link."
+      },
+      {
+        "id": "EAP-ERRP-001",
+        "partialLinks": 3,
+        "missing": "Two links are client-adapter-side; the host-side link never verifies that no mutation occurred."
+      },
+      {
+        "id": "EAP-ERRP-003",
+        "partialLinks": 3,
+        "missing": "No link pairs the absent-resource outcome with the 'without leaking another tenant's state' clause in the same case."
+      },
+      {
+        "id": "EAP-ERRP-004",
+        "partialLinks": 5,
+        "missing": "'approval does not waive evidence requirements' is asserted by none of the five."
+      },
+      {
+        "id": "EAP-SEC-001",
+        "partialLinks": 3,
+        "missing": "The scenario's Given spans an invalid CellKey, an empty HorizonId AND a cross-tenant identifier; the corpus splits these across three cases and covers no CellKey arm at a governed boundary."
+      },
+      {
+        "id": "EAP-SEC-003",
+        "partialLinks": 1,
+        "missing": "The single link replays a COMMAND. The scenario's Given is a captured EVENT (`KnowledgeVerified`, `PromotionProposed`, `CapabilityExecuted`) replayed as though it were a command — untested."
+      }
     ]
   },
   "quarantineReport": {
@@ -165,13 +280,34 @@
     "note": "Task 06 acceptance 1 permits a case to be 'explicitly recorded as out-of-scope with a reason'. Each of these carries that reason as an in-file comment above the case; they discharge no Scenario Identifier because `004` states none. Counted here so task 07 can distinguish a deliberate non-binding from an unclaimed case. 131 EAP test cases − 110 annotated = 21.",
     "count": 21,
     "byClass": [
-      { "class": "structural / implementation-shape assertions (no in-memory store; no unbounded collection; SQLite not a Map; obsolete table absent; composition-root identity)", "count": 6 },
-      { "class": "MCP tool-schema shape assertions that issue no Cognitive command", "count": 2 },
-      { "class": "quarantine-adjacent cases that pin an ambiguity OPEN (QA2 ×3, QA5 ×1, QA6 ×2)", "count": 6 },
-      { "class": "performance / query-plan assertions (snapshot reads per candidate; indexed membership lookup)", "count": 2 },
-      { "class": "client-adapter-local guards with no `004` counterpart (session token; evidence fabrication)", "count": 2 },
-      { "class": "host-internal routing (SSE session filters for one event kind) and identifier-allocation uniqueness", "count": 2 },
-      { "class": "closed-union validation with no `004` scenario (LegacyClaimStatus union)", "count": 1 }
+      {
+        "class": "structural / implementation-shape assertions (no in-memory store; no unbounded collection; SQLite not a Map; obsolete table absent; composition-root identity)",
+        "count": 6
+      },
+      {
+        "class": "MCP tool-schema shape assertions that issue no Cognitive command",
+        "count": 2
+      },
+      {
+        "class": "quarantine-adjacent cases that pin an ambiguity OPEN (QA2 ×3, QA5 ×1, QA6 ×2)",
+        "count": 6
+      },
+      {
+        "class": "performance / query-plan assertions (snapshot reads per candidate; indexed membership lookup)",
+        "count": 2
+      },
+      {
+        "class": "client-adapter-local guards with no `004` counterpart (session token; evidence fabrication)",
+        "count": 2
+      },
+      {
+        "class": "host-internal routing (SSE session filters for one event kind) and identifier-allocation uniqueness",
+        "count": 2
+      },
+      {
+        "class": "closed-union validation with no `004` scenario (LegacyClaimStatus union)",
+        "count": 1
+      }
     ]
   }
 }
