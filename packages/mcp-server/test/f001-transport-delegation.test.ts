@@ -14,6 +14,7 @@ import { advanceCandidates, callTool, register } from "./helpers"
 import { write } from "../src/db"
 import { CapabilityGateway } from "../src/eap/capability-gateway"
 import { SqliteDependencyQuery } from "../src/eap/dependency-query"
+import { annotatedTest } from "./verification/annotate"
 
 /** A committed graph claim: `refs` are the claims it rests on, i.e. the recall closure's edges. */
 function seedClaim(
@@ -39,7 +40,12 @@ function seedClaim(
 }
 
 describe("cognitive.contest delegates to ContestationService", () => {
-  test("evidence elements are inspected: [null] is EVIDENCE_REQUIRED, not an admitted contestation", async () => {
+  annotatedTest(
+    "evidence elements are inspected: [null] is EVIDENCE_REQUIRED, not an admitted contestation",
+    // EAP-SVCS-007 in full: the terminal evidence Refusal, and admitted knowledge unchanged —
+    // proven by the zero-row count on `contestations`.
+    { asserts: ["EAP-SVCS-007"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -61,9 +67,15 @@ describe("cognitive.contest delegates to ContestationService", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("targets must resolve to admitted knowledge — a fabricated or traversal-shaped id is refused", async () => {
+  annotatedTest(
+    "targets must resolve to admitted knowledge — a fabricated or traversal-shaped id is refused",
+    // EAP-SEC-001 spans invalid CellKey, empty HorizonId AND cross-tenant identifiers. This case
+    // covers the non-canonical/traversal-shaped arm only; the cross-tenant arm is the next case.
+    { coversPartially: ["EAP-SEC-001"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -95,9 +107,15 @@ describe("cognitive.contest delegates to ContestationService", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("target resolution is tenant-scoped: another tenant's admitted claim is absent, never contestable", async () => {
+  annotatedTest(
+    "target resolution is tenant-scoped: another tenant's admitted claim is absent, never contestable",
+    // The cross-tenant arm of EAP-SEC-001 and of EAP-ERRP-003's "without leaking another tenant's
+    // state". Each scenario's other arms live elsewhere, so both links stay partial.
+    { coversPartially: ["EAP-SEC-001", "EAP-ERRP-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -115,9 +133,15 @@ describe("cognitive.contest delegates to ContestationService", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("an admitted contestation carries the domain's own provenance, not a hardcoded status", async () => {
+  annotatedTest(
+    "an admitted contestation carries the domain's own provenance, not a hardcoded status",
+    // EAP-SVCS-006's first clause (the contestation is recorded, with its own provenance). The
+    // second clause — target claims not directly edited or deleted — is not observed here.
+    { coversPartially: ["EAP-SVCS-006"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -148,11 +172,17 @@ describe("cognitive.contest delegates to ContestationService", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("cognitive.promote delegates to PromotionService and reads the child's candidates", () => {
-  test("an arbitrary candidate id cannot be injected into a parent horizon", async () => {
+  annotatedTest(
+    "an arbitrary candidate id cannot be injected into a parent horizon",
+    // A fabricated identifier is rejected at the governed boundary before anything enters the
+    // parent horizon — one arm of EAP-SEC-001.
+    { coversPartially: ["EAP-SEC-001"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -175,9 +205,15 @@ describe("cognitive.promote delegates to PromotionService and reads the child's 
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("a candidate that has not reached VERIFIED in the child is refused as an illegal transition", async () => {
+  annotatedTest(
+    "a candidate that has not reached VERIFIED in the child is refused as an illegal transition",
+    // EAP-PROM-001's decisive clause: the promoted candidate re-enters the parent as `proposed`,
+    // i.e. "without inherited admission or Relative Authority", over the immediate parent edge.
+    { asserts: ["EAP-PROM-001"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -220,11 +256,23 @@ describe("cognitive.promote delegates to PromotionService and reads the child's 
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("cognitive.recall drives RecallWorker over the recall_* aggregate", () => {
-  test("the closure is a real reverse-dependency traversal, and case/checkpoint/scar are all written", async () => {
+  annotatedTest(
+    "the closure is a real reverse-dependency traversal, and case/checkpoint/scar are all written",
+    {
+      // EAP-RECL-001: the case is created for a DETERMINISTIC TRAVERSAL of registered admitted
+      // reverse dependencies — the transitive dependents are in the affected set, not the contested
+      // ids copied verbatim.
+      asserts: ["EAP-RECL-001"],
+      // RECL-004's scar is written and readable, but nothing here shows a prior record surviving
+      // unrewritten. FUNC-003 additionally requires an interruption and a resume, absent here.
+      coversPartially: ["EAP-RECL-004", "EAP-FUNC-003"],
+    },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -282,8 +330,11 @@ describe("cognitive.recall drives RecallWorker over the recall_* aggregate", () 
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06): a schema-hygiene assertion that one obsolete table no longer
+  // exists. `004` specifies observable governed behaviour, not the host's internal table set.
   test("there is no second recall schema: the adapter's private `recalls` table is gone", async () => {
     const s = startServer()
     try {
@@ -296,7 +347,12 @@ describe("cognitive.recall drives RecallWorker over the recall_* aggregate", () 
     }
   })
 
-  test("replaying recall returns the same case and sequence rather than re-degrading", async () => {
+  annotatedTest(
+    "replaying recall returns the same case and sequence rather than re-degrading",
+    // EAP-RECL-003's "no degradation is applied twice", observed under REPLAY rather than under the
+    // checkpointed resume the scenario specifies — hence partial, not `asserts`.
+    { coversPartially: ["EAP-RECL-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -328,9 +384,16 @@ describe("cognitive.recall drives RecallWorker over the recall_* aggregate", () 
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("SqliteDependencyQuery survives a malformed refs column instead of throwing out of the boundary", async () => {
+  annotatedTest(
+    "SqliteDependencyQuery survives a malformed refs column instead of throwing out of the boundary",
+    // EAP-PERS-007's "without inferring unregistered dependencies": an unreadable `refs` column
+    // yields the target alone. The scenario's Given is a claim with NO registered edges, which is
+    // not quite this Given, so the link is partial.
+    { coversPartially: ["EAP-PERS-007"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -341,11 +404,21 @@ describe("cognitive.recall drives RecallWorker over the recall_* aggregate", () 
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("the EAP composition root is reachable from the server", () => {
-  test("capability execution and persistent-delta admission are wired, not orphaned", async () => {
+  annotatedTest(
+    "capability execution and persistent-delta admission are wired, not orphaned",
+    {
+      // EAP-CAPB-001: a successful gateway execution returns the classified outcome AND leaves an
+      // append-only audit reference (`auditRepo.count() === 1`).
+      asserts: ["EAP-CAPB-001"],
+      // The delta admission half shows the claim ids but not the recorded Sequence or event.
+      coversPartially: ["EAP-SVCS-004"],
+    },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -381,8 +454,12 @@ describe("the EAP composition root is reachable from the server", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06): composition-root identity — that the transport and the domain
+  // service read the same rows. This is an architectural property of the host's wiring; `004`
+  // specifies what the host must DO, and mints no scenario for how it is assembled.
   test("the governed services the transport uses are the same objects the composition root builds", async () => {
     const s = startServer()
     try {

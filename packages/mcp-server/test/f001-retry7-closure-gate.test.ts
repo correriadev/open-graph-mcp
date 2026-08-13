@@ -21,6 +21,7 @@
  *     resetting the lifecycle; `basedOnSeq: -0` is not a sequence.
  */
 import { describe, expect, test } from "bun:test"
+import { annotatedTest } from "./verification/annotate"
 import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register, rpc } from "./helpers"
 import { write } from "../src/db"
@@ -95,6 +96,11 @@ async function recallWithIndirectDependent(s: any) {
 }
 
 describe("a candidate inside a recall closure cannot complete its lifecycle (003 defers the STATUS, not the gate)", () => {
+  // OUT OF SCOPE (F002 task 06), and deliberately NOT linked to EAP-QUAR-002. This case exists
+  // precisely because quarantine family QA2 — the destination status of an INDIRECT recall
+  // dependent — is undecided: it asserts the candidate is held short of `verified` with its final
+  // status left open. It keeps QA2 open rather than discharging it, and `003` §Section 2 forbids a
+  // Traceability Link into a quarantined family regardless. Reported to task 08 as reviewed.
   test("an indirect dependent may still be CONCRETIZEd but is refused at VERIFY", async () => {
     const s = startServer()
     try {
@@ -130,6 +136,8 @@ describe("a candidate inside a recall closure cannot complete its lifecycle (003
     }
   })
 
+  // OUT OF SCOPE (F002 task 06), same QA2 reasoning as the case above: the promotion is held while
+  // the candidate's destination status stays undecided.
   test("a verified candidate that a later recall pulled into its closure cannot be promoted", async () => {
     const s = startServer()
     try {
@@ -175,7 +183,12 @@ describe("a candidate inside a recall closure cannot complete its lifecycle (003
     }
   })
 
-  test("a candidate untouched by any recall closure still verifies and promotes", async () => {
+  annotatedTest(
+    "a candidate untouched by any recall closure still verifies and promotes",
+    // The parent proposal appears in `proposed` state over the immediate parent edge — EAP-PROM-001
+    // observed as a control against the closure gate, without the non-inheritance clause.
+    { coversPartially: ["EAP-PROM-001"] },
+    async () => {
     const s = startServer()
     try {
       const a = await recallWithIndirectDependent(s)
@@ -192,11 +205,18 @@ describe("a candidate inside a recall closure cannot complete its lifecycle (003
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("truth-ownership suspension is announced on the channel the authority view subscribes to", () => {
-  test("every suspended cell emits TruthOwnershipSuspended, including cells suspended in a non-final batch", async () => {
+  annotatedTest(
+    "every suspended cell emits TruthOwnershipSuspended, including cells suspended in a non-final batch",
+    // EAP-EVNT-001's minimum-payload clause for `TruthOwnershipSuspended` (cellKey, recallId) —
+    // one event of the eleven the scenario enumerates, so partial. EAP-FUNC-003's "graph-owned
+    // affected cells emit TruthOwnershipSuspended" is likewise covered without its resume clause.
+    { coversPartially: ["EAP-EVNT-001", "EAP-FUNC-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -240,8 +260,11 @@ describe("truth-ownership suspension is announced on the channel the authority v
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06): SSE session-filter routing for one event kind. `004` specifies the
+  // event's emission and payload (EAP-EVNT-001), not which subscribers the transport delivers to.
   test("TruthOwnershipSuspended ignores session filters, exactly as authority.flipped does", () => {
     const env = {
       schemaVersion: 1 as const,
@@ -264,7 +287,13 @@ describe("the advertised tool schemas are the interface", () => {
     return tool!.inputSchema
   }
 
-  test("cognitive.propose advertises evidence (required) and basedOnSeq, and the advertised contract works", async () => {
+  annotatedTest(
+    "cognitive.propose advertises evidence (required) and basedOnSeq, and the advertised contract works",
+    // The second half drives a real `cognitive.propose` built ONLY from the advertised schema and
+    // asserts the admitted outcome — EAP-XPRT-001, minus its "the transport adds no independent
+    // epistemic policy" clause. The schema-shape half discharges nothing in `004`.
+    { coversPartially: ["EAP-XPRT-001"] },
+    async () => {
     const s = startServer()
     try {
       const schema = await schemaOf(s.url, "cognitive.propose")
@@ -290,9 +319,14 @@ describe("the advertised tool schemas are the interface", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("cognitive.promote advertises candidateIds (required) and basedOnSeq", async () => {
+  annotatedTest(
+    "cognitive.promote advertises candidateIds (required) and basedOnSeq",
+    // As above: the case also performs the promotion and asserts the admitted outcome.
+    { coversPartially: ["EAP-XPRT-001"] },
+    async () => {
     const s = startServer()
     try {
       const schema = await schemaOf(s.url, "cognitive.promote")
@@ -315,8 +349,11 @@ describe("the advertised tool schemas are the interface", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06): a pure tool-schema shape assertion — no Cognitive command is
+  // issued. `004` specifies host behaviour, not the advertised JSON schema of the MCP binding.
   test("cognitive.recall advertises batchSize and does NOT advertise the unsupported checkpoint", async () => {
     const s = startServer()
     try {
@@ -328,6 +365,7 @@ describe("the advertised tool schemas are the interface", () => {
     }
   })
 
+  // OUT OF SCOPE (F002 task 06): same tool-schema shape reasoning as the case above.
   test("cognitive.contest and cognitive.initiate advertise every field their handlers accept", async () => {
     const s = startServer()
     try {
@@ -348,7 +386,12 @@ describe("the advertised tool schemas are the interface", () => {
 })
 
 describe("smaller confirmed items", () => {
-  test("cognitive.recall refuses `checkpoint` as unsupported rather than validating and discarding it", async () => {
+  annotatedTest(
+    "cognitive.recall refuses `checkpoint` as unsupported rather than validating and discarding it",
+    // EAP-ERRP-002: a malformed MCP Cognitive request is rejected with the applicable typed Refusal
+    // and no repository write occurs (`recall_cases` stays empty).
+    { asserts: ["EAP-ERRP-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -376,8 +419,13 @@ describe("smaller confirmed items", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06), and deliberately NOT linked to EAP-QUAR-006. Quarantine family QA6
+  // covers page size, batching limits and completion bounds for very large closures. This case
+  // asserts no such bound: it forces `maxBatches` to an explicit test value and checks only that
+  // exhaustion is REPORTED distinctly from completion. It leaves QA6 open. Reported to task 08.
   test("exhausting the batch cap is reported distinctly instead of looking like completion", async () => {
     const s = startServer()
     const original = RECALL_LIMITS.maxBatches
@@ -411,6 +459,8 @@ describe("smaller confirmed items", () => {
     }
   })
 
+  // OUT OF SCOPE (F002 task 06): the complement of the case above — the reporting shape of a
+  // completed drive. Same QA6 reasoning; no bound is asserted.
   test("a completed recall reports complete:true and no batch-limit signal", async () => {
     const s = startServer()
     try {
@@ -435,7 +485,13 @@ describe("smaller confirmed items", () => {
     }
   })
 
-  test("an unrecognized stored candidate state fails CLOSED instead of restarting the lifecycle", async () => {
+  annotatedTest(
+    "an unrecognized stored candidate state fails CLOSED instead of restarting the lifecycle",
+    // EAP-LIFE-002's "the state remains unchanged and the outcome is a typed Refusal", reached from
+    // an unrecognized stored state rather than the out-of-order transition the scenario names, and
+    // without checking the refusal's client obligation.
+    { coversPartially: ["EAP-LIFE-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -457,9 +513,15 @@ describe("smaller confirmed items", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("basedOnSeq: -0 is not a sequence", async () => {
+  annotatedTest(
+    "basedOnSeq: -0 is not a sequence",
+    // EAP-SEC-002's out-of-range contract value, refused with MALFORMED_CONTRACT. The scenario's
+    // "before any lifecycle, repository or capability action" clause is not read back here.
+    { coversPartially: ["EAP-SEC-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -479,5 +541,6 @@ describe("smaller confirmed items", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })

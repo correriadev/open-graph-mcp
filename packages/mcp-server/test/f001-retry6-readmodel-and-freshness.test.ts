@@ -15,6 +15,7 @@
  *     a corrupt stored JSON column produces a typed Refusal, never a raw SyntaxError.
  */
 import { describe, expect, test } from "bun:test"
+import { annotatedTest } from "./verification/annotate"
 import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register } from "./helpers"
 import { write } from "../src/db"
@@ -50,7 +51,13 @@ const candidateState = (s: any, tenantId: string, horizonId: string, candidateId
 }
 
 describe("recall projects its degradation onto the read model", () => {
-  test("a recalled claim is no longer admitted knowledge in `candidates`, and cannot climb the lifecycle", async () => {
+  annotatedTest(
+    "a recalled claim is no longer admitted knowledge in `candidates`, and cannot climb the lifecycle",
+    // The recall's degradation reaches the read model and the recalled claim stops behaving as
+    // admitted knowledge. EAP-FUNC-003's When requires an interruption and a resume (absent here)
+    // and EAP-RECL-004 is about the surviving scar, which this case does not read.
+    { coversPartially: ["EAP-FUNC-003", "EAP-RECL-004"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -98,9 +105,14 @@ describe("recall projects its degradation onto the read model", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("a recalled candidate cannot be promoted into a parent horizon", async () => {
+  annotatedTest(
+    "a recalled candidate cannot be promoted into a parent horizon",
+    // Recalled knowledge is not promotable — the read-model half of EAP-FUNC-003's degradation.
+    { coversPartially: ["EAP-FUNC-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -132,9 +144,20 @@ describe("recall projects its degradation onto the read model", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("truth-ownership suspension reaches the `authority` table, and indirect dependents stay deferred", async () => {
+  annotatedTest(
+    "truth-ownership suspension reaches the `authority` table, and indirect dependents stay deferred",
+    // EAP-FUNC-003's "graph-owned affected cells emit TruthOwnershipSuspended", without the
+    // interruption-and-resume the scenario's When requires.
+    //
+    // Deliberately NOT linked to EAP-QUAR-002 (family QA2, destination status of indirect recall
+    // dependents). The second half of this case asserts that the read model invents NO destination
+    // status for the indirect dependent — it keeps QA2 open rather than deciding it, so there is
+    // nothing to discharge and `003` §Section 2 forbids a link into a quarantined family anyway.
+    { coversPartially: ["EAP-FUNC-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -177,11 +200,18 @@ describe("recall projects its degradation onto the read model", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("the capability gateway resolves freshness from durable state, not from the request", () => {
-  test("an approval bound to a sequence the horizon never reached is refused even when the caller asserts it", async () => {
+  annotatedTest(
+    "an approval bound to a sequence the horizon never reached is refused even when the caller asserts it",
+    // EAP-VOBJ-011's Sequence arm, in full: the request is based on a different Sequence than the
+    // durable state holds, authorization is refused, and the grant is not consumed. ERRP-004 is
+    // partial — the provider is not called, but its evidence-waiver clause is untouched.
+    { asserts: ["EAP-VOBJ-011"], coversPartially: ["EAP-ERRP-004"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -220,9 +250,15 @@ describe("the capability gateway resolves freshness from durable state, not from
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("an approval bound to the sequence the durable horizon actually holds executes", async () => {
+  annotatedTest(
+    "an approval bound to the sequence the durable horizon actually holds executes",
+    // The positive path of EAP-FUNC-004 (a matching non-expired approval on the CURRENT Sequence
+    // executes). Neither `CapabilityExecuted` nor the consumption of the grant is read back here.
+    { coversPartially: ["EAP-FUNC-004"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -256,11 +292,17 @@ describe("the capability gateway resolves freshness from durable state, not from
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("basedOnSeq is bounded and compared for equality with the observed sequence", () => {
-  test("an oversized basedOnSeq is a malformed contract, not a free pass through the freshness gate", async () => {
+  annotatedTest(
+    "an oversized basedOnSeq is a malformed contract, not a free pass through the freshness gate",
+    // EAP-SEC-002: an out-of-range contract value is refused before any lifecycle or repository
+    // action — the candidate row is never created.
+    { asserts: ["EAP-SEC-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -290,9 +332,15 @@ describe("basedOnSeq is bounded and compared for equality with the observed sequ
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("a basedOnSeq claiming a FUTURE sequence is refused as not fresh", async () => {
+  annotatedTest(
+    "a basedOnSeq claiming a FUTURE sequence is refused as not fresh",
+    // EAP-VOBJ-007 is about a NEGATIVE or DECREASING Sequence; this refuses one that runs AHEAD of
+    // the observed value. Same freshness invariant, different arm — hence partial.
+    { coversPartially: ["EAP-VOBJ-007"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -325,11 +373,17 @@ describe("basedOnSeq is bounded and compared for equality with the observed sequ
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("boundary commands are idempotent under concurrency and replay", () => {
-  test("two concurrent cognitive.recall calls for one contestation open exactly one case", async () => {
+  annotatedTest(
+    "two concurrent cognitive.recall calls for one contestation open exactly one case",
+    // EAP-FUNC-003's "processed idempotently" clause, under concurrency rather than under the
+    // interruption-and-resume the scenario specifies.
+    { coversPartially: ["EAP-FUNC-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -364,9 +418,15 @@ describe("boundary commands are idempotent under concurrency and replay", () => 
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("replaying cognitive.promote returns the same proposal instead of minting a second one", async () => {
+  annotatedTest(
+    "replaying cognitive.promote returns the same proposal instead of minting a second one",
+    // EAP-SEC-003's "the host performs no state transition" on replay — but the scenario's Given is
+    // a captured EVENT replayed as a command, whereas this replays the COMMAND itself. Partial.
+    { coversPartially: ["EAP-SEC-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -410,11 +470,17 @@ describe("boundary commands are idempotent under concurrency and replay", () => 
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("contracts are refused whole, and corrupt durable state refuses instead of crashing", () => {
-  test("cognitive.contest refuses evidence with a non-string element rather than silently dropping it", async () => {
+  annotatedTest(
+    "cognitive.contest refuses evidence with a non-string element rather than silently dropping it",
+    // EAP-SVCS-007's terminal evidence refusal, for a partially-malformed evidence array rather
+    // than the "no required evidence" Given the scenario states.
+    { coversPartially: ["EAP-SVCS-007"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -436,9 +502,16 @@ describe("contracts are refused whole, and corrupt durable state refuses instead
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("a corrupt contestations column yields a typed Refusal, not a SyntaxError out of the repository", async () => {
+  annotatedTest(
+    "a corrupt contestations column yields a typed Refusal, not a SyntaxError out of the repository",
+    // EAP-XPRT-002's "a typed MCP Refusal with a stable RefusalCode and no partial side effect".
+    // The scenario's Given is a request that violates a host RULE, not corrupt durable state, and
+    // the client obligation is not read back — so the link is partial.
+    { coversPartially: ["EAP-XPRT-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -462,9 +535,14 @@ describe("contracts are refused whole, and corrupt durable state refuses instead
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("a corrupt recall_cases.state column yields a typed Refusal on replay", async () => {
+  annotatedTest(
+    "a corrupt recall_cases.state column yields a typed Refusal on replay",
+    // Same partial relationship to EAP-XPRT-002 as the case above.
+    { coversPartially: ["EAP-XPRT-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -494,5 +572,6 @@ describe("contracts are refused whole, and corrupt durable state refuses instead
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })

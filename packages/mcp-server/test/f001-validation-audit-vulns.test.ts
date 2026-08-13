@@ -12,14 +12,20 @@
  *   4. DATA_INTEGRITY— `SqliteRecallRepository.complete()` without a recallCase bypassed `write()`
  *                      and the JSONL mirror, so a rebuild resurrected a completed recall.
  */
-import { describe, expect, test } from "bun:test"
+import { describe, expect } from "bun:test"
+import { annotatedTest } from "./verification/annotate"
 import { createEapEnv } from "./eap-env"
 import { CapabilityGateway } from "../src/eap/capability-gateway"
 import { rebuildFromJsonl } from "../src/db"
 import { createRecallCase, stepRecall, InMemoryDependencyQuery, type RecallNotice } from "@open-graph-mcp/graph-core/eap/recall"
 
 describe("Validation audit HIGH #1 — a consumed single-use approval cannot be re-armed", () => {
-  test("re-registering an existing approval id does not reset the consumed flag", async () => {
+  annotatedTest(
+    "re-registering an existing approval id does not reset the consumed flag",
+    // EAP-PERS-009: a consumed irreversible authorization is refused on reuse and no capability
+    // execution is authorized (`providerRanAgain` stays false).
+    { asserts: ["EAP-PERS-009"], defects: ["RETRY5-AUDIT-HIGH-1"] },
+    async () => {
     const env = createEapEnv()
     try {
       env.setObservedSeq(42)
@@ -70,9 +76,15 @@ describe("Validation audit HIGH #1 — a consumed single-use approval cannot be 
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("consumption is terminal: a second consumeAuthorization always refuses", () => {
+  annotatedTest(
+    "consumption is terminal: a second consumeAuthorization always refuses",
+    // EAP-PERS-009 at the repository boundary the scenario names: `consumeAuthorization` called a
+    // second time on an already-consumed approval is refused.
+    { asserts: ["EAP-PERS-009"], defects: ["RETRY5-AUDIT-HIGH-1"] },
+    () => {
     const env = createEapEnv()
     try {
       env.approvals.registerApproval({
@@ -97,11 +109,17 @@ describe("Validation audit HIGH #1 — a consumed single-use approval cannot be 
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 })
 
 describe("Validation audit HIGH #2 — a malformed expiry fails closed", () => {
-  test("registration rejects an unparseable expiresAt", () => {
+  annotatedTest(
+    "registration rejects an unparseable expiresAt",
+    // EAP-VOBJ-011 covers scope, expiry AND Sequence mismatch on an Operator Approval. This is the
+    // expiry arm, and refuses at REGISTRATION rather than at the request the scenario describes.
+    { coversPartially: ["EAP-VOBJ-011"], defects: ["RETRY5-AUDIT-HIGH-2"] },
+    () => {
     const env = createEapEnv()
     try {
       const res = env.approvals.registerApproval({
@@ -116,9 +134,16 @@ describe("Validation audit HIGH #2 — a malformed expiry fails closed", () => {
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("a stored approval whose expiry does not parse is treated as expired, not as valid forever", async () => {
+  annotatedTest(
+    "a stored approval whose expiry does not parse is treated as expired, not as valid forever",
+    // The expiry arm of EAP-VOBJ-011 and of EAP-ERRP-004 (the provider is not called). Neither
+    // scenario's scope/Sequence arms nor ERRP-004's "approval does not waive evidence
+    // requirements" clause is exercised here.
+    { coversPartially: ["EAP-VOBJ-011", "EAP-ERRP-004"], defects: ["RETRY5-AUDIT-HIGH-2"] },
+    async () => {
     const env = createEapEnv()
     try {
       const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
@@ -152,11 +177,17 @@ describe("Validation audit HIGH #2 — a malformed expiry fails closed", () => {
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 })
 
 describe("Validation audit HIGH #3 — the idempotency key is reserved, not merely checked", () => {
-  test("three concurrent executions with the same key invoke the provider exactly once", async () => {
+  annotatedTest(
+    "three concurrent executions with the same key invoke the provider exactly once",
+    // EAP-CAPB-002: the same idempotency key never repeats the external effect, and exactly one
+    // durable outcome exists for the key.
+    { asserts: ["EAP-CAPB-002"], defects: ["RETRY5-AUDIT-HIGH-3"] },
+    async () => {
     const env = createEapEnv()
     try {
       const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
@@ -184,9 +215,16 @@ describe("Validation audit HIGH #3 — the idempotency key is reserved, not mere
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("a failed execution releases its reservation so the key can be retried", async () => {
+  annotatedTest(
+    "a failed execution releases its reservation so the key can be retried",
+    // EAP-CAPB-003's "no successful CapabilityExecuted outcome is fabricated" (audit count 0 after
+    // a provider throw). The scenario's Given is an UNAVAILABLE provider and its "the failure is
+    // auditable" clause is not observed here, so the link is partial.
+    { coversPartially: ["EAP-CAPB-003"], defects: ["RETRY5-AUDIT-HIGH-3"] },
+    async () => {
     const env = createEapEnv()
     try {
       const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
@@ -216,11 +254,18 @@ describe("Validation audit HIGH #3 — the idempotency key is reserved, not mere
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 })
 
 describe("Validation audit HIGH #4 — recall completion is mirrored, not a raw UPDATE", () => {
-  test("a recall completed without an explicit case stays completed across rebuildFromJsonl", async () => {
+  annotatedTest(
+    "a recall completed without an explicit case stays completed across rebuildFromJsonl",
+    // EAP-PERS-001 is stated over claims, authority coordinates and Sequences; this rebuild is over
+    // `recall_cases`, so the link is partial. It likewise partially covers EAP-RECL-004's "prior
+    // history and recall provenance remain queryable" — the scar survives the rebuild.
+    { coversPartially: ["EAP-PERS-001", "EAP-RECL-004"], defects: ["RETRY5-AUDIT-HIGH-4"] },
+    async () => {
     const env = createEapEnv()
     try {
       const notice: RecallNotice = {
@@ -261,5 +306,6 @@ describe("Validation audit HIGH #4 — recall completion is mirrored, not a raw 
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 })

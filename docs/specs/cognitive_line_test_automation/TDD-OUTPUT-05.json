@@ -1,0 +1,112 @@
+{
+  "featureId": "F002",
+  "taskId": "05",
+  "title": "Implement the Discharge Annotation Surface",
+  "status": "SUCCESS",
+  "metrics": {
+    "totalTests": 842,
+    "passed": 841,
+    "failed": 0,
+    "todo": 1,
+    "coverage": 0.0,
+    "expectCalls": 3952,
+    "testFiles": 140,
+    "taskSuiteTests": 26,
+    "taskSuitePassed": 26,
+    "taskSuiteFailed": 0
+  },
+  "baselineDelta": {
+    "before": { "tests": 816, "passed": 815, "expectCalls": 3892, "files": 139 },
+    "after": { "tests": 842, "passed": 841, "expectCalls": 3952, "files": 140 },
+    "explanation": "+26 tests and +60 expect() calls, all from the single new file packages/mcp-server/test/verification/annotate.test.ts (26 tests, 60 expect()). The deltas reconcile exactly, which is independent proof that annotating packages/mcp-server/test/eap-conformance.test.ts changed no assertion: had any been lost, the expect() delta would be below +60."
+  },
+  "modifiedFiles": [
+    "packages/mcp-server/test/verification/annotate.ts",
+    "packages/mcp-server/test/verification/annotate.test.ts",
+    ".gitignore",
+    "packages/mcp-server/test/eap-conformance.test.ts"
+  ],
+  "acceptance": [
+    {
+      "criterion": "A test case annotated with one or more identifiers emits exactly one annotation record per execution into `.verification/annotations.jsonl`, containing file, test name and identifiers",
+      "met": true,
+      "evidence": "Unit: two identical emissions produce two records ('emits exactly one record per execution'). End-to-end: a spawned `bun test` over a two-case annotatedTest fixture wrote exactly two records with the right names and link kinds; re-running the same fixture filtered by `-t` appended exactly one more (3 total), proving one record per EXECUTION rather than per declaration. Live: running packages/mcp-server/test/eap-conformance.test.ts against an emptied real sink wrote exactly 3 JSON lines, each carrying file `packages/mcp-server/test/eap-conformance.test.ts`, the verbatim test name, and its scenario links."
+    },
+    {
+      "criterion": "An annotation naming an identifier absent from the register fails the run with a named error",
+      "met": true,
+      "evidence": "`buildRecord` throws an error naming the identifier, the file and the test name; the test asserts all three appear in the message. A second test asserts the sink file is never created when the annotation is rejected, so a bad annotation writes nothing. Malformed identifiers, retired entries, duplicate declarations, empty test names and empty annotations are each refused by their own named error and their own test."
+    },
+    {
+      "criterion": "`.gitignore` ignores `.verification/` and does NOT ignore `docs/verification/`, and annotations from graph-core, mcp-server and client suites land in one collectable sink",
+      "met": true,
+      "evidence": "`git check-ignore -v .verification/annotations.jsonl` -> `.gitignore:16:.verification/` exit 0; `git check-ignore -v docs/verification/scenario-register.json` -> no output, exit 1 (not ignored). `git status --short` lists no `.verification/` entry despite the directory existing. Cross-package: three `bun test` processes launched concurrently with cwd set to packages/graph-core, packages/mcp-server and packages/client each emitted into one sink and the collected file held exactly 3 records, one per package path."
+    }
+  ],
+  "designDecisions": [
+    {
+      "topic": "Where the validation line sits for `declared-untestable` identifiers",
+      "decision": "Report, do not block.",
+      "reasoning": "A `declared-untestable` identifier (EAP-QUAR-001..007) IS present in the register, so the 'absent from the register' check does not catch it, and letting it through unmarked would be the silent pass this domain exists to prevent. But blocking it is task 08's quarantine gate, which 004 phrases as firing 'when the gate evaluates the change', and task 06's acceptance says such a case is 'reported for task 08 rather than committed'. Throwing here would move the gate into the annotation surface, fire it during ordinary development, and make the very candidates task 08 must discover unrunnable. The record therefore carries a `declaredUntestable` field derived from register STATUS (never a reimplementation of quarantine membership) and the process writes a named warning to stderr. Task 08 gets a mechanical input to fail on and this file will not need to change when that gate lands."
+    },
+    {
+      "topic": "Cross-package reach vs. the helper's declared home inside packages/mcp-server",
+      "decision": "No scope extension was needed.",
+      "reasoning": "Two properties resolve the tension without a fourth package and without touching another task's scope. (1) This is one Bun workspace with one module graph and no build step, so graph-core and client test files import the helper by relative specifier `../../mcp-server/test/verification/annotate`. (2) The sink path is resolved from the REPOSITORY ROOT, derived from the module's own location via the existing `repoRoot()` in scripts/verification/register-scenarios.ts, never from `process.cwd()` — so a suite run from inside any package cwd appends to the same repo-root sink. Both are pinned by test."
+    },
+    {
+      "topic": "Concurrent appends from parallel test processes",
+      "decision": "One `appendFileSync` in `a` mode per record; never a read-modify-write and never a truncating write.",
+      "reasoning": "Each record is one open(O_APPEND)/write/close of one complete line, so the kernel positions every write at end-of-file. Proven, not asserted: 6 spawned processes x 40 records = 240 records written concurrently to one sink; the collected file held exactly 240 records with 240 distinct test names — no loss and no interleaving."
+    },
+    {
+      "topic": "Register loading",
+      "decision": "Reuses `loadScenarioRegister` and `repoRoot` from scripts/verification/register-scenarios.ts; no register parsing is reimplemented.",
+      "reasoning": "The register is loaded once per process with `writer: 'derivation'` because this surface is a READER of committed state that may legitimately carry `evidenced` entries written by task 09. Nothing in this task writes the register or the status `evidenced` anywhere."
+    }
+  ],
+  "priorAttemptDisposition": {
+    "summary": "The interrupted attempt's work was assessed rather than assumed. Three of the four files were kept as sound; one bug was fixed to close the RED state it had left behind.",
+    "kept": [
+      "packages/mcp-server/test/verification/annotate.test.ts — kept unchanged. Its 26 cases map onto the 004 scenarios for this task (§3.2 'reject a DischargeAnnotation naming a Scenario Identifier absent from the register', §3.2 'never derive a DischargeAnnotation from a test title', §1.5 'name the asserting test case by file and test name', §5 'collect one annotation record per test case execution when the sink is read') plus each acceptance clause, and it exercises the real committed register, real spawned processes and real `git check-ignore` rather than mocks.",
+      ".gitignore — kept. `.verification/` has no internal slash so it matches a directory of that exact name at any depth; `docs/verification` is a differently named directory and is untouched. Verified with git check-ignore on a path under each.",
+      "packages/mcp-server/test/eap-conformance.test.ts — kept. Its doc comment CLAIMED the AssertionFingerprint was unchanged at 41 assertions; that claim was verified independently rather than trusted, by fingerprinting the committed HEAD version and the working-tree version through scripts/verification/assertion-fingerprint.ts. Both: 41 expect(), hash c2efa33febcaf17eba7620d1456ceae8f8a2cb981384a94bc0c74c6a869c8c61. The claim is true."
+    ],
+    "fixed": [
+      "packages/mcp-server/test/verification/annotate.ts — the caller-frame regex required `:<line>:<column>` and the helper `callerFile` was not exported, which was the single typecheck error failing the run. Bun emits a MODULE TOP-LEVEL frame as `at <file>:<line>` with no parentheses, no function name and no column — which is exactly the shape produced by `annotatedTest(...)` called at the top level of a test file, i.e. the only shape this surface sees in practice. The old pattern missed it and would have recorded `unknown` as the file of every annotation, making every downstream Traceability Link point at nothing. Fixed by making the column optional and extracting `callerFileFromStack(stack)` as an exported pure function of the stack text, so both frame shapes are pinned by test without depending on how a given Bun build formats a live stack. Confirmed live: the real sink written by eap-conformance.test.ts records the real file path."
+    ]
+  },
+  "constraintsRespected": {
+    "typeErrorFixedNotBaselined": true,
+    "typecheckBaselineUntouched": true,
+    "otherTaskScopeUntouched": true,
+    "scriptsVerificationReadOnly": true,
+    "sevenF001FilesUnmodified": true,
+    "eapConformanceAssertionsUnchanged": true,
+    "noEvidencedStatusWritten": true,
+    "noProhibitedGitOperations": true,
+    "committed": false
+  },
+  "gates": {
+    "bunRunVerify": "exit 0 — 841 pass, 1 todo, 0 fail, 3952 expect(), 842 tests across 140 files",
+    "typecheckGate": "PASS — graph-core 2, mcp-server 25, client 18 errors, all within the Frozen Error Set; no new-file violation",
+    "assertionFingerprintCheck": "PASS — 7 file(s) match the baseline",
+    "scenarioRegisterCheck": "PASS — 71 heading(s), byte-identical"
+  },
+  "openItems": [
+    {
+      "item": "The sink accumulates across runs; nothing truncates it at run start.",
+      "observed": "After four runs of the annotated eap-conformance.test.ts, .verification/annotations.jsonl held 12 lines — 3 records x 4 runs. Acceptance 1 ('exactly one record per execution') holds literally: each is a distinct execution. But a collector that reads a stale sink would see four links where one run produced one.",
+      "whyNotFixedHere": "The correct place to clear a per-run sink is the run harness, and both candidates are other tasks' scope and PROHIBITED to this task: the `verify` script in root package.json (task 02) and .github/workflows/ci.yml (task 11). Truncating from inside a test process is worse than the problem, since bun test runs files in parallel and a truncate would race the appends it is meant to preserve.",
+      "ownedBy": "task 07 (Traceability Map generation) or the run harness. Flagged so it is a decision rather than a surprise."
+    }
+  ],
+  "knownFlakes": [
+    "reconnect-after-restart.test.ts EBUSY Windows temp-dir teardown race — hit on the first full run, cleared on rerun. Not suppressed, not mine."
+  ],
+  "documentation": {
+    "projectMemoryInvoked": false,
+    "reasoning": "Task scope is three files and no public contract changed. Sibling F002 tasks 01/02/03/04/12 wrote no docs/feature or docs/adr entry either; feature-level project memory is reconciled by the orchestrator at checkpoint, so writing one here would be scope creep into another task's surface."
+  },
+  "reworksCount": 1
+}

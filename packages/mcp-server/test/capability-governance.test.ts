@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { afterEach, beforeEach, describe, expect } from 'bun:test'
 import type { CapabilityExecutionRequest, OperatorApproval } from '@open-graph-mcp/graph-core/eap/capabilities'
 import { CapabilityGateway } from '../src/eap/capability-gateway'
 import { createEapEnv, type EapEnv } from './eap-env'
+import { annotatedTest } from './verification/annotate'
 
 describe('Capability Classification & Governance Boundary (Task 10)', () => {
   let env: EapEnv
@@ -27,7 +28,13 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
     env.cleanup()
   })
 
-  it('1. Irreversible execution requires a valid matching single-use authorization', async () => {
+  annotatedTest(
+    '1. Irreversible execution requires a valid matching single-use authorization',
+    // The positive path of EAP-SVCS-009 / EAP-FUNC-004: execution completes and the grant is
+    // consumed. Neither `CapabilityExecuted` nor the un-reusability of the grant is observed here
+    // (case 4 covers reuse), so both links are partial.
+    { coversPartially: ['EAP-SVCS-009', 'EAP-FUNC-004'] },
+    async () => {
     // The gateway reads the sequence from durable governed state, never from the request, so the
     // world this approval is bound to has to actually exist.
     env.setObservedSeq(42)
@@ -47,9 +54,15 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
     const res = await gateway.execute(req)
     expect(res.status).toBe('COMPLETED')
     expect(env.approvals.getApproval('appr-001')?.consumed).toBe(true)
-  })
+    },
+  )
 
-  it('2. Expired, stale, or out-of-scope approval is refused', async () => {
+  annotatedTest(
+    '2. Expired, stale, or out-of-scope approval is refused',
+    // Despite the title, only the STALE-Sequence arm runs here. EAP-VOBJ-011 spans scope, expiry
+    // and Sequence; EAP-ERRP-004 additionally requires that the provider is not called.
+    { coversPartially: ['EAP-VOBJ-011', 'EAP-ERRP-004'] },
+    async () => {
     const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('deploy_tool', 'irreversible')
 
@@ -73,9 +86,14 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
     if (res.status === 'REFUSED') {
       expect(res.refusal.code).toBe('APPROVAL_STALE_SEQ')
     }
-  })
+    },
+  )
 
-  it('3. An expired approval is refused and the single-use grant is not consumed', async () => {
+  annotatedTest(
+    '3. An expired approval is refused and the single-use grant is not consumed',
+    // The expiry arm of EAP-VOBJ-011 / EAP-ERRP-004; scope and Sequence are covered elsewhere.
+    { coversPartially: ['EAP-VOBJ-011', 'EAP-ERRP-004'] },
+    async () => {
     const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('deploy_tool', 'irreversible')
     gateway.getApprovalRepo().registerApproval({
@@ -95,9 +113,15 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
     expect(res.status).toBe('REFUSED')
     if (res.status === 'REFUSED') expect(res.refusal.code).toBe('APPROVAL_EXPIRED')
     expect(env.approvals.getApproval('appr-expired')?.consumed).toBe(false)
-  })
+    },
+  )
 
-  it('4. A consumed irreversible authorization cannot be reused', async () => {
+  annotatedTest(
+    '4. A consumed irreversible authorization cannot be reused',
+    // EAP-PERS-009 exactly: the second consumption is refused and no capability execution is
+    // authorized (`providerRan` stays false). Partially covers EAP-SVCS-009's "cannot be reused".
+    { asserts: ['EAP-PERS-009'], coversPartially: ['EAP-SVCS-009'] },
+    async () => {
     env.setObservedSeq(42)
     const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('deploy_tool', 'irreversible')
@@ -128,9 +152,19 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
     expect(second.status).toBe('REFUSED')
     if (second.status === 'REFUSED') expect(second.refusal.code).toBe('APPROVAL_ALREADY_USED')
     expect(providerRan).toBe(false)
-  })
+    },
+  )
 
-  it('5. A reversible capability executes without an operator approval and is idempotency-keyed', async () => {
+  annotatedTest(
+    '5. A reversible capability executes without an operator approval and is idempotency-keyed',
+    {
+      // EAP-CAPB-002: the same request and idempotency key returns the prior outcome
+      // (`isCached`) without repeating the external effect (`runs === 1`).
+      asserts: ['EAP-CAPB-002'],
+      // EAP-SVCS-008 additionally requires an append-only audit reference, not inspected here.
+      coversPartially: ['EAP-SVCS-008'],
+    },
+    async () => {
     const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     gateway.registerClassification('read_tool', 'reversible')
 
@@ -152,9 +186,16 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
     expect(second.status).toBe('COMPLETED')
     if (second.status === 'COMPLETED') expect(second.isCached).toBe(true)
     expect(runs).toBe(1)
-  })
+    },
+  )
 
-  it('6. An unclassified capability defaults to irreversible and therefore requires approval', async () => {
+  annotatedTest(
+    '6. An unclassified capability defaults to irreversible and therefore requires approval',
+    // EAP-VOBJ-012 requires the refusal to land BEFORE the external effect occurs. No provider
+    // action is supplied here, so that clause is not observed; f001-retry5-concurrency-authz's
+    // forged-approval case asserts it.
+    { coversPartially: ['EAP-VOBJ-012'] },
+    async () => {
     const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
     expect(gateway.classify('unknown_tool')).toBe('irreversible')
 
@@ -166,5 +207,6 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
     })
     expect(res.status).toBe('REFUSED')
     if (res.status === 'REFUSED') expect(res.refusal.code).toBe('APPROVAL_MISSING')
-  })
+    },
+  )
 })

@@ -1,7 +1,18 @@
-import { expect, test } from "bun:test"
+import { expect } from "bun:test"
 import { ExternalAgentClientAdapter } from "../src/eap"
+import { annotatedTest } from "../../mcp-server/test/verification/annotate.ts"
 
-test("Client Conformance Suite: External Agent Client Adapter Protocol Invariants", async () => {
+annotatedTest(
+  "Client Conformance Suite: External Agent Client Adapter Protocol Invariants",
+  {
+    // Two clauses, each covered in part: EAP-ERRP-001 (a direct-persistence attempt is returned as a
+    // typed governed refusal — observed here on the CLIENT side only, so it proves nothing about
+    // host-side mutation) and EAP-XPRT-005 (the adapter applies the declared obligation).
+    // Deliberately NOT linked to EAP-SVCS-010: this file is named a conformance suite but runs no
+    // `AssessConformance` and issues no host/client verdict.
+    coversPartially: ["EAP-ERRP-001", "EAP-XPRT-005"],
+  },
+  async () => {
   const adapter = new ExternalAgentClientAdapter()
 
   const directEditResult = await adapter.attemptDirectEdit({
@@ -16,4 +27,5 @@ test("Client Conformance Suite: External Agent Client Adapter Protocol Invariant
   const handled = adapter.handleRefusal(directEditResult.refusal!)
   expect(handled.handled).toBe(true)
   expect(handled.actionRequired).toBe("SUBMIT_PROPOSAL")
-})
+  },
+)

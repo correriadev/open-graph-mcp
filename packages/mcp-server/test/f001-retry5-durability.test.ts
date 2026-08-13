@@ -8,6 +8,7 @@
  * in-memory Map: the environment is closed and reopened from disk between write and read.
  */
 import { describe, expect, test } from "bun:test"
+import { annotatedTest } from "./verification/annotate"
 import { createEapEnv } from "./eap-env"
 import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register } from "./helpers"
@@ -20,7 +21,12 @@ import { InMemoryDependencyQuery, type RecallNotice } from "@open-graph-mcp/grap
 import type { OperatorApproval, CapabilityExecutionRequest } from "@open-graph-mcp/graph-core/eap/capabilities"
 
 describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)", () => {
-  test("PromotionService proposals and events survive a host process restart", () => {
+  annotatedTest(
+    "PromotionService proposals and events survive a host process restart",
+    // EAP-PERS-001 is about a SQLite rebuild from durable JSONL over claims/authority/Sequence.
+    // A restart reopening the same durable store is a weaker observation of the same property.
+    { coversPartially: ["EAP-PERS-001"] },
+    () => {
     let env = createEapEnv()
     try {
       const before = new PromotionService(env.promotions)
@@ -46,8 +52,11 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06): a structural assertion that one field does not exist on one class.
+  // `004` specifies governed behaviour, not the internal shape of a service object.
   test("PromotionService keeps no in-memory aggregate store", () => {
     const env = createEapEnv()
     try {
@@ -58,7 +67,11 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
     }
   })
 
-  test("ContestationService contestations survive a host process restart", () => {
+  annotatedTest(
+    "ContestationService contestations survive a host process restart",
+    // Same partial relationship to EAP-PERS-001 as the promotion case above.
+    { coversPartially: ["EAP-PERS-001"] },
+    () => {
     let env = createEapEnv()
     try {
       const before = new ContestationService(env.contestations)
@@ -81,9 +94,16 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("ContestationService allocates monotonic sequences from durable storage, not a reset counter", () => {
+  annotatedTest(
+    "ContestationService allocates monotonic sequences from durable storage, not a reset counter",
+    // EAP-VOBJ-007 is stated as a REJECTION of a negative or decreasing Sequence. This case proves
+    // the allocator never hands one out across a restart, which is the same invariant approached
+    // from the producing side rather than the validating side.
+    { coversPartially: ["EAP-VOBJ-007"] },
+    () => {
     let env = createEapEnv()
     try {
       const before = new ContestationService(env.contestations)
@@ -113,9 +133,20 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("RecallWorker checkpoints survive a restart and resume to the same affected set", async () => {
+  annotatedTest(
+    "RecallWorker checkpoints survive a restart and resume to the same affected set",
+    {
+      // EAP-PERS-008 exactly: `RecallRepository.get` restores the case after restart, processing
+      // resumes from the same checkpoint, and the preserved scar is still there.
+      asserts: ["EAP-PERS-008"],
+      // EAP-RECL-003 additionally requires the final affected set to EQUAL an uninterrupted
+      // execution and no degradation to be applied twice; neither comparison is made here.
+      coversPartially: ["EAP-RECL-003"],
+    },
+    async () => {
     let env = createEapEnv()
     try {
       const depQuery = new InMemoryDependencyQuery([
@@ -159,9 +190,16 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("operator approvals and their consumed flag survive a restart", () => {
+  annotatedTest(
+    "operator approvals and their consumed flag survive a restart",
+    // EAP-PERS-009's refusal on second consumption, observed across a restart. The scenario says
+    // nothing about restart and its "no capability execution is authorized" clause is not checked
+    // here (no gateway is involved), so the link is partial.
+    { coversPartially: ["EAP-PERS-009"] },
+    () => {
     let env = createEapEnv()
     try {
       const approval: OperatorApproval = {
@@ -182,9 +220,15 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("capability execution outcomes are durable and idempotency survives a restart", async () => {
+  annotatedTest(
+    "capability execution outcomes are durable and idempotency survives a restart",
+    // EAP-CAPB-002's "the prior outcome is returned without repeating the external effect", here
+    // across a restart. The scenario is about a same-process replay, so the link is partial.
+    { coversPartially: ["EAP-CAPB-002"] },
+    async () => {
     let env = createEapEnv()
     try {
       const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
@@ -218,11 +262,18 @@ describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)"
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 })
 
 describe("F001 retry#5 — defect 1: the domain service and the MCP adapter share one store", () => {
-  test("a promotion admitted through the MCP tool is visible to PromotionService — no cross-layer divergence", async () => {
+  annotatedTest(
+    "a promotion admitted through the MCP tool is visible to PromotionService — no cross-layer divergence",
+    // EAP-XPRT-001's "the transport handler adds no independent epistemic policy", shown as the
+    // adapter and the domain service reading the same rows. The scenario's admitted-outcome clause
+    // is covered by eap-mcp-contract, so this link is partial.
+    { coversPartially: ["EAP-XPRT-001"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -248,9 +299,14 @@ describe("F001 retry#5 — defect 1: the domain service and the MCP adapter shar
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("a contestation admitted through the MCP tool is visible to ContestationService", async () => {
+  annotatedTest(
+    "a contestation admitted through the MCP tool is visible to ContestationService",
+    // Same partial relationship to EAP-XPRT-001 as the promotion case above.
+    { coversPartially: ["EAP-XPRT-001"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -273,9 +329,15 @@ describe("F001 retry#5 — defect 1: the domain service and the MCP adapter shar
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
+// OUT OF SCOPE (F002 task 06), whole describe: the three cases below assert bounded-memory
+// properties of the implementation (no in-memory collections; an audit retention bound; storage in
+// SQLite rather than a Map). `004` mints no scenario for host resource management, and the
+// retention bound here is a configured audit cap — unrelated to quarantine family QA6, which
+// concerns page/batch/completion bounds on very large reverse-dependency closures.
 describe("F001 retry#5 — defect 2: bounded memory for accumulating collections", () => {
   test("CapabilityGateway keeps no unbounded in-memory outcome or audit collections", () => {
     const env = createEapEnv()

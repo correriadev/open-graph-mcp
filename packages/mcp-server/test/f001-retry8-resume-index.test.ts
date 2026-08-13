@@ -23,6 +23,7 @@
  *     in the append-only log a reconnecting session replays from.
  */
 import { describe, expect, test } from "bun:test"
+import { annotatedTest } from "./verification/annotate"
 import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register } from "./helpers"
 import { injectMirrorAppendFailure, rebuildFromJsonl, write } from "../src/db"
@@ -74,7 +75,14 @@ async function seedChain(s: any, length: number): Promise<{ token: string; tenan
 }
 
 describe("an unfinished recall case is RESUMED, not replayed (the documented remedy is reachable)", () => {
-  test("re-driving a batch-cap-exhausted case finishes it and reports it as resumed", async () => {
+  annotatedTest(
+    "re-driving a batch-cap-exhausted case finishes it and reports it as resumed",
+    // EAP-RECL-003: the case is interrupted after a durable checkpoint, resumed, and the final
+    // affected set is the whole closure (k1..k4) with exactly ONE scar row — the scenario's "no
+    // degradation is applied twice". The batch cap is only the mechanism used to interrupt it; no
+    // bound is asserted, so quarantine family QA6 stays open.
+    { asserts: ["EAP-RECL-003"] },
+    async () => {
     const s = startServer()
     const original = RECALL_LIMITS.maxBatches
     try {
@@ -118,9 +126,15 @@ describe("an unfinished recall case is RESUMED, not replayed (the documented rem
       RECALL_LIMITS.maxBatches = original
       s.stop()
     }
-  })
+    },
+  )
 
-  test("two concurrent drives of the same case cannot both advance it", async () => {
+  annotatedTest(
+    "two concurrent drives of the same case cannot both advance it",
+    // EAP-RECL-003's "no degradation is applied twice" (every degradation count is 1), under
+    // concurrency rather than under the checkpointed resume the scenario specifies.
+    { coversPartially: ["EAP-RECL-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await seedChain(s, 4)
@@ -144,8 +158,12 @@ describe("an unfinished recall case is RESUMED, not replayed (the documented rem
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06), and deliberately NOT linked to EAP-QUAR-002. The case exists to
+  // PIN that completing a recall does not decide the destination status of an indirect dependent —
+  // quarantine family QA2 stays open, which is the opposite of discharging it.
   test("resuming to completion does NOT clear the gate: the closure is still closed (003 defers the exit)", async () => {
     const s = startServer()
     const original = RECALL_LIMITS.maxBatches
@@ -195,7 +213,12 @@ describe("an unfinished recall case is RESUMED, not replayed (the documented rem
     }
   })
 
-  test("a COMPLETED case still replays idempotently: no second drive, no second event", async () => {
+  annotatedTest(
+    "a COMPLETED case still replays idempotently: no second drive, no second event",
+    // EAP-RECL-003's "no degradation is applied twice", observed under replay of a COMPLETED case
+    // rather than under a resume from a checkpoint.
+    { coversPartially: ["EAP-RECL-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await seedChain(s, 3)
@@ -223,11 +246,18 @@ describe("an unfinished recall case is RESUMED, not replayed (the documented rem
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("the degradation report is the whole case, not the last batch", () => {
-  test("a batched drive and an immediate replay of the same case report the same degradations", async () => {
+  annotatedTest(
+    "a batched drive and an immediate replay of the same case report the same degradations",
+    // EAP-RECL-003's "the final affected set equals uninterrupted execution" — approximated by
+    // comparing a batched drive against its own replay rather than against a separate, genuinely
+    // uninterrupted run, so the link stays partial.
+    { coversPartially: ["EAP-RECL-003"] },
+    async () => {
     const s = startServer()
     try {
       const a = await seedChain(s, 4)
@@ -248,7 +278,8 @@ describe("the degradation report is the whole case, not the last batch", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("closure membership is an indexed lookup resolved once per command", () => {
@@ -263,6 +294,8 @@ describe("closure membership is an indexed lookup resolved once per command", ()
     return { sqls, restore: () => (db.query = original) }
   }
 
+  // OUT OF SCOPE (F002 task 06): a query-plan assertion — one membership lookup per command, index
+  // backed. `004` specifies governed outcomes and mints no scenario about host query shape.
   test("a promotion of N candidates resolves membership ONCE, with an index-backed plan", async () => {
     const s = startServer()
     try {
@@ -297,7 +330,13 @@ describe("closure membership is an indexed lookup resolved once per command", ()
     }
   })
 
-  test("the closure membership index survives a rebuild from the JSONL mirror", async () => {
+  annotatedTest(
+    "the closure membership index survives a rebuild from the JSONL mirror",
+    // EAP-PERS-001's "rebuild identical persistent state from durable JSONL", observed on the
+    // derived closure-membership index rather than on the claims / ownership / Sequence triple the
+    // scenario enumerates — and via the gate's behaviour rather than by comparing state directly.
+    { coversPartially: ["EAP-PERS-001"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -340,9 +379,16 @@ describe("closure membership is an indexed lookup resolved once per command", ()
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("a recall case written behind the write path with an unreadable closure still fails CLOSED", async () => {
+  annotatedTest(
+    "a recall case written behind the write path with an unreadable closure still fails CLOSED",
+    // EAP-XPRT-002's "a stable RefusalCode without a partial side effect", reached from corrupt
+    // durable state rather than from the host-rule violation the scenario's Given names, and
+    // without reading back the client obligation.
+    { coversPartially: ["EAP-XPRT-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -373,11 +419,20 @@ describe("closure membership is an indexed lookup resolved once per command", ()
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("the suspension event commits with the write it describes", () => {
-  test("no durable suspension without the append-only row that announces it, at any failure point", async () => {
+  annotatedTest(
+    "no durable suspension without the append-only row that announces it, at any failure point",
+    // EAP-PERS-002: a durable transaction fails midway and neither store exposes a partial
+    // committed result. The failure is injected into the JSONL MIRROR append at each of the 14
+    // durable append points of the unit, and after every one the `authority` row and the
+    // append-only `events` row still agree — so both halves of the scenario's Then are observed,
+    // over both the SQLite side and the authoritative history.
+    { asserts: ["EAP-PERS-002"] },
+    async () => {
     // A recall of a one-claim closure over a graph-owned cell performs a bounded number of durable
     // appends. Injecting a failure at EACH of them must never leave the pair half-written.
     for (let injectAt = 1; injectAt <= 14; injectAt++) {
@@ -423,5 +478,6 @@ describe("the suspension event commits with the write it describes", () => {
         s.stop()
       }
     }
-  })
+    },
+  )
 })

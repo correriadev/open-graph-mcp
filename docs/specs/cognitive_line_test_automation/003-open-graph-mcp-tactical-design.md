@@ -605,7 +605,7 @@ interface ProbeHostPort [E]:
       "docs/verification/scenario-register.json"
     ],
     "acceptance": [
-      "Every test case in the 17 EAP test files carries a Discharge Annotation naming the Scenario Identifiers it discharges, or is explicitly recorded as out-of-scope with a reason",
+      "Every test case in the 21 EAP test files (16 in packages/mcp-server/test, 2 in packages/client/test, 3 in packages/graph-core/test; 131 test cases) carries a Discharge Annotation naming the Scenario Identifiers it discharges, or is explicitly recorded as out-of-scope with a reason",
       "Annotating changes no assertion: the suite's pass count, file count and total expect() count are unchanged from the pre-annotation baseline of 700 pass / 3293 expect() calls",
       "Any scenario left with no annotating test is listed in the register as a known gap rather than silently absent, and any test discharging a QA1-QA7 identifier is reported for task 08 rather than committed"
     ],

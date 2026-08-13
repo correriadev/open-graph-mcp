@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "task": "F002 task 06 — Annotate the Existing EAP Corpus",
+  "generatedFrom": ".verification/annotations.jsonl (one full `bun run verify` run, sink truncated first)",
+  "policy": "The gap ledger required by task 06 acceptance 3. It is NOT held in docs/verification/scenario-register.json, and that is a mechanical constraint rather than a choice: `serializeRegister` in scripts/verification/register-scenarios.ts emits a fixed key set (version, policy, source, scenarios[id, area, section, group, heading, status, retired?]) and drops everything else, while `register-scenarios.test.ts` pins `serializeRegister(regenerated) === committedRaw()` byte for byte. Any gap field written into the register is therefore erased on the next regeneration and fails that test. Widening the serializer means editing scripts/verification/* (task 06 may only read it) and weakening the byte-identity test (forbidden outright). This file is the committed record instead: a scenario with no annotating test is listed here rather than silently absent. Task 07's reconciler should read it alongside the register; whether the ledger is folded back into the register is an architect decision recorded against task 07, not something task 06 may take unilaterally.",
+  "corpus": {
+    "eapTestFiles": 21,
+    "note": "003 task 06 says '17 EAP test files'. The measured set is 21: 16 in packages/mcp-server/test, 2 in packages/client/test, 3 in packages/graph-core/test. The 21 file paths named in the task brief were each verified to exist; the count 17 in 003 is stale and is reported here rather than forced.",
+    "eapTestCases": 131,
+    "annotationRecords": 110,
+    "distinctAnnotatedTestCases": 110,
+    "outOfScopeTestCases": 21,
+    "filesEmittingRecords": 21
+  },
+  "suiteBaselineUnchanged": {
+    "claim": "Annotating changed no assertion (task 06 acceptance 2).",
+    "before": { "pass": 841, "todo": 1, "fail": 0, "expectCalls": 3952, "tests": 842, "files": 140 },
+    "after": { "pass": 841, "todo": 1, "fail": 0, "expectCalls": 3952, "tests": 842, "files": 140 },
+    "independentCheck": "bun scripts/verification/assertion-fingerprint.ts --check → PASS, 7 f001-* file(s) match the committed baseline, every hash unchanged. Known limitation carried from task 12: matcher ARGUMENTS are outside the fingerprint, so this proves nothing was dropped, not that nothing was weakened. The unchanged whole-suite expect() total is the second, independent leg of that claim."
+  },
+  "counts": {
+    "proposedScenarios": 71,
+    "withAssertsLink": 34,
+    "coversPartiallyOnly": 24,
+    "gaps": 13,
+    "declaredUntestable": 7,
+    "committedLinksIntoQuarantine": 0
+  },
+  "gaps": [
+    {
+      "id": "EAP-ADMS-001",
+      "heading": "Should produce one admitted outcome when a candidate satisfies the Admission Gate",
+      "reason": "No case in the EAP corpus asserts the CARDINALITY the scenario names — exactly one admitted Admission Decision for one satisfying candidate. Admission is exercised throughout as a precondition of other flows, never as its own subject."
+    },
+    {
+      "id": "EAP-ADMS-003",
+      "heading": "Should return the same verdict when identical candidate evidence is submitted by a hostile identity",
+      "reason": "No case submits identical candidate content twice under different identities and compares the verdicts. Determinism-under-hostile-identity is untested."
+    },
+    {
+      "id": "EAP-VOBJ-005",
+      "heading": "Should reject HorizonId when it is empty",
+      "reason": "`createHorizonId` is imported by packages/graph-core/test/eap-types.test.ts and never called. The empty-HorizonId refusal IS exercised at the MCP boundary (MALFORMED_CONTRACT, in eap-conformance and eap-mcp-contract), but that is the transport contract, not the value-object constructor this scenario is stated over — so a link would misattribute the proof."
+    },
+    {
+      "id": "EAP-VOBJ-006",
+      "heading": "Should preserve HorizonId opacity when topology changes",
+      "reason": "No case re-reads a HorizonId after its Horizon gains a declared parent to show the identifier is unchanged and encodes no topology."
+    },
+    {
+      "id": "EAP-VOBJ-008",
+      "heading": "Should prevent admission or Relative Authority when a Negotiation Seed carries them",
+      "reason": "`validateNegotiationSeed` is imported by packages/graph-core/test/eap-types.test.ts and never called. Nothing attaches admission or authority to a seed and observes the rejection."
+    },
+    {
+      "id": "EAP-SVCS-001",
+      "heading": "Should commit a Changeset atomically when incremental and final gates accept it",
+      "reason": "Exercised by packages/mcp-server/test/commit-atomic.test.ts, which lies OUTSIDE the 21-file EAP corpus task 06 annotates. A gap in the annotated set, not necessarily in the suite. Extending annotation to the changeset corpus is a scope decision for the architect."
+    },
+    {
+      "id": "EAP-SVCS-002",
+      "heading": "Should leave no durable mutation when a Changeset gate refuses it",
+      "reason": "Same as EAP-SVCS-001: the changeset gate suite is outside the annotated EAP corpus."
+    },
+    {
+      "id": "EAP-EVNT-002",
+      "heading": "Should remain immutable when a consumer handles a governed event",
+      "reason": "No case takes an emitted governed event, attempts to mutate it, and shows the mutation grants no permission to change host state."
+    },
+    {
+      "id": "EAP-PERS-003",
+      "heading": "Should isolate Claim Snapshot Store results when tenants use the same CellKey",
+      "reason": "Exercised by packages/mcp-server/test/tenant-isolation.test.ts, outside the annotated EAP corpus. Cross-tenant isolation IS partially covered inside the corpus (EAP-SEC-001), but over contestation targets rather than the Claim Snapshot Store this scenario names."
+    },
+    {
+      "id": "EAP-PERS-005",
+      "heading": "Should return no Horizon when HorizonId does not exist",
+      "reason": "packages/mcp-server/test/horizon-durability.test.ts calls `HorizonStore.get` only for a horizon it just created. The empty result for an absent id — 'without inventing a root or parent' — is never asserted."
+    },
+    {
+      "id": "EAP-PERS-006",
+      "heading": "Should return Admission Decisions in Sequence order when historySince matches records",
+      "reason": "`AdmissionLedgerStore` is constructed in horizon-durability.test.ts but `historySince` is called by no test in the repository."
+    },
+    {
+      "id": "EAP-XPRT-004",
+      "heading": "Should run MCP host contract flows when no LLM provider is configured",
+      "reason": "Every host contract flow in the corpus in fact runs without an LLM provider, but no case ASSERTS the absence of an LLM dependency or credential. The property holds incidentally; nothing would fail if it stopped holding, so there is nothing to bind."
+    },
+    {
+      "id": "EAP-SEC-004",
+      "heading": "Should keep the deterministic MCP host independent when an LLM response is malicious",
+      "reason": "No case feeds prompt-injected content through the client adapter and shows the host treats it as untrusted proposal input. The adapter's local guards (token, evidence) are tested but are a different obligation."
+    }
+  ],
+  "coversPartiallyOnly": {
+    "note": "003 §Section 2: a `covers-partially` link alone can never promote a scenario to `evidenced`. These 24 are therefore NOT evidenced by this corpus; each is listed so task 09 reports them as unpromoted with a reason rather than as silent absences. `partialLinks` is the number of partial links.",
+    "scenarios": [
+      { "id": "EAP-HRZN-001", "partialLinks": 1, "missing": "Negotiation Seed provenance, Budget Ledger validity, and 'starts without inherited Relative Authority' are unproven; only the declared-parent clause is covered." },
+      { "id": "EAP-HRZN-003", "partialLinks": 1, "missing": "`HorizonBudgetExhausted` is never read back — only the escalation outcome and its reason." },
+      { "id": "EAP-ADMS-002", "partialLinks": 2, "missing": "'exactly one' Refusal, and the explicit client obligation on it." },
+      { "id": "EAP-VOBJ-007", "partialLinks": 4, "missing": "All four links are producing-side (an allocator never emits a decreasing Sequence). `createSequence` and `validateSequenceAdvance` are imported by eap-types.test.ts and never called, so the REJECTION the scenario states is untested." },
+      { "id": "EAP-VOBJ-009", "partialLinks": 3, "missing": "All three prove the converse — every listed code HAS an obligation. Constructing a Refusal from an unmapped code and observing the failure is untested." },
+      { "id": "EAP-SVCS-003", "partialLinks": 2, "missing": "`HorizonInitiated` and its seedRef/budgetRef payload." },
+      { "id": "EAP-SVCS-004", "partialLinks": 2, "missing": "`PersistentDeltaAdmitted` and the recorded Sequence." },
+      { "id": "EAP-SVCS-006", "partialLinks": 4, "missing": "No single case pairs 'KnowledgeContested is recorded' with 'the target claims are not directly edited or deleted'; the corpus splits the two clauses across cases." },
+      { "id": "EAP-SVCS-008", "partialLinks": 1, "missing": "The append-only audit reference for the reversible path." },
+      { "id": "EAP-SVCS-009", "partialLinks": 2, "missing": "`CapabilityExecuted` is never read back; only the consumed flag and the reuse refusal." },
+      { "id": "EAP-SVCS-010", "partialLinks": 1, "missing": "No case runs `AssessConformance` or produces independent host and client verdicts. The two files NAMED eap-conformance report exclusions and adapter invariants instead." },
+      { "id": "EAP-EVNT-001", "partialLinks": 1, "missing": "Only `TruthOwnershipSuspended` of the eleven governed events the scenario enumerates has its minimum payload checked." },
+      { "id": "EAP-PERS-001", "partialLinks": 4, "missing": "Every link observes a restart or a rebuild over recall/promotion state, never the claims + ownership + Sequence triple the scenario states." },
+      { "id": "EAP-PERS-007", "partialLinks": 1, "missing": "The Given is a corrupt `refs` column, not the 'no registered reverse-dependency edges' the scenario states." },
+      { "id": "EAP-XPRT-002", "partialLinks": 4, "missing": "The client obligation on the refusal is never read back, and three of the four links arise from corrupt durable state rather than a violated host rule." },
+      { "id": "EAP-XPRT-003", "partialLinks": 1, "missing": "The MCP client is a stub; 'only the deterministic MCP host may admit or persist it' is unexercised." },
+      { "id": "EAP-FUNC-002", "partialLinks": 1, "missing": "Atomic commit is shown; the monotonic Sequence advance and the observable event are not." },
+      { "id": "EAP-FUNC-003", "partialLinks": 6, "missing": "No single link performs the scenario's whole When — Recall requested, interrupted, THEN resumed — with all three Then clauses. The six links each carry one fragment." },
+      { "id": "EAP-FUNC-004", "partialLinks": 2, "missing": "`CapabilityExecuted` is not read back in either link." },
+      { "id": "EAP-ERRP-001", "partialLinks": 3, "missing": "Two links are client-adapter-side; the host-side link never verifies that no mutation occurred." },
+      { "id": "EAP-ERRP-003", "partialLinks": 3, "missing": "No link pairs the absent-resource outcome with the 'without leaking another tenant's state' clause in the same case." },
+      { "id": "EAP-ERRP-004", "partialLinks": 5, "missing": "'approval does not waive evidence requirements' is asserted by none of the five." },
+      { "id": "EAP-SEC-001", "partialLinks": 3, "missing": "The scenario's Given spans an invalid CellKey, an empty HorizonId AND a cross-tenant identifier; the corpus splits these across three cases and covers no CellKey arm at a governed boundary." },
+      { "id": "EAP-SEC-003", "partialLinks": 1, "missing": "The single link replays a COMMAND. The scenario's Given is a captured EVENT (`KnowledgeVerified`, `PromotionProposed`, `CapabilityExecuted`) replayed as though it were a command — untested." }
+    ]
+  },
+  "quarantineReport": {
+    "forTask": "08",
+    "committedLinks": 0,
+    "statement": "No Traceability Link into EAP-QUAR-001..007 was committed. The sink carries zero records with a non-empty `declaredUntestable` field, which is the mechanical input task 08's gate consumes — so the gate can be turned on against this corpus without a pre-existing violation to resolve.",
+    "reviewedCandidates": [
+      {
+        "family": "QA2",
+        "scenario": "EAP-QUAR-002",
+        "subject": "Destination status of an indirect dependent in a Recall cascade.",
+        "tests": [
+          "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts :: truth-ownership suspension reaches the `authority` table, and indirect dependents stay deferred",
+          "packages/mcp-server/test/f001-retry7-closure-gate.test.ts :: an indirect dependent may still be CONCRETIZEd but is refused at VERIFY",
+          "packages/mcp-server/test/f001-retry7-closure-gate.test.ts :: a verified candidate that a later recall pulled into its closure cannot be promoted",
+          "packages/mcp-server/test/f001-retry8-resume-index.test.ts :: resuming to completion does NOT clear the gate: the closure is still closed (003 defers the exit)"
+        ],
+        "verdict": "NOT a violation, binding not committed. Each case asserts that the destination status stays UNDECIDED — the read model invents no status and the lifecycle is held short of `verified`. They keep QA2 open rather than resolving it, which is the opposite of discharging it. Left unannotated with an in-file comment naming the family."
+      },
+      {
+        "family": "QA5",
+        "scenario": "EAP-QUAR-005",
+        "subject": "Mapping a LegacyClaimStatus value into the Epistemic Lifecycle.",
+        "tests": [
+          "packages/graph-core/test/eap-types.test.ts :: Should explicitly prevent inferred mapping of LegacyClaimStatus"
+        ],
+        "verdict": "NOT a violation, binding not committed. The case asserts the mapper THROWS with the deferral reason — it pins the ambiguity open. Left unannotated with an in-file comment naming the family."
+      },
+      {
+        "family": "QA6",
+        "scenario": "EAP-QUAR-006",
+        "subject": "Page size, batching limits and completion bounds for very large reverse-dependency closures.",
+        "tests": [
+          "packages/mcp-server/test/f001-retry7-closure-gate.test.ts :: exhausting the batch cap is reported distinctly instead of looking like completion",
+          "packages/mcp-server/test/f001-retry7-closure-gate.test.ts :: a completed recall reports complete:true and no batch-limit signal",
+          "packages/mcp-server/test/f001-retry8-resume-index.test.ts :: re-driving a batch-cap-exhausted case finishes it and reports it as resumed"
+        ],
+        "verdict": "NOT a violation. No case asserts a maximum batch size, page size or completion bound: each forces `RECALL_LIMITS.maxBatches` to an explicit test value and checks only the REPORTING shape, restoring the original afterwards. The third is bound to EAP-RECL-003 (resume semantics), not to any bound. Flagged so task 08 can re-check the reasoning rather than take it on trust."
+      }
+    ]
+  },
+  "outOfScopeTestCases": {
+    "note": "Task 06 acceptance 1 permits a case to be 'explicitly recorded as out-of-scope with a reason'. Each of these carries that reason as an in-file comment above the case; they discharge no Scenario Identifier because `004` states none. Counted here so task 07 can distinguish a deliberate non-binding from an unclaimed case. 131 EAP test cases − 110 annotated = 21.",
+    "count": 21,
+    "byClass": [
+      { "class": "structural / implementation-shape assertions (no in-memory store; no unbounded collection; SQLite not a Map; obsolete table absent; composition-root identity)", "count": 6 },
+      { "class": "MCP tool-schema shape assertions that issue no Cognitive command", "count": 2 },
+      { "class": "quarantine-adjacent cases that pin an ambiguity OPEN (QA2 ×3, QA5 ×1, QA6 ×2)", "count": 6 },
+      { "class": "performance / query-plan assertions (snapshot reads per candidate; indexed membership lookup)", "count": 2 },
+      { "class": "client-adapter-local guards with no `004` counterpart (session token; evidence fabrication)", "count": 2 },
+      { "class": "host-internal routing (SSE session filters for one event kind) and identifier-allocation uniqueness", "count": 2 },
+      { "class": "closed-union validation with no `004` scenario (LegacyClaimStatus union)", "count": 1 }
+    ]
+  }
+}

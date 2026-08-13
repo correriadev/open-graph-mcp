@@ -6,6 +6,7 @@
  * execution-timeout points. Feature F001 / domain cognitive_line.
  */
 import { describe, expect, test } from "bun:test"
+import { annotatedTest } from "./verification/annotate"
 import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register } from "./helpers"
 import { createEapEnv } from "./eap-env"
@@ -21,7 +22,12 @@ const claimDelta = (id: string, domain = "ui", level = 5) => ({
 })
 
 describe("F001 retry#5 — defect 3: atomic sequence allocation and transition writes", () => {
-  test("eapContest sequences are unique, monotonic, and never reused after row deletion", async () => {
+  annotatedTest(
+    "eapContest sequences are unique, monotonic, and never reused after row deletion",
+    // EAP-VOBJ-007 rejects a Sequence that is negative or DECREASES within its scope. This proves
+    // the allocator never produces one, which is the invariant seen from the producing side.
+    { coversPartially: ["EAP-VOBJ-007"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -61,8 +67,11 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06): uniqueness of the host's generated contestation IDENTIFIERS.
+  // `004` constrains Sequences (EAP-VOBJ-007) but mints no scenario for identifier allocation.
   test("eapContest identifiers are unique even when the id shape collides with a purged row", async () => {
     const s = startServer()
     try {
@@ -85,7 +94,12 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     }
   })
 
-  test("eapRecall allocates its sequence durably and refuses replay of a completed recall", async () => {
+  annotatedTest(
+    "eapRecall allocates its sequence durably and refuses replay of a completed recall",
+    // Two distinct recalls receive distinct Sequences — the same producing-side view of
+    // EAP-VOBJ-007 as the contest allocator above.
+    { coversPartially: ["EAP-VOBJ-007"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -112,9 +126,15 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("eapPromote persists a proposed parent candidate row alongside the proposal", async () => {
+  annotatedTest(
+    "eapPromote persists a proposed parent candidate row alongside the proposal",
+    // EAP-PROM-001's parent proposal, observed durably. `PromotionProposed` itself is not read, and
+    // the "no inherited Relative Authority" clause is asserted by f001-transport-delegation.
+    { coversPartially: ["EAP-PROM-001"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -144,9 +164,15 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("eapPromote does not advance the child horizon sequence or write a proposal when refused", async () => {
+  annotatedTest(
+    "eapPromote does not advance the child horizon sequence or write a proposal when refused",
+    // EAP-PROM-002's "no parent proposal is stored". The refusal CODE is not asserted here (only
+    // `ok === false`), so the scenario's first clause is unproven and the link stays partial.
+    { coversPartially: ["EAP-PROM-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -183,9 +209,16 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("eapPromote rolls back the horizon transition when the durable write fails", async () => {
+  annotatedTest(
+    "eapPromote rolls back the horizon transition when the durable write fails",
+    // EAP-PERS-002: a durable transaction fails midway and neither the sequence advance nor the
+    // proposal survives. Only the SQLite side is read back, not the JSONL history, so partial —
+    // f001-retry8's injection sweep asserts the scenario across both.
+    { coversPartially: ["EAP-PERS-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -228,11 +261,17 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 })
 
 describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
-  test("CapabilityGateway refuses a client-supplied approval that is not registered by an operator", async () => {
+  annotatedTest(
+    "CapabilityGateway refuses a client-supplied approval that is not registered by an operator",
+    // EAP-VOBJ-012: an irreversible capability without a matching single-use authorization is
+    // refused BEFORE the external effect occurs — `providerRan` never becomes true.
+    { asserts: ["EAP-VOBJ-012"] },
+    async () => {
     const env = createEapEnv()
     try {
       const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
@@ -264,9 +303,16 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("CapabilityGateway validates the stored approval, not the client-supplied copy", async () => {
+  annotatedTest(
+    "CapabilityGateway validates the stored approval, not the client-supplied copy",
+    // EAP-VOBJ-011's scope arm, in full: an out-of-scope request is refused (SCOPE_EXCEEDED) and
+    // the operator's single-use grant is not burned — "mechanical evidence requirements remain in
+    // force". Also the scope arm of EAP-ERRP-004, whose expiry/staleness arms live elsewhere.
+    { asserts: ["EAP-VOBJ-011"], coversPartially: ["EAP-ERRP-004"] },
+    async () => {
     const env = createEapEnv()
     try {
       const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
@@ -302,9 +348,16 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("getAuditLog applies an authorization projection filter", async () => {
+  annotatedTest(
+    "getAuditLog applies an authorization projection filter",
+    // EAP-SEC-005: an Agent Client without projection access gets neither the capability outcome
+    // nor the contract reference, and the append-only audit record itself is unchanged — the
+    // scoped principal still reads the full entry afterwards.
+    { asserts: ["EAP-SEC-005"] },
+    async () => {
     const env = createEapEnv()
     try {
       const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
@@ -336,9 +389,16 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("CapabilityGateway times out a hanging provider and cancels it via AbortSignal", async () => {
+  annotatedTest(
+    "CapabilityGateway times out a hanging provider and cancels it via AbortSignal",
+    // EAP-CAPB-003: the provider is effectively unavailable (it never returns), no successful
+    // `CapabilityExecuted` outcome is fabricated (`audit.count() === 0`), and the failure surfaces
+    // as the typed PROVIDER_UNAVAILABLE outcome.
+    { asserts: ["EAP-CAPB-003"] },
+    async () => {
     const env = createEapEnv()
     try {
       const gateway = new CapabilityGateway(env.approvals, env.audit, env.sequences)
@@ -368,9 +428,15 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
     } finally {
       env.cleanup()
     }
-  })
+    },
+  )
 
-  test("eapRecall refuses a contestation whose status is not 'admitted'", async () => {
+  annotatedTest(
+    "eapRecall refuses a contestation whose status is not 'admitted'",
+    // EAP-RECL-002 in full for the `refused` arm: recall is refused (RECALL_UNPROVEN) and no Recall
+    // Case is created (`recall_cases` count is 0).
+    { asserts: ["EAP-RECL-002"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -397,12 +463,19 @@ describe("F001 retry#5 — defect 4: authorization and validation gaps", () => {
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
 })
 
 describe("F001 retry#5 — transactional recovery of admitPersistentDelta", () => {
-  test("a refused candidate returns typed reasons without throwing", async () => {
+  annotatedTest(
+    "a refused candidate returns typed reasons without throwing",
+    // EAP-SVCS-005: a required candidate is refused by the existing Admission Gate, none of the
+    // delta's candidates is durably committed (`cs_deltas` is empty) and no second admission path
+    // is used (the cell locks are released too).
+    { asserts: ["EAP-SVCS-005"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -438,9 +511,16 @@ describe("F001 retry#5 — transactional recovery of admitPersistentDelta", () =
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
-  test("a failing commit leaves no orphaned cs_deltas rows and no held cell locks", async () => {
+  annotatedTest(
+    "a failing commit leaves no orphaned cs_deltas rows and no held cell locks",
+    // A durable append fails midway: no partial commit survives (EAP-PERS-002, SQLite side only),
+    // and the delta as a whole leaves nothing behind (EAP-SVCS-005, here by infrastructure failure
+    // rather than by the gate refusing a candidate).
+    { coversPartially: ["EAP-PERS-002", "EAP-SVCS-005"] },
+    async () => {
     const s = startServer()
     try {
       const a = await register(s.url, "alice")
@@ -478,8 +558,11 @@ describe("F001 retry#5 — transactional recovery of admitPersistentDelta", () =
     } finally {
       s.stop()
     }
-  })
+    },
+  )
 
+  // OUT OF SCOPE (F002 task 06): a performance assertion counting snapshot reads per candidate.
+  // `004` specifies governed outcomes; it mints no scenario bounding host query counts.
   test("candidate evaluation does not rebuild the tenant claim snapshot per candidate", async () => {
     const s = startServer()
     try {

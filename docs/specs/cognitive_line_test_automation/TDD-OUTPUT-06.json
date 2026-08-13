@@ -1,0 +1,159 @@
+{
+  "featureId": "F002",
+  "taskId": "06",
+  "taskTitle": "Annotate the Existing EAP Corpus",
+  "status": "SUCCESS",
+  "metrics": {
+    "totalTests": 842,
+    "passed": 841,
+    "failed": 0,
+    "todo": 1,
+    "expectCalls": 3952,
+    "testFiles": 140,
+    "coverage": 0.0
+  },
+  "acceptance": [
+    {
+      "id": 1,
+      "statement": "Every test case in the EAP test files carries a Discharge Annotation naming the Scenario Identifiers it discharges, or is explicitly recorded as out-of-scope with a reason",
+      "verdict": "MET",
+      "evidence": "131 test cases across the 21 EAP test files. 110 emit a Discharge Annotation (one record per execution in .verification/annotations.jsonl, sink truncated before the measuring run). The remaining 21 carry an in-file OUT OF SCOPE comment naming the reason; they are inventoried by class in docs/verification/annotation-coverage.json. 110 + 21 = 131, so no case is unaccounted for.",
+      "deviation": "003 task 06 says '17 EAP test files'. The measured set is 21 — every path named in the task brief was verified to exist. The count in 003 is stale; reported rather than forced."
+    },
+    {
+      "id": 2,
+      "statement": "Annotating changes no assertion: pass count, file count and total expect() count unchanged from the pre-annotation baseline",
+      "verdict": "MET",
+      "before": { "pass": 841, "todo": 1, "fail": 0, "expectCalls": 3952, "tests": 842, "files": 140 },
+      "after": { "pass": 841, "todo": 1, "fail": 0, "expectCalls": 3952, "tests": 842, "files": 140 },
+      "delta": "zero on every figure",
+      "independentCheck": "bun scripts/verification/assertion-fingerprint.ts --check → PASS, all 7 f001-* fingerprints match the committed baseline, no hash changed. docs/verification/assertion-fingerprints.json was read only, never written.",
+      "limitation": "Carried from task 12: matcher ARGUMENTS are outside the fingerprint, so it proves nothing was dropped, not that nothing was weakened. The unchanged whole-suite expect() total is the independent second leg."
+    },
+    {
+      "id": 3,
+      "statement": "Any scenario left with no annotating test is listed as a known gap rather than silently absent, and any test discharging a QA1-QA7 identifier is reported for task 08 rather than committed",
+      "verdict": "MET WITH A DOCUMENTED DEVIATION",
+      "gaps": "All 13 gap scenarios are recorded, each with a reason, in docs/verification/annotation-coverage.json. The 24 covers-partially-only scenarios are recorded separately with the specific unproven clause, since 003 §Section 2 forbids promoting them on partial links alone.",
+      "deviation": "The brief asks for the gaps to be recorded IN docs/verification/scenario-register.json. That is mechanically impossible without touching files task 06 may only read. `serializeRegister` (scripts/verification/register-scenarios.ts) emits a fixed key set and drops everything else, and register-scenarios.test.ts pins `serializeRegister(regenerated) === committedRaw()` byte for byte — so any gap field added to the register is erased on regeneration and fails that test. Widening the serializer means editing scripts/verification/* (off-limits) or weakening a test (forbidden). scenario-register.json is therefore left byte-unchanged and the ledger is committed as docs/verification/annotation-coverage.json, which is not any other task's declared scope path. Folding it back into the register is an architect decision for task 07.",
+      "quarantine": "Zero Traceability Links into EAP-QUAR-001..007 were committed. The sink holds zero records with a non-empty `declaredUntestable` field — the mechanical input task 08's gate consumes — so the gate can be enabled against this corpus with no pre-existing violation to resolve. Three families had candidate cases; all were reviewed and reported for task 08 rather than bound."
+    }
+  ],
+  "traceability": {
+    "proposedScenarios": 71,
+    "withAssertsLink": 34,
+    "coversPartiallyOnly": 24,
+    "gaps": 13,
+    "declaredUntestable": 7,
+    "annotationRecords": 110,
+    "committedQuarantineLinks": 0
+  },
+  "quarantineReportForTask08": [
+    {
+      "family": "QA2",
+      "scenario": "EAP-QUAR-002",
+      "candidateTests": 4,
+      "verdict": "NOT A VIOLATION — binding not committed. Each case asserts the destination status of an indirect recall dependent stays UNDECIDED (no status invented, lifecycle held short of `verified`). They keep QA2 open rather than resolving it."
+    },
+    {
+      "family": "QA5",
+      "scenario": "EAP-QUAR-005",
+      "candidateTests": 1,
+      "verdict": "NOT A VIOLATION — binding not committed. graph-core/test/eap-types.test.ts asserts the LegacyClaimStatus mapper THROWS with the deferral reason, pinning the ambiguity open."
+    },
+    {
+      "family": "QA6",
+      "scenario": "EAP-QUAR-006",
+      "candidateTests": 3,
+      "verdict": "NOT A VIOLATION — no case asserts a maximum batch size, page size or completion bound. Each forces RECALL_LIMITS.maxBatches to an explicit test value, checks only the REPORTING shape, and restores the original. Flagged so task 08 can re-check the reasoning rather than take it on trust."
+    }
+  ],
+  "lowConfidenceBindings": [
+    {
+      "scenario": "EAP-PERS-004",
+      "test": "packages/mcp-server/test/horizon-durability.test.ts :: HorizonStore: optimistic concurrency in saveTransition",
+      "kind": "asserts",
+      "doubt": "The scenario says 'two CONCURRENT transitions'. The two saves are issued sequentially; only the shared expected Sequence — the mechanism the scenario actually names — is exercised. Downgrade to covers-partially if a reviewer reads 'concurrent' as load-bearing."
+    },
+    {
+      "scenario": "EAP-RECL-004",
+      "test": "packages/mcp-server/test/recall.test.ts :: Should preserve the historical scar when Recall completes",
+      "kind": "asserts",
+      "doubt": "The test name is the scenario heading verbatim and the scar is queried after completion, but the second Then clause — 'no admitted record is erased or directly rewritten' — is not observed anywhere in the corpus."
+    },
+    {
+      "scenario": "EAP-LIFE-001",
+      "test": "packages/graph-core/test/eap-lifecycle.test.ts :: 1. Should complete Relative Authority when full normative sequence succeeds in order",
+      "kind": "asserts",
+      "doubt": "'receives Relative Authority ONLY within that Horizon' is not proven by this case; the aggregate is merely constructed against one HorizonId. The scoping half is EAP-HRZN-004's case, in a different file."
+    },
+    {
+      "scenario": "EAP-SEC-005",
+      "test": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: getAuditLog applies an authorization projection filter",
+      "kind": "asserts",
+      "doubt": "'without changing the append-only audit record' is inferred from the scoped principal still reading the full entry afterwards, rather than asserted against the durable rows directly."
+    },
+    {
+      "scenario": "EAP-RECL-003",
+      "test": "packages/mcp-server/test/f001-retry8-resume-index.test.ts :: re-driving a batch-cap-exhausted case finishes it and reports it as resumed",
+      "kind": "asserts",
+      "doubt": "'the final affected set equals uninterrupted execution' is proven against the known closure (k1..k4) rather than against a separately executed uninterrupted run."
+    }
+  ],
+  "findings": [
+    {
+      "class": "STALE_SPEC",
+      "detail": "003 task 06 states 17 EAP test files; the measured set is 21."
+    },
+    {
+      "class": "DEAD_TEST_IMPORTS",
+      "detail": "packages/graph-core/test/eap-types.test.ts imports createHorizonId, createSequence, validateSequenceAdvance, validateNegotiationSeed, validatePersistentDelta, validateOperatorApproval, requiresSingleUseAuthorization, isValidCapabilityClassification, EPISTEMIC_LIFECYCLE_STATES, isValidEpistemicLifecycleState, BOUNDARY_COMMANDS, isBoundaryCommand and createRefusal, and calls none of them. This is the direct cause of gaps EAP-VOBJ-005, EAP-VOBJ-006 and EAP-VOBJ-008, and of EAP-VOBJ-007 having only producing-side partial links. Closing those gaps is cheap and mostly means calling functions the file already imports."
+    },
+    {
+      "class": "SCOPE_BOUNDARY",
+      "detail": "EAP-SVCS-001, EAP-SVCS-002 and EAP-PERS-003 are exercised by commit-atomic.test.ts and tenant-isolation.test.ts, which lie outside the 21-file EAP corpus. They are gaps in the ANNOTATED set, not necessarily in the suite. Whether annotation extends to the changeset corpus is an architect decision."
+    },
+    {
+      "class": "REGISTER_SCHEMA_CLOSED",
+      "detail": "scenario-register.json cannot hold gap records under the current serializer + byte-identity test. See acceptance 3's deviation note."
+    },
+    {
+      "class": "CROSS_PACKAGE_RESOLUTION",
+      "detail": "packages/client uses moduleResolution `nodenext`, so its two EAP test files must import the annotation surface with an explicit extension. `.js` made tsc follow into annotate.ts and typecheck it under client's stricter settings, producing 6 new errors (a [new-file] gate violation). The working form is the `.ts` extension (client and mcp-server both set allowImportingTsExtensions), which also required annotate.ts's own import of scripts/verification/register-scenarios to gain a `.ts` extension. graph-core uses `bundler` resolution and needs no extension. Net effect on the typecheck gate: PASS, frozen error set unchanged, client project total fell from 20 to 18 errors."
+    }
+  ],
+  "modifiedFiles": [
+    "packages/mcp-server/test/verification/annotate.ts",
+    "packages/mcp-server/test/capability-governance.test.ts",
+    "packages/mcp-server/test/contestation.test.ts",
+    "packages/mcp-server/test/eap-mcp-contract.test.ts",
+    "packages/mcp-server/test/eap-refusals.test.ts",
+    "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+    "packages/mcp-server/test/f001-retry5-durability.test.ts",
+    "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+    "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+    "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
+    "packages/mcp-server/test/f001-transport-delegation.test.ts",
+    "packages/mcp-server/test/f001-validation-audit-vulns.test.ts",
+    "packages/mcp-server/test/horizon-durability.test.ts",
+    "packages/mcp-server/test/persistent-delta.test.ts",
+    "packages/mcp-server/test/promotion.test.ts",
+    "packages/mcp-server/test/recall.test.ts",
+    "packages/client/test/eap-client.test.ts",
+    "packages/client/test/eap-conformance.test.ts",
+    "packages/graph-core/test/eap-types.test.ts",
+    "packages/graph-core/test/eap-lifecycle.test.ts",
+    "packages/graph-core/test/horizon.test.ts",
+    "docs/verification/annotation-coverage.json"
+  ],
+  "unmodifiedByDesign": [
+    "docs/verification/scenario-register.json",
+    "docs/verification/assertion-fingerprints.json",
+    "docs/verification/typecheck-baseline.json",
+    "docs/verification/quarantine.json",
+    "scripts/verification/*",
+    "docs/specs/cognitive_line/**",
+    "packages/mcp-server/test/eap-conformance.test.ts"
+  ],
+  "reworksCount": 0
+}

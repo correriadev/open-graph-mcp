@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test"
+import { expect } from "bun:test"
+import { annotatedTest } from "./verification/annotate"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -20,7 +21,13 @@ function createTestEnv() {
   return { dir, dbPath, db, horizonStore, admissionLedger, cleanup }
 }
 
-test("HorizonStore: atomic and tenant-scoped creation and lookup", () => {
+annotatedTest(
+  "HorizonStore: atomic and tenant-scoped creation and lookup",
+  // EAP-SVCS-003's `InitiateHorizon` requires provenance, topology and budget validation plus a
+  // `HorizonInitiated` event carrying seedRef/budgetRef. This is the repository beneath that
+  // service: it stores and reads back a horizon row, nothing more.
+  { coversPartially: ["EAP-SVCS-003"] },
+  () => {
   const env = createTestEnv()
   try {
     const root = env.horizonStore.create({
@@ -39,9 +46,17 @@ test("HorizonStore: atomic and tenant-scoped creation and lookup", () => {
   } finally {
     env.cleanup()
   }
-})
+  },
+)
 
-test("HorizonStore: optimistic concurrency in saveTransition", () => {
+annotatedTest(
+  "HorizonStore: optimistic concurrency in saveTransition",
+  // EAP-PERS-004: two transitions loaded from the same Horizon version call `saveTransition` with
+  // the SAME expected Sequence; one persists and the stale save returns a deterministic typed
+  // conflict (`STALE_SEQUENCE`). The two saves are issued sequentially rather than in parallel, but
+  // the mechanism the scenario names — the shared expected Sequence — is exactly what is exercised.
+  { asserts: ["EAP-PERS-004"] },
+  () => {
   const env = createTestEnv()
   try {
     env.horizonStore.create({
@@ -64,4 +79,5 @@ test("HorizonStore: optimistic concurrency in saveTransition", () => {
   } finally {
     env.cleanup()
   }
-})
+  },
+)

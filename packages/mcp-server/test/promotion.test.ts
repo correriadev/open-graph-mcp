@@ -1,4 +1,5 @@
-import { describe, expect, it, beforeEach, afterEach } from "bun:test"
+import { describe, expect, beforeEach, afterEach } from "bun:test"
+import { annotatedTest } from "./verification/annotate"
 import { Horizon, PromotionRequest } from "@open-graph-mcp/graph-core/eap/promotion"
 import { PromotionService } from "../src/eap/promotion-service"
 import { createEapEnv, type EapEnv } from "./eap-env"
@@ -30,7 +31,11 @@ describe("One-Edge Promotion (Task 06)", () => {
     env.cleanup()
   })
 
-  it("returns HORIZON_SKIP when Promotion targets a non-parent Horizon", () => {
+  annotatedTest(
+    "returns HORIZON_SKIP when Promotion targets a non-parent Horizon",
+    // Refused with HORIZON_SKIP and no parent proposal stored — both clauses of EAP-PROM-002.
+    { asserts: ["EAP-PROM-002"] },
+    () => {
     const request: PromotionRequest = {
       childId: childHorizon.id,
       parentId: "horizon-other-99",
@@ -44,9 +49,14 @@ describe("One-Edge Promotion (Task 06)", () => {
       expect(result.refusalCode).toBe("HORIZON_SKIP")
     }
     expect(service.getProposalsForParent("horizon-other-99")).toHaveLength(0)
-  })
+    },
+  )
 
-  it("returns STALE_BASE when basedOnSeq precedes current applicable Sequence", () => {
+  annotatedTest(
+    "returns STALE_BASE when basedOnSeq precedes current applicable Sequence",
+    // The normative stale refusal, and no knowledge transferred (no proposal in the parent).
+    { asserts: ["EAP-PROM-003"] },
+    () => {
     const request: PromotionRequest = {
       childId: childHorizon.id,
       parentId: parentHorizon.id,
@@ -60,9 +70,16 @@ describe("One-Edge Promotion (Task 06)", () => {
       expect(result.refusalCode).toBe("STALE_BASE")
     }
     expect(service.getProposalsForParent(parentHorizon.id)).toHaveLength(0)
-  })
+    },
+  )
 
-  it("creates a parent proposal in proposed status when Promotion succeeds", () => {
+  annotatedTest(
+    "creates a parent proposal in proposed status when Promotion succeeds",
+    // EAP-PROM-001 also requires "without inherited admission or Relative Authority". This case
+    // shows the parent proposal exists in `proposed` status; the non-inheritance clause is asserted
+    // by f001-transport-delegation's "a candidate that has not reached VERIFIED..." case.
+    { coversPartially: ["EAP-PROM-001"] },
+    () => {
     const request: PromotionRequest = {
       childId: childHorizon.id,
       parentId: parentHorizon.id,
@@ -76,5 +93,6 @@ describe("One-Edge Promotion (Task 06)", () => {
       expect(result.proposal.status).toBe("proposed")
       expect(service.getProposalsForParent(parentHorizon.id).map((p) => p.id)).toContain(result.proposal.id)
     }
-  })
+    },
+  )
 })

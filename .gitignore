@@ -9,3 +9,8 @@ test-results/
 playwright-report/
 .graph-dev-state/
 .tmp-*/
+
+# F002 — per-run verification artefacts (annotation sink, suite verdicts). Ephemeral, uploaded as
+# CI artifacts, never committed. The committed counterpart is `docs/verification/`, which this
+# pattern must NOT match: the leading dot makes it a different directory name.
+.verification/

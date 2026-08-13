@@ -1,8 +1,20 @@
-import { expect, test } from "bun:test"
+import { expect } from "bun:test"
 import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register } from "./helpers"
+import { annotatedTest } from "./verification/annotate"
 
-test("cognitive.initiate creates horizon and returns admitted outcome or typed refusal for invalid parent", async () => {
+annotatedTest(
+  "cognitive.initiate creates horizon and returns admitted outcome or typed refusal for invalid parent",
+  {
+    // EAP-XPRT-001: a valid `initiate` returns the admitted outcome through the MCP Cognitive
+    // Binding, and the transport adds no policy of its own.
+    asserts: ["EAP-XPRT-001"],
+    // Each of these is touched as one step of that flow: the host-side InitiateHorizon service
+    // (SVCS-003, whose seedRef/budgetRef payload is not inspected), the malformed-contract refusal
+    // (ERRP-002) and the absent-parent outcome (ERRP-003, whose cross-tenant clause is elsewhere).
+    coversPartially: ["EAP-SVCS-003", "EAP-ERRP-002", "EAP-ERRP-003"],
+  },
+  async () => {
   const s = startServer()
   try {
     const a = await register(s.url, "alice")
@@ -42,9 +54,19 @@ test("cognitive.initiate creates horizon and returns admitted outcome or typed r
   } finally {
     s.stop()
   }
-})
+  },
+)
 
-test("cognitive.propose enforces epistemic lifecycle sequence and refuses direct persistence bypass", async () => {
+annotatedTest(
+  "cognitive.propose enforces epistemic lifecycle sequence and refuses direct persistence bypass",
+  {
+    // Four scenarios each touched as one step: the out-of-order refusal (LIFE-002) and the boundary
+    // command refusal (LIFE-003) are observed at the transport rather than on the aggregate and the
+    // resulting STATE is not read back; ERRP-001's "no mutation occurs" and XPRT-002's client
+    // obligation are likewise not inspected.
+    coversPartially: ["EAP-LIFE-002", "EAP-LIFE-003", "EAP-ERRP-001", "EAP-XPRT-002"],
+  },
+  async () => {
   const s = startServer()
   try {
     const a = await register(s.url, "alice")
@@ -101,9 +123,16 @@ test("cognitive.propose enforces epistemic lifecycle sequence and refuses direct
   } finally {
     s.stop()
   }
-})
+  },
+)
 
-test("cognitive.promote handles immediate parent edges and refuses HORIZON_SKIP", async () => {
+annotatedTest(
+  "cognitive.promote handles immediate parent edges and refuses HORIZON_SKIP",
+  // The transport-level view of PROM-001 and PROM-002. Neither the non-inheritance clause nor the
+  // absence of a stored parent proposal after the skip is checked here; promotion.test.ts and
+  // f001-transport-delegation carry the `asserts` links.
+  { coversPartially: ["EAP-PROM-001", "EAP-PROM-002"] },
+  async () => {
   const s = startServer()
   try {
     const a = await register(s.url, "alice")
@@ -133,9 +162,16 @@ test("cognitive.promote handles immediate parent edges and refuses HORIZON_SKIP"
   } finally {
     s.stop()
   }
-})
+  },
+)
 
-test("cognitive.contest and cognitive.recall enforce evidence-backed contestation and invalidating severity", async () => {
+annotatedTest(
+  "cognitive.contest and cognitive.recall enforce evidence-backed contestation and invalidating severity",
+  // The evidence refusal (SVCS-007), the informative-contestation recall refusal (RECL-002) and the
+  // admitted-contestation path (SVCS-006) are each one step of this flow; none of their durable
+  // "and nothing was written / nothing was edited" clauses is inspected.
+  { coversPartially: ["EAP-SVCS-006", "EAP-SVCS-007", "EAP-RECL-002"] },
+  async () => {
   const s = startServer()
   try {
     const a = await register(s.url, "alice")
@@ -184,4 +220,5 @@ test("cognitive.contest and cognitive.recall enforce evidence-backed contestatio
   } finally {
     s.stop()
   }
-})
+  },
+)

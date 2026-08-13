@@ -17,9 +17,9 @@
 | F002 | 02 | open-graph-mcp | Unify Local and CI Verification Entrypoint | cognitive_line_test_automation | - | COMPLETED |
 | F002 | 03 | open-graph-mcp | Define Scenario Identifier Scheme and Seed the Scenario Register | cognitive_line_test_automation | - | COMPLETED |
 | F002 | 04 | open-graph-mcp | Record the Seven Quarantined Ambiguity Families | cognitive_line_test_automation | - | COMPLETED |
-| F002 | 05 | open-graph-mcp | Implement the Discharge Annotation Surface | cognitive_line_test_automation | IMPLEMENTATION | IN_PROGRESS |
-| F002 | 06 | open-graph-mcp | Annotate the Existing EAP Corpus | cognitive_line_test_automation | - | NOT_STARTED |
-| F002 | 07 | open-graph-mcp | Build the Bidirectional Traceability Map | cognitive_line_test_automation | - | NOT_STARTED |
+| F002 | 05 | open-graph-mcp | Implement the Discharge Annotation Surface | cognitive_line_test_automation | - | COMPLETED |
+| F002 | 06 | open-graph-mcp | Annotate the Existing EAP Corpus | cognitive_line_test_automation | - | COMPLETED |
+| F002 | 07 | open-graph-mcp | Build the Bidirectional Traceability Map | cognitive_line_test_automation | IMPLEMENTATION | IN_PROGRESS |
 | F002 | 08 | open-graph-mcp | Add the Quarantine Violation Gate | cognitive_line_test_automation | - | NOT_STARTED |
 | F002 | 09 | open-graph-mcp | Derive Scenario Status From Evidence | cognitive_line_test_automation | - | NOT_STARTED |
 | F002 | 10 | open-graph-mcp | Transcribe Apendice D Into a Conformance Manifest | cognitive_line_test_automation | - | NOT_STARTED |

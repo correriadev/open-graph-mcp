@@ -9,12 +9,26 @@
  * Invariants whose expected outcome the ADR explicitly defers are listed as EXCLUSIONS at the end
  * rather than silently decided here (tactical design §"Explicitly Deferred Decisions").
  */
-import { expect, test } from "bun:test"
+import { expect } from "bun:test"
 import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register } from "./helpers"
 import { REFUSAL_CODES, CLIENT_OBLIGATIONS, type RefusalCode } from "@open-graph-mcp/graph-core/eap/refusals"
+import { annotatedTest } from "./verification/annotate"
 
-test("INV-02 — the refusal taxonomy is closed and every code carries a client obligation", () => {
+/**
+ * F002 task 05 — worked example of the Discharge Annotation Surface. Each case below declares, as
+ * data, the Scenario Identifiers it discharges. No assertion in this file was added, removed, or
+ * weakened by the annotation: the file's `AssertionFingerprint` is unchanged
+ * (`c2efa33febcaf17eba7620d1456ceae8f8a2cb981384a94bc0c74c6a869c8c61`, 41 assertions).
+ */
+
+annotatedTest(
+  "INV-02 — the refusal taxonomy is closed and every code carries a client obligation",
+  // The closed vocabulary plus a client obligation per code is EAP-VOBJ-009's subject; covered in
+  // part, because the register's scenario is about REJECTING a code with no obligation, which this
+  // case observes only through the absence of an unlisted code.
+  { coversPartially: ["EAP-VOBJ-009"] },
+  () => {
   expect(REFUSAL_CODES.length).toBeGreaterThan(0)
   for (const code of REFUSAL_CODES) {
     const obligation = CLIENT_OBLIGATIONS[code as RefusalCode]
@@ -23,9 +37,26 @@ test("INV-02 — the refusal taxonomy is closed and every code carries a client 
   }
   // Closed: an unlisted code has no obligation, so it cannot be constructed as a protocol refusal.
   expect((CLIENT_OBLIGATIONS as Record<string, string>)["NOT_A_REAL_CODE"]).toBeUndefined()
-})
+  },
+)
 
-test("Host conformance profile: lifecycle, promotion, contestation, recall and authority boundaries", async () => {
+annotatedTest(
+  "Host conformance profile: lifecycle, promotion, contestation, recall and authority boundaries",
+  {
+    // The end-to-end governed flow from Horizon initiation through parent proposal.
+    asserts: ["EAP-FUNC-001"],
+    // Each of these is exercised here as one step of that flow, not as its own focused case.
+    coversPartially: [
+      "EAP-LIFE-002",
+      "EAP-LIFE-003",
+      "EAP-HRZN-002",
+      "EAP-PROM-002",
+      "EAP-RECL-002",
+      "EAP-ERRP-002",
+      "EAP-ERRP-003",
+    ],
+  },
+  async () => {
   const s = startServer()
   try {
     const a = await register(s.url, "alice")
@@ -193,13 +224,21 @@ test("Host conformance profile: lifecycle, promotion, contestation, recall and a
   } finally {
     s.stop()
   }
-})
+  },
+)
 
 /**
  * Reported EXCLUSIONS — not verified here because the ADR has not decided the expected outcome.
  * Listing them keeps the conformance verdict honest instead of letting a test invent the answer.
  */
-test("Host conformance profile reports deferred ADR questions as exclusions, not verdicts", () => {
+annotatedTest(
+  "Host conformance profile reports deferred ADR questions as exclusions, not verdicts",
+  // Reporting conformance without granting authority. Deliberately NOT annotated with any
+  // EAP-QUAR-00n identifier: this case asserts that six deferred questions stay unanswered — it
+  // discharges none of them, and a QUAR annotation here would be exactly the silent decision the
+  // Ambiguity Quarantine exists to prevent.
+  { coversPartially: ["EAP-SVCS-010"] },
+  () => {
   const exclusions = [
     "Topology change while a promotion is in flight",
     "Destination status of indirect dependents in a recall cascade",
@@ -211,4 +250,5 @@ test("Host conformance profile reports deferred ADR questions as exclusions, not
   expect(exclusions.length).toBe(6)
   // The assertion that matters: none of these is claimed as verified anywhere in this profile.
   expect(exclusions.every((e) => typeof e === "string" && e.length > 0)).toBe(true)
-})
+  },
+)
