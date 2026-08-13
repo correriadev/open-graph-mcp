@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedBy": "scripts/verification/conformance-report.ts (F002 task 10)",
-  "policy": "Transcription of Apêndice D of the OpenGraph Working Paper v1.0 — the EAP conformance checklist — one item per semicolon-delimited clause. `clause` is the Working Paper's own Portuguese, VERBATIM: no item is reworded, translated in place, or reinterpreted, and `scripts/verification/conformance-report.ts --check` fails if a single `clause` is not literally present in the pinned section. Any English is confined to `restatementEn` and nothing binds to it. Every item carries an evidence predicate stated over the HOST's own records — audit trail, request log, egress log, or wire response — because ADR-0007 rejected certification by self-declaration and ADR-0021 governs: verification by host log, never self-report. Roles follow ADR-0007: L0-L1 certify clients (agents), L2-L4 certify hosts; no agent certifies as a host. `claim.state` records what this repository claims today, per item, with `claim.evidenceRefs` naming the file:line behind it; it is NOT an assessment result — task 11 runs the checklist against real transport and attributes items to test cases.",
+  "policy": "Transcription of Apêndice D of the OpenGraph Working Paper v1.0 — the EAP conformance checklist — one item per semicolon-delimited clause. `clause` is the Working Paper's own Portuguese, VERBATIM: no item is reworded, translated in place, or reinterpreted, and `scripts/verification/conformance-report.ts --check` fails if a single `clause` is not literally present in the pinned section. Any English is confined to `restatementEn` and nothing binds to it. Every item carries an evidence predicate stated over the HOST's own records — audit trail, request log, egress log, or wire response — because ADR-0007 rejected certification by self-declaration and ADR-0021 governs: verification by host log, never self-report. Roles follow ADR-0007: L0-L1 certify clients (agents), L2-L4 certify hosts; no agent certifies as a host. `claim.state` records what this repository claims today, per item, with `claim.evidenceRefs` naming the file:line behind it; it is NOT an assessment result — Task 11 RAN the checklist against real transport: `claimed` rows are attributed to an annotated test case that observes the clause in a host record, `demoted` rows were claimed and then refuted by that run and carry a `claim.assessment` naming the predicate limb no host record could answer, and `not-yet-claimed` rows were never claimed. `demoted` and `not-yet-claimed` are both declared exclusions and are never merged; client (L0-L1) and host (L2-L3) verdicts are reported independently and never summed.",
   "source": {
     "path": "docs/PRD/OpenGraph_Working_Paper_v1_0.md",
     "heading": "## Apêndice D",
@@ -91,11 +91,17 @@
         "predicate": "In a session where the host emitted both a taxonomy refusal envelope and a transport-level error, the host's request log shows the transport error followed by a retry of the same request, and the refusal followed by either no retry or a request that differs from the refused one; a byte-identical retry of a refused request is the observable failure."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Refusals leave a coded envelope on the wire distinct from transport faults, so the two are separable in the log.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. The host log DOES separate the two shapes — an EAP refusal is recorded as `ok:true` with `verdict:\"refused\"`, a transport-level failure as `ok:false` with an `error` — but the clause constrains what the CLIENT does next, and no client in this repository issues a follow-up request after either outcome.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/refusals.ts:7"
-        ]
+          "packages/mcp-server/src/index.ts:275",
+          "packages/client/src/eap.ts:238"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "Drove a real host with logging on and read `<stateDir>/server.log`: refusals and transport errors are distinguishable rows. No deliberately injected transport-fault harness exists, and `ExternalAgentClientAdapter.handleRefusal` returns advice (`actionRequired`, `recommendation`, `canAutoRetry`) without issuing any request — pinned by packages/client/test/eap-conformance.test.ts.",
+          "unobservableLimb": "\"the host's request log shows the transport error followed by a retry of the same request, and the refusal followed by either no retry or a request that differs from the refused one\" — no client in the corpus issues a request in response to either, so neither a retry nor its absence appears in any host log."
+        }
       }
     },
     {
@@ -116,11 +122,17 @@
         "predicate": "Across two horizons in one host log, no request scoped to horizon H2 carries a sequence, anchor or authority reference the host only ever returned under horizon H1; where one does, the audit records `HORIZON_SKIP` or `AUTHORITY_REF_INVALID` rather than an admission."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Horizon scoping is enforced at the host boundary and both codes exist in the closed taxonomy.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. Horizon scoping is enforced and refused on the wire, but the audit records no refusal row, so only half of the predicate is readable.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/refusals.ts:13"
-        ]
+          "packages/mcp-server/src/tools/eap.ts:602",
+          "packages/mcp-server/src/tools/eap.ts:740"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "Built two horizons over real transport and issued a promotion referencing a horizon outside the declared edge. The wire answered `HORIZON_SKIP`; `graph://history` gained no row whatsoever. This host's audit log records ADMISSIONS ONLY. The complete set of EAP rows it ever writes is `PromotionProposed`, `KnowledgeContested` and `RecallProgressed`; no refusal, and no candidate payload, is ever appended.",
+          "unobservableLimb": "\"the audit records `HORIZON_SKIP` or `AUTHORITY_REF_INVALID` rather than an admission\" — only the ABSENCE of an admission is observable. The affirmative refusal row the predicate names does not exist."
+        }
       }
     },
     {
@@ -141,11 +153,17 @@
         "predicate": "Every write attributed to the certified client in the host's audit appears as a staging submission; any direct-edit attempt from that client appears in the audit only as a `DIRECT_EDIT_FORBIDDEN` refusal row and never as a mutation row."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Single Admission Gate with `DIRECT_EDIT_FORBIDDEN` is in the closed taxonomy and audited.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. `cognitive.propose` — the entire staging path — writes nothing to the host audit, so neither limb of the predicate has rows to quantify over.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/refusals.ts:25"
-        ]
+          "packages/mcp-server/src/tools/eap.ts:1043",
+          "packages/mcp-server/src/tools/eap.ts:602"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "Drove staging submissions and a direct-edit attempt over real transport. The direct edit was refused `DIRECT_EDIT_FORBIDDEN` on the wire and the staging submissions succeeded, and `graph://history` recorded neither. This host's audit log records ADMISSIONS ONLY. The complete set of EAP rows it ever writes is `PromotionProposed`, `KnowledgeContested` and `RecallProgressed`; no refusal, and no candidate payload, is ever appended.",
+          "unobservableLimb": "both limbs: \"Every write attributed to the certified client in the host's audit appears as a staging submission\" quantifies over rows that are never written, and \"appears in the audit only as a `DIRECT_EDIT_FORBIDDEN` refusal row\" names a row the host never writes."
+        }
       }
     },
     {
@@ -166,11 +184,17 @@
         "predicate": "For each changeset identifier appearing in the host audit, the recorded rows form the full open-to-verdict cycle in order; a changeset identifier that ends the session with no verdict row, or whose rows skip a step, fails this item."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Lifecycle transitions are refused out of order and each transition is audited.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment, with a referent ambiguity recorded. The host DOES audit a full open-to-verdict cycle — but for the GRAPH changeset subsystem (`changeset.opened` then `changeset.committed`/`changeset.aborted`), not for the EAP epistemic ladder a client certified at L1 actually drives.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/lifecycle.ts:1"
-        ]
+          "packages/mcp-server/src/tools/changeset.ts:212",
+          "packages/mcp-server/src/tools/eap.ts:1043"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "The EAP ladder (`cognitive.propose` DELIBERATE → ADMIT → CONCRETIZE → VERIFY) was driven end to end over real transport and produced no audit row at any rung. The `changeset.*` tools do produce a complete audited cycle, but they are a different surface from the one Apêndice D L1 certifies. Discharging an EAP L1 clause with evidence from the graph changeset subsystem would be conflation, so it was not done.",
+          "unobservableLimb": "\"For each changeset identifier appearing in the host audit, the recorded rows form the full open-to-verdict cycle in order\" — no EAP changeset identifier appears in the host audit at all. Which of the two subsystems the Working Paper's `ciclo de changeset` names is unresolved and is reported as a finding rather than decided here."
+        }
       }
     },
     {
@@ -191,11 +215,16 @@
         "predicate": "Every candidate payload recorded in the host's admission audit carries a non-empty anchor and a provenance block containing `derivation`; rows missing either exist only paired with an `ANCHOR_NOT_FOUND` or `PROVENANCE_MISSING` refusal and never with an admission."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Both codes are in the closed taxonomy and the admission gate audits the payload it judged.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. The host records no candidate payload in any audit row, so the anchor and the `derivation` block are outside every host record an assessor can read.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/refusals.ts:8"
-        ]
+          "packages/mcp-server/src/tools/eap.ts:1043"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "Submitted candidates through the full admission path over real transport and re-read `graph://history`: no row carries a candidate payload, an anchor, or a provenance block. This host's audit log records ADMISSIONS ONLY. The complete set of EAP rows it ever writes is `PromotionProposed`, `KnowledgeContested` and `RecallProgressed`; no refusal, and no candidate payload, is ever appended.",
+          "unobservableLimb": "\"Every candidate payload recorded in the host's admission audit carries a non-empty anchor and a provenance block containing `derivation`\" — the quantifier ranges over an empty set, and an empty set satisfies it vacuously rather than evidentially."
+        }
       }
     },
     {
@@ -237,11 +266,17 @@
         "predicate": "After each refusal envelope in the host's log, the client's next request against the same target differs from the refused one in the field the refusal's stated obligation names; a byte-identical resubmission following a refusal is the observable failure."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Every code maps to a published obligation, so the expected next request is determined by the refusal.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment, confirming what task 10 recorded from source: the `exibe código e razões` limb is client-side display and is invisible to a host log by nature, and the non-blind-resubmission limb is never exercised because this client never resubmits.",
         "evidenceRefs": [
+          "packages/client/src/eap.ts:238",
           "packages/graph-core/src/eap/refusals.ts:37"
-        ]
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "`ExternalAgentClientAdapter.handleRefusal` terminates in a returned advice object and issues no request; an adapter wired to a recording transport made zero calls in response to a refusal (pinned by packages/client/test/eap-conformance.test.ts). No host log can contain a follow-up that was never sent.",
+          "unobservableLimb": "\"the client's next request against the same target differs from the refused one in the field the refusal's stated obligation names\" — there is no next request. The display limb (`exibe código e razões`) is unobservable in a host log by nature and no predicate was faked for it."
+        }
       }
     },
     {
@@ -305,11 +340,17 @@
         "predicate": "A candidate whose anchor text is not byte-identical to its target produces an `ANCHOR_NOT_FOUND` audit row and no admitted row for that candidate; an admitted row for a non-matching anchor is the observable failure."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "`ANCHOR_NOT_FOUND` is in the closed taxonomy with a non-resubmit obligation.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. The EAP admission path over transport accepts no anchor to make non-matching, and the audit carries no refusal row to read if it did.",
         "evidenceRefs": [
+          "packages/mcp-server/src/tools/eap.ts:1043",
           "packages/graph-core/src/eap/refusals.ts:8"
-        ]
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "No field on the EAP tool surface carries anchor text, so a non-matching anchor cannot be submitted through the wire this assessment runs over. This host's audit log records ADMISSIONS ONLY. The complete set of EAP rows it ever writes is `PromotionProposed`, `KnowledgeContested` and `RecallProgressed`; no refusal, and no candidate payload, is ever appended.",
+          "unobservableLimb": "\"A candidate whose anchor text is not byte-identical to its target produces an `ANCHOR_NOT_FOUND` audit row\" — neither the submission nor the audit row is reachable over the EAP wire."
+        }
       }
     },
     {
@@ -329,11 +370,17 @@
         "predicate": "The audit contains no row granting β possession to a candidate whose recorded coverage was unbalanced; unbalanced submissions appear as `COVERAGE_UNBALANCED` refusals with the measured coverage on the row."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "`COVERAGE_UNBALANCED` is in the closed taxonomy with a complete-or-renounce obligation.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. Neither β possession nor a coverage measure reaches any host record.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/refusals.ts:9"
-        ]
+          "packages/graph-core/src/eap/refusals.ts:9",
+          "packages/mcp-server/src/tools/eap.ts:602"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "No row in `graph://history` grants or names β possession, and no coverage figure appears in any audit row or wire response on the EAP path. This host's audit log records ADMISSIONS ONLY. The complete set of EAP rows it ever writes is `PromotionProposed`, `KnowledgeContested` and `RecallProgressed`; no refusal, and no candidate payload, is ever appended.",
+          "unobservableLimb": "\"unbalanced submissions appear as `COVERAGE_UNBALANCED` refusals with the measured coverage on the row\" — there is no such row, and \"the audit contains no row granting β possession\" is satisfied only because the audit contains no possession rows at all."
+        }
       }
     },
     {
@@ -354,11 +401,17 @@
         "predicate": "Audit rows for drifted submissions carry a recorded drift measure alongside a graded outcome, and at least two distinct grades appear across a corpus spanning the drift range; a single accept/refuse split with no recorded measure fails this item."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Drift-adjacent refusals are coded and the gate records the measure it judged on rather than a bare verdict.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. Drift grade is published as a cell read model, not as a decision record attached to the submission that was judged.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/refusals.ts:16"
-        ]
+          "packages/mcp-server/src/resources.ts:406",
+          "packages/mcp-server/src/tools/eap.ts:602"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "Re-read `graph://history` after driving the admission path: no audit row carries a drift measure or a graded outcome. Drift grade is readable from `graph://cell/{cellKey}` as current cell state, which is not the per-submission record the predicate asks an assessor to read.",
+          "unobservableLimb": "\"Audit rows for drifted submissions carry a recorded drift measure alongside a graded outcome, and at least two distinct grades appear across a corpus spanning the drift range\" — no audit row carries a measure, so no grade distribution is readable from the audit."
+        }
       }
     },
     {
@@ -378,11 +431,17 @@
         "predicate": "For every ingress edge the host exposes — tool call, resource read, import — the audit records the cell key in canonical form; a non-canonical key appears only on a `CELL_KEY_NONCANONICAL` refusal row and never on a created-cell row."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "`CELL_KEY_NONCANONICAL` carries the obligation to normalise and never to create the cell under the new spelling.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. The predicate quantifies over three ingress edges and one of them — the resource read — produces no audit row at all.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/refusals.ts:10"
-        ]
+          "packages/mcp-server/src/resources.ts:341",
+          "packages/mcp-server/src/log.ts:118"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "The host's request log records a `resources/read` with the URI query string STRIPPED (a deliberate privacy rule), and the audit records no row for a resource read whatsoever, so no cell key in any form is attributable to that ingress edge.",
+          "unobservableLimb": "\"For every ingress edge the host exposes — tool call, resource read, import — the audit records the cell key in canonical form\" — the resource-read edge contributes no audit row, so the universal quantifier cannot be discharged."
+        }
       }
     },
     {
@@ -400,11 +459,17 @@
         "predicate": "During an admission decision the host's egress log records zero outbound network requests, and the same corpus reaches the same verdicts with egress denied; any outbound request between submission and verdict is the observable failure."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Admission is decided from local state and the persisted graph; no network call sits on the gate path.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment, confirming task 10's prediction. The host produces no egress log, and no denied-egress run exists.",
         "evidenceRefs": [
-          "packages/mcp-server/src/tools/eap.ts:1"
-        ]
+          "packages/mcp-server/src/log.ts:60",
+          "packages/mcp-server/src/log.ts:98"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "The host's `Logger` surface is exactly `boot`, `toolCall`, `resourceRead`, `fetchError` and `shutdown`. There is no egress record of any kind, and no harness that runs the corpus with egress denied. Absence of an observed outbound call is not the recorded zero the predicate demands.",
+          "unobservableLimb": "\"the host's egress log records zero outbound network requests, and the same corpus reaches the same verdicts with egress denied\" — the egress log does not exist, and the denied-egress run has never been performed."
+        }
       }
     },
     {
@@ -446,11 +511,17 @@
         "predicate": "A candidate whose `derivation` would close a cycle over already-admitted nodes produces a refusal row timestamped within the same admission decision and no admitted row; a cycle detected only by a later sweep, or an admitted row followed by a repair, fails this item."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "The closed taxonomy carries no cycle-specific code, so the refusal is contract-shaped; recorded as a finding.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. No `derivation` reaches the EAP admission path over the wire, and the closed taxonomy carries no cycle-specific code, so the decision the predicate reads is never made.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/refusals.ts:30"
-        ]
+          "packages/graph-core/src/eap/refusals.ts:30",
+          "packages/mcp-server/src/tools/eap.ts:1043"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "No field on the EAP tool surface carries a `derivation` edge, so a candidate that would close a cycle over already-admitted nodes cannot be submitted through the transport this assessment runs over. This host's audit log records ADMISSIONS ONLY. The complete set of EAP rows it ever writes is `PromotionProposed`, `KnowledgeContested` and `RecallProgressed`; no refusal, and no candidate payload, is ever appended.",
+          "unobservableLimb": "\"A candidate whose `derivation` would close a cycle over already-admitted nodes produces a refusal row timestamped within the same admission decision\" — neither the submission nor the refusal row is reachable."
+        }
       }
     },
     {
@@ -471,12 +542,17 @@
         "predicate": "Every horizon row in the host's state names at most one parent that already existed at its creation time, and the host log contains no row in which a horizon's parent was reassigned; a parent naming a descendant is the observable failure."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Horizon creation refuses an absent parent and the update path exposes no parent reassignment, so the recorded topology cannot close a cycle.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. Parent pre-existence is genuinely enforced and observable on the wire, but horizons appear in no audit row and no published resource, so the predicate's `every horizon row in the host's state` has no rows an assessor can read.",
         "evidenceRefs": [
           "packages/mcp-server/src/tools/eap.ts:157-163",
           "packages/mcp-server/src/eap/horizon-store.ts:124"
-        ]
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "`cognitive.initiate` with an unknown parent is refused `RESOURCE_ABSENT` on the wire — one limb, observed. But `cognitive.initiate` writes nothing to `graph://history` and no horizon read surface is published, so neither the parent of each horizon nor the absence of a reassignment row can be read out of any host record.",
+          "unobservableLimb": "\"Every horizon row in the host's state names at most one parent that already existed at its creation time, and the host log contains no row in which a horizon's parent was reassigned\" — there are no horizon rows in any readable host record, so both halves are vacuous rather than observed."
+        }
       }
     },
     {
@@ -642,12 +718,17 @@
         "predicate": "An invalidating contestation produces recall progress rows naming exactly the reverse-dependency closure of the target claim ids over the admitted graph; a claim reachable in that closure but absent from the recorded affected set, or one present that is not reachable, is the observable failure."
       },
       "claim": {
-        "state": "claimed",
-        "rationale": "Recall computes a reverse closure over the dependency graph, carries it on the recall case, and reports progress as audited events.",
+        "state": "demoted",
+        "rationale": "Demoted by assessment. The closure IS computed and IS proven elsewhere — but not by anything this assessment can run black-box, and over the EAP wire alone the observation cannot distinguish a closure from an echo of the target list.",
         "evidenceRefs": [
-          "packages/graph-core/src/eap/recall.ts:96-142",
-          "packages/mcp-server/src/tools/eap.ts:928"
-        ]
+          "packages/mcp-server/test/f001-retry7-closure-gate.test.ts:94",
+          "packages/mcp-server/src/eap/dependency-query.ts:37"
+        ],
+        "assessment": {
+          "assessedBy": "F002 task 11 — AssessConformance, run black-box over real transport",
+          "observation": "Drove an invalidating contestation and a recall over real transport: `RecallProgressed.affectedClaimIds` equalled the target list exactly, because the only corpus reachable through the EAP wire has no dependents. The multi-hop closure is genuinely proven in packages/mcp-server/test/f001-retry7-closure-gate.test.ts:94, but only with claims seeded by direct SQLite write, which is not the black-box run this assessment requires.",
+          "unobservableLimb": "\"recall progress rows naming exactly the reverse-dependency closure of the target claim ids over the admitted graph\" — with no dependents reachable over transport, `affectedClaimIds == targetClaimIds`, and the observation is consistent with the host echoing its input."
+        }
       }
     },
     {

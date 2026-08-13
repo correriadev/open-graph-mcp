@@ -1,0 +1,177 @@
+{
+  "task": 11,
+  "feature": "F002 cognitive_line_test_automation",
+  "title": "Execute Conformance Assessment Against the Manifest",
+  "status": "COMPLETE",
+  "branch": "f002-test-automation",
+
+  "filesChanged": [
+    {
+      "path": "scripts/verification/conformance-report.ts",
+      "change": "Added the AssessConformance engine: `assessConformance`, `assessmentViolations`, `renderAssessment`, `CONFORMANCE_ITEM_ID`, `parseAnnotationSink`, the `demoted` claim state and its required `ClaimAssessment` record. `main()` now reads the annotation sink, feeds acceptance-1 violations into task 10's `renderReport(manifest, violations)` seam, and prints the per-level per-role verdict."
+    },
+    {
+      "path": "scripts/verification/conformance-report.test.ts",
+      "change": "Extended with 24 tests covering the assessment engine and the three acceptance criteria. One existing test was REFINED (not weakened) and two new tests pin the guard it used to carry — see `refinedExistingTest`."
+    },
+    {
+      "path": "packages/mcp-server/test/eap-conformance.test.ts",
+      "change": "Added 5 black-box assessment cases driving a real MCP host over HTTP and observing the host's own request log, audit trail and wire responses. The pre-existing EAP-FUNC-001 binding and all 41 original assertions are untouched."
+    },
+    {
+      "path": "packages/client/test/eap-conformance.test.ts",
+      "change": "Added 1 case that pins the fact behind two client-role demotions: the adapter answers a refusal with advice and never issues the next request. Carries NO conformance items — it is the guard on the demotions, not evidence for them."
+    },
+    {
+      "path": "docs/verification/conformance-manifest.json",
+      "change": "14 items DEMOTED (claimed -> demoted) with a `claim.assessment` record each. No item promoted. No clause reworded. Source digest and line pins untouched."
+    },
+    {
+      "path": "docs/verification/traceability-map.json",
+      "change": "REGENERATED (derived artefact, not hand-edited)."
+    },
+    {
+      "path": "docs/product/DECISIONS.md",
+      "change": "10 findings appended (append-only)."
+    }
+  ],
+
+  "attributionChannelDecision": {
+    "chosen": "the existing `items[]` field of the Discharge Annotation (packages/mcp-server/test/verification/annotate.ts:83)",
+    "rejected": "reusing `asserts`/`coversPartially`, which are keyed to Scenario Register ids",
+    "justification": "`items[]` is already a separate field, is already excluded from `buildLinks` in reconcile-traceability.ts (only `record.scenarios` produces links), and is validated by nobody against the Scenario Register. Conformance Item Ids therefore cannot leak into the Traceability Map as scenario coverage. Belt and braces: `CONFORMANCE_ITEM_ID` is /^EAP-L[0-3]-\\d{3}$/ and the Scenario `IDENTIFIER` is /^EAP-[A-Z]+-\\d{3}$/; `L0`..`L3` contain a digit, so NEITHER regex can match the other's identifiers. An id in the wrong channel is reported as a violation rather than silently counted, and both directions are pinned by test.",
+    "sideEffectAccepted": "`recordIdentity` in reconcile-traceability.ts includes `record.items`, so adding items to an existing annotated case changes that record's identity. The stale sink was deleted and the suite re-run, as that script instructs."
+  },
+
+  "verdict": {
+    "policy": "Client and host verdicts are independent and are never merged into one pass rate (ADR-0007: L0-L1 certify clients, L2-L4 certify hosts). Declared exclusions are neither failures nor green.",
+    "byRole": {
+      "client": {
+        "levels": { "L0": { "total": 4, "discharged": 2, "undischarged": 0, "declaredExclusions": 2 },
+                    "L1": { "total": 5, "discharged": 1, "undischarged": 0, "declaredExclusions": 4 } },
+        "total": 9, "discharged": 3, "undischarged": 0, "declaredExclusions": 6
+      },
+      "host": {
+        "levels": { "L2": { "total": 9, "discharged": 3, "undischarged": 0, "declaredExclusions": 6 },
+                    "L3": { "total": 9, "discharged": 2, "undischarged": 0, "declaredExclusions": 7 } },
+        "total": 18, "discharged": 5, "undischarged": 0, "declaredExclusions": 13
+      }
+    },
+    "claimStateCounts": { "before": { "claimed": 22, "notYetClaimed": 5 }, "after": { "claimed": 8, "demoted": 14, "notYetClaimed": 5 } }
+  },
+
+  "discharged": [
+    { "itemId": "EAP-L0-001", "clause": "resolve resources", "testFile": "packages/mcp-server/test/eap-conformance.test.ts", "testName": "AssessConformance L0 — the host's request log records the client resolving resources and reading history/since", "observedIn": "host-request-log: `<stateDir>/server.log` carries a `resources/read` row per published URI, ok:true, no refusal verdict" },
+    { "itemId": "EAP-L0-002", "clause": "query e `history/since`", "testFile": "packages/mcp-server/test/eap-conformance.test.ts", "testName": "AssessConformance L0 — the host's request log records the client resolving resources and reading history/since", "observedIn": "host-request-log for the `graph.query` call and both history reads; the cursor-provenance limb on the wire response, because the request log strips the query string by design", "caveat": "observed across two host records rather than the one the manifest's `evidence.surface` names" },
+    { "itemId": "EAP-L1-004", "clause": "`based_on_seq` em toda proposta", "testFile": "packages/mcp-server/test/eap-conformance.test.ts", "testName": "AssessConformance L1 — the audit carries based_on_seq on the admitted proposal and nothing for the rebased one", "observedIn": "audit: the single `PromotionProposed` row carries `basedOnSeq`; wire: a client-supplied stale base is refused `STALE_BASE`; audit: the refused attempt left no row" },
+    { "itemId": "EAP-L2-001", "clause": "gate cego ao chamador (mesmo conteúdo ⇒ mesmo veredito sob N identidades)", "testFile": "packages/mcp-server/test/eap-conformance.test.ts", "testName": "AssessConformance L2 — same content under N identities reaches the same verdict and the same refusal code", "observedIn": "N=4 identities, one payload: identical wire verdict, refusal code and obligation; identical audit shape and identical `basedOnSeq`", "caveat": "identities are tenant-distinct by necessity; caller-blindness across identities WITHIN one tenant is not proven" },
+    { "itemId": "EAP-L2-002", "clause": "recusa com código da taxonomia", "testFile": "packages/mcp-server/test/eap-conformance.test.ts", "testName": "AssessConformance L2 — same content under N identities reaches the same verdict and the same refusal code", "observedIn": "wire-response: every refusal envelope carries a `code` from the closed `REFUSAL_CODES` union and its published obligation", "caveat": "the predicate's second limb ('every refusal row in the audit carries a code') is satisfied VACUOUSLY — there are no refusal rows" },
+    { "itemId": "EAP-L2-008", "clause": "audit separado do grafo", "testFile": "packages/mcp-server/test/eap-conformance.test.ts", "testName": "AssessConformance L2 — the audit survives a recall of the very claims it describes", "observedIn": "forced recall then audit re-read: `degradedClaims` moved the claims out of `admitted` while every earlier `graph://history` row naming those ids stayed byte-identical, and the recall APPENDED its progress row", "note": "refutes one of task 10's three referrals — the capability did not exist, and now does" },
+    { "itemId": "EAP-L3-005", "clause": "contestação por evento com três severidades", "testFile": "packages/mcp-server/test/eap-conformance.test.ts", "testName": "AssessConformance L3 — three contestation severities are audited, a fourth is refused, and promotion admits nothing", "observedIn": "audit: exactly three `KnowledgeContested` rows carrying informative/blocking/invalidating; wire: a fourth severity is refused `MALFORMED_CONTRACT` and left no row" },
+    { "itemId": "EAP-L3-006", "clause": "escalonamento sem promoção implícita", "testFile": "packages/mcp-server/test/eap-conformance.test.ts", "testName": "AssessConformance L3 — three contestation severities are audited, a fourth is refused, and promotion admits nothing", "observedIn": "audit: `PromotionProposed` carries no authority and no admission; wire: status `proposed`; and the promoted candidate arrived at the START of the parent's ladder — a VERIFY is refused ILLEGAL_TRANSITION while DELIBERATE is accepted, which inherited admission would invert" }
+  ],
+
+  "demoted": [
+    { "itemId": "EAP-L0-003", "clause": "distingue recusa de erro de transporte", "reason": "The host log DOES separate the two shapes (refusal = ok:true + verdict:'refused'; transport error = ok:false + error), but the clause constrains the CLIENT's next request and no client here issues one.", "unobservableLimb": "'the transport error followed by a retry ... and the refusal followed by either no retry or a request that differs'", "evidence": "packages/mcp-server/src/index.ts:275; packages/client/src/eap.ts:238; guard test in packages/client/test/eap-conformance.test.ts" },
+    { "itemId": "EAP-L0-004", "clause": "nunca trata resposta de um horizonte como autoritativa fora dele", "reason": "Cross-edge promotion is refused HORIZON_SKIP on the wire and `graph://history` gained no row at all.", "unobservableLimb": "'the audit records HORIZON_SKIP or AUTHORITY_REF_INVALID rather than an admission' — only the ABSENCE of an admission is readable", "evidence": "packages/mcp-server/src/tools/eap.ts:602,:740" },
+    { "itemId": "EAP-L1-001", "clause": "staging válido", "reason": "`cognitive.propose` — the entire staging path — writes nothing to the audit, so neither limb has rows to quantify over.", "unobservableLimb": "both: the staging-submission quantifier and the DIRECT_EDIT_FORBIDDEN refusal row", "evidence": "packages/mcp-server/src/tools/eap.ts:1043" },
+    { "itemId": "EAP-L1-002", "clause": "ciclo de changeset", "reason": "The host audits a full cycle for the GRAPH changeset subsystem, not for the EAP epistemic ladder an L1 client drives, which writes no rows at any rung. Discharging an EAP clause with another subsystem's evidence would be conflation.", "unobservableLimb": "'For each changeset identifier appearing in the host audit ...' — no EAP changeset identifier appears there", "evidence": "packages/mcp-server/src/tools/changeset.ts:212; packages/mcp-server/src/tools/eap.ts:1043", "openQuestion": "which subsystem the Working Paper's `ciclo de changeset` names is unresolved" },
+    { "itemId": "EAP-L1-003", "clause": "toda claim com âncora e proveniência (incluindo `derivation`)", "reason": "The host records no candidate payload in any audit row.", "unobservableLimb": "'Every candidate payload recorded in the host's admission audit ...' — the quantifier ranges over an empty set", "evidence": "packages/mcp-server/src/tools/eap.ts:1043" },
+    { "itemId": "EAP-L1-005", "clause": "recusa como resultado de primeira classe — exibe código e razões, cumpre a obrigação da taxonomia, não re-submete cegamente", "reason": "Confirms task 10 from source: the display limb is client-side and invisible to a host log by nature; the resubmission limb is never exercised because this client never resubmits.", "unobservableLimb": "'the client's next request ... differs from the refused one' — there is no next request", "evidence": "packages/client/src/eap.ts:238" },
+    { "itemId": "EAP-L2-003", "clause": "âncora verbatim com bloqueio duro", "reason": "No field on the EAP tool surface carries anchor text, so a non-matching anchor cannot be submitted over this transport; and the audit carries no refusal row if it could.", "unobservableLimb": "'produces an ANCHOR_NOT_FOUND audit row and no admitted row'", "evidence": "packages/mcp-server/src/tools/eap.ts:1043" },
+    { "itemId": "EAP-L2-004", "clause": "cobertura para posse β", "reason": "Neither β possession nor a coverage measure reaches any host record.", "unobservableLimb": "'COVERAGE_UNBALANCED refusals with the measured coverage on the row'", "evidence": "packages/graph-core/src/eap/refusals.ts:9" },
+    { "itemId": "EAP-L2-005", "clause": "drift graduado", "reason": "Drift grade is published as a cell read model, not as a decision record attached to the submission judged.", "unobservableLimb": "'Audit rows for drifted submissions carry a recorded drift measure alongside a graded outcome'", "evidence": "packages/mcp-server/src/resources.ts:406" },
+    { "itemId": "EAP-L2-006", "clause": "forma canônica de célula em toda borda", "reason": "The predicate quantifies over three ingress edges and the resource-read edge produces no audit row at all; the request log strips the URI query string by design.", "unobservableLimb": "'For every ingress edge ... tool call, resource read, import ... the audit records the cell key in canonical form'", "evidence": "packages/mcp-server/src/resources.ts:341; packages/mcp-server/src/log.ts:118" },
+    { "itemId": "EAP-L2-007", "clause": "verificação 100% offline", "reason": "CONFIRMS task 10's referral. The host produces no egress log of any kind — the Logger surface is boot/toolCall/resourceRead/fetchError/shutdown — and no denied-egress run exists.", "unobservableLimb": "'the host's egress log records zero outbound network requests, and the same corpus reaches the same verdicts with egress denied'", "evidence": "packages/mcp-server/src/log.ts:60,:98" },
+    { "itemId": "EAP-L2-009", "clause": "aciclicidade do grafo de derivação na admissão", "reason": "No `derivation` reaches the EAP admission path over the wire, and the taxonomy has no cycle-specific code, so the decision the predicate reads is never made.", "unobservableLimb": "'A candidate whose derivation would close a cycle ... produces a refusal row'", "evidence": "packages/graph-core/src/eap/refusals.ts:30" },
+    { "itemId": "EAP-L3-001", "clause": "topologia declarada como DAG", "reason": "Parent pre-existence IS enforced and observable on the wire (RESOURCE_ABSENT), but horizons appear in no audit row and no published resource, so the predicate's horizon rows cannot be read by an assessor.", "unobservableLimb": "'Every horizon row in the host's state names at most one parent ... and the host log contains no row in which a horizon's parent was reassigned' — both halves vacuous", "evidence": "packages/mcp-server/src/tools/eap.ts:157-163" },
+    { "itemId": "EAP-L3-008", "clause": "cascata de recall com fechamento calculado sobre o grafo admitido", "reason": "The multi-hop closure IS proven at f001-retry7-closure-gate.test.ts:94 — but only with claims seeded by direct SQLite write. Over the EAP wire the only reachable corpus has no dependents, so affectedClaimIds == targetClaimIds and the observation cannot distinguish a closure from an echo.", "unobservableLimb": "'recall progress rows naming exactly the reverse-dependency closure'", "evidence": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts:94; packages/mcp-server/src/eap/dependency-query.ts:37" }
+  ],
+
+  "declaredExclusionsNotTouched": [
+    { "itemId": "EAP-L3-002", "state": "not-yet-claimed", "note": "no semantic profile field exists (task 10)" },
+    { "itemId": "EAP-L3-003", "state": "not-yet-claimed", "note": "2 of the 5 §7 rules enforced (task 10)" },
+    { "itemId": "EAP-L3-004", "state": "not-yet-claimed", "note": "CHANGE_READY exists nowhere in the shipped packages (task 10)" },
+    { "itemId": "EAP-L3-007", "state": "not-yet-claimed", "note": "budget ledger stored, never enforced (task 10)" },
+    { "itemId": "EAP-L3-009", "state": "not-yet-claimed", "note": "no propagation module or per-property observation (task 10)" }
+  ],
+
+  "predicatesThatCouldNotBeObserved": {
+    "systemicCause": "The host's audit log records ADMISSIONS ONLY. The complete set of EAP rows ever appended is PromotionProposed, KnowledgeContested and RecallProgressed. `cognitive.initiate` and `cognitive.propose` write nothing. Ten of the fourteen demotions reduce to this one fact.",
+    "secondaryCauses": [
+      "No egress log exists on the host (EAP-L2-007).",
+      "No client in the repository issues a request in response to a refusal (EAP-L0-003, EAP-L1-005).",
+      "No horizon read surface is published, so horizon state is unreadable by an assessor (EAP-L3-001).",
+      "The EAP tool surface carries no anchor and no derivation field, so those submissions cannot be made over transport (EAP-L2-003, EAP-L2-009).",
+      "No claim-dependency corpus is constructible over the EAP wire (EAP-L3-008)."
+    ],
+    "hostRequestLogGap": "index.ts:275 harvests `reasons` from a refused tool result, but an EAP refusal carries `refusal.code`. Every EAP refusal is therefore logged as `verdict:\"refused\", reasons:[]` — the fact of refusal without its taxonomy code."
+  },
+
+  "refinedExistingTest": {
+    "file": "scripts/verification/conformance-report.test.ts",
+    "was": "test(\"claims L0, L1 and L2 in full\") — asserted every L0/L1/L2 item is `claimed`",
+    "now": "test(\"keeps L0, L1 and L2 out of `not-yet-claimed`: a claim leaves only through a demotion\")",
+    "whyThisIsNotAWeakening": "Task 10's rule encoded a judgement made by READING SOURCE, which was the only evidence then available; task 11 refuted 14 of those claims against real transport and has demotion authority. The guard task 10 built is intact and separately pinned — an L0/L1/L2 item downgraded to `not-yet-claimed` is STILL a violation (validateManifest, and the untouched test \"catches an L2 item downgraded out of its full claim\"). The refined rule additionally REQUIRES every demotion to carry an assessment record, and two NEW tests pin that a demotion without one, and an assessment record on a still-claimed item, both fail the gate. Strictly more is enforced after this change than before it."
+  },
+
+  "traceabilityDelta": {
+    "links": { "old": 146, "new": 148 },
+    "asserts": { "old": 39, "new": 39 },
+    "coversPartially": { "old": 107, "new": 109 },
+    "unlinkedScenarios": { "old": 13, "new": 13 },
+    "annotationSinkDistinctRecords": { "old": 110, "new": 116 },
+    "corpusTestCases": { "old": 131, "new": 137 },
+    "cause": "Six new annotated test cases (5 host + 1 client). Two of them add a `covers-partially` link to EAP-SVCS-010, taking it from 1 to 3 covers-partially links. No `asserts` link was added anywhere.",
+    "deliberateNonPromotion": "EAP-SVCS-010 ('report conformance without granting authority when observable obligations are assessed') was NOT promoted to `asserts`. A test could have been added in packages/ purely to move that marker to `evidenced`, but the verdict logic lives in scripts/verification/ and is fully tested there; adding a redundant corpus test to move a marker is the marker-chasing this feature exists to abolish."
+  },
+
+  "derivedStatusDelta": {
+    "evidenced": { "old": 34, "new": 34 },
+    "coversPartiallyOnly": { "old": 24, "new": 24 },
+    "unlinked": { "old": 13, "new": 13 },
+    "declaredUntestable": { "old": 7, "new": 7 },
+    "note": "UNCHANGED. EAP-SVCS-010 was already covers-partially-only, and covers-partially never promotes at any multiplicity. docs/verification/scenario-status.md was not regenerated because nothing in it changed."
+  },
+
+  "verification": [
+    { "command": "bun run verify", "exit": 0, "result": "994 pass / 1 todo / 0 fail / 995 tests / 144 files. No known flakes hit on this run." },
+    { "command": "bun scripts/verification/conformance-report.ts --check", "exit": 0, "result": "27 items verbatim; client 3/9 and host 5/18 discharged, reported separately; 0 undischarged" },
+    { "command": "bun scripts/verification/reconcile-traceability.ts --check", "exit": 0, "result": "after regeneration; idempotent on re-run" },
+    { "command": "bun test --reporter=junit --reporter-outfile=.verification/junit.xml then bun scripts/verification/derive-status.ts --check", "exit": 0, "result": "34 evidenced / 24 covers-partially-only / 13 unlinked / 7 declared-untestable — baseline unchanged" },
+    { "command": "bun scripts/verification/quarantine-gate.ts", "exit": 0, "result": "7 families checked; no test case discharges a quarantined Scenario" },
+    { "command": "bun scripts/verification/assertion-fingerprint.ts --check", "exit": 0, "result": "7 files match the baseline (eap-conformance.test.ts is not fingerprinted)" }
+  ],
+
+  "tddEvidence": {
+    "red": "bun test scripts/verification/conformance-report.test.ts -> SyntaxError: Export named 'CONFORMANCE_ITEM_ID' not found. 0 pass / 1 fail.",
+    "greenEngine": "57 pass / 0 fail after implementing the engine, with one remaining failure ('backs every demotion with an assessment record') which was the RED for the manifest work.",
+    "greenManifest": "57 pass / 0 fail after applying the 14 demotions.",
+    "blackBox": "packages/mcp-server/test/eap-conformance.test.ts 8 pass / 0 fail; packages/client/test/eap-conformance.test.ts 2 pass / 0 fail."
+  },
+
+  "pendingCiGates": {
+    "supersedes": "task 10's note that conformance-report --check takes no ordering dependency",
+    "gates": [
+      { "gate": "bun scripts/verification/conformance-report.ts --check", "orderingDependency": "HARD — must run AFTER the suite IN THE SAME JOB. It now reads the git-ignored `.verification/annotations.jsonl` to attribute items to test cases. It does NOT need the junit reporter flags. With the sink absent it FAILS rather than reporting 22 undischarged claims against a run that never happened." },
+      { "gate": "bun scripts/verification/reconcile-traceability.ts --check", "orderingDependency": "HARD — after the suite, same job, junit reporter flags required (task 07)" },
+      { "gate": "bun scripts/verification/derive-status.ts --check", "orderingDependency": "HARD — after the suite, same job, junit reporter flags required (task 09)" },
+      { "gate": "bun scripts/verification/register-scenarios.ts --check", "orderingDependency": "none" },
+      { "gate": "bun scripts/verification/quarantine-gate.ts", "orderingDependency": "none (wired in ci.yml by task 08)" },
+      { "gate": "bun scripts/verification/assertion-fingerprint.ts --check", "orderingDependency": "none" }
+    ],
+    "oneChangeUnblocksThree": "`bun run verify` still does not pass `--reporter=junit --reporter-outfile=.verification/junit.xml`. Three gates now depend on that single change to package.json."
+  },
+
+  "foundButNotOwned": [
+    { "finding": "The host's audit log records admissions and never refusals. Ten of fourteen demotions reduce to this. A refusal is visible on the wire and as `verdict:\"refused\"` in the request log, but is absent from the audit trail an EAP assessor is told to read.", "owner": "human architect — EAP behaviour, not test tooling", "severity": "high" },
+    { "finding": "index.ts:275 `toolVerdict` harvests `reasons` from a refused result, but EAP refusals carry `refusal.code`. Every EAP refusal is logged as `reasons:[]` — the fact of refusal without its code. A one-line fix would materially strengthen the host request log as a conformance surface.", "owner": "unowned; small and high-value", "severity": "medium" },
+    { "finding": "Two manifest items name an `evidence.surface` that cannot carry the limb they describe: EAP-L0-002's cursor limb (the request log strips the query string by design, log.ts:118) and EAP-L2-002's audit limb (vacuous — no refusal rows). Both discharge on genuine host records; the labels are wrong. Out of scope here: the manifest may only be modified to demote.", "owner": "a later manifest-correction task", "severity": "low" },
+    { "finding": "EAP-L1-002 referent ambiguity: `ciclo de changeset` may mean the graph changeset subsystem (audited, complete) or the EAP epistemic ladder (unaudited). Demoted rather than decided.", "owner": "human architect", "severity": "medium" },
+    { "finding": "Caller-blindness within a single tenant is unproven and may be unprovable by construction: two identities cannot submit identical content twice in one tenant, because the first submission moves the state the second is judged against.", "owner": "human architect — may need a clause reading, not a test", "severity": "medium" },
+    { "finding": "`scripts/verification/reconcile-traceability.ts` contains a literal NUL byte around offset 15679, which makes ripgrep treat it as binary. Pre-existing; not touched.", "owner": "unowned", "severity": "low" },
+    { "finding": "Task 10's task-05 header comment in packages/mcp-server/test/eap-conformance.test.ts records an AssertionFingerprint of 41 assertions for that file. That statement was about task 05's change and remains true of it, but the file now has 201 assertions. The file is not in the fingerprint baseline, so nothing broke.", "owner": "cosmetic", "severity": "low" }
+  ],
+
+  "honestSummary": "Apêndice D was claimed at 22 of 27 items from a reading of source. Assessed against real transport, 8 discharge. The gap is not mostly missing tests — it is missing host records: this host's audit log does not record refusals, and most of Apêndice D's evidence predicates are written over refusal rows. One of task 10's three referrals was refuted (EAP-L2-008 now discharges), two were confirmed, and the weakest claimed row (EAP-L2-001) now has a real four-identity test. No item was promoted. No clause was reworded. No existing test was weakened."
+}

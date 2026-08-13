@@ -14,11 +14,11 @@
     },
     "annotationSink": {
       "path": ".verification/annotations.jsonl",
-      "distinctRecords": 110
+      "distinctRecords": 116
     },
     "executedTests": {
       "path": ".verification/junit.xml",
-      "corpusTestCases": 131
+      "corpusTestCases": 137
     }
   },
   "corpus": {
@@ -47,8 +47,8 @@
       "packages/mcp-server/test/recall.test.ts"
     ],
     "fileCount": 21,
-    "testCaseCount": 131,
-    "annotatedTestCaseCount": 110,
+    "testCaseCount": 137,
+    "annotatedTestCaseCount": 116,
     "undeclaredCandidates": []
   },
   "counts": {
@@ -58,8 +58,8 @@
     "unclaimedTests": 21,
     "links": {
       "asserts": 39,
-      "coversPartially": 107,
-      "total": 146
+      "coversPartially": 109,
+      "total": 148
     }
   },
   "links": [
@@ -737,6 +737,18 @@
     },
     {
       "scenario": "EAP-SVCS-010",
+      "testFile": "packages/client/test/eap-conformance.test.ts",
+      "testName": "AssessConformance client — the adapter answers a refusal with advice and never issues the next request itself",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-SVCS-010",
+      "testFile": "packages/mcp-server/test/eap-conformance.test.ts",
+      "testName": "AssessConformance L0 — the host's request log records the client resolving resources and reading history/since",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-SVCS-010",
       "testFile": "packages/mcp-server/test/eap-conformance.test.ts",
       "testName": "Host conformance profile reports deferred ADR questions as exclusions, not verdicts",
       "kind": "covers-partially"
@@ -1262,7 +1274,7 @@
     {
       "id": "EAP-SVCS-010",
       "assertsLinks": 0,
-      "coversPartiallyLinks": 1,
+      "coversPartiallyLinks": 3,
       "coverage": "covers-partially-only"
     },
     {

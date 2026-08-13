@@ -63,8 +63,20 @@ export const ALL_LEVELS = ["L0", "L1", "L2", "L3", "L4"] as const
 export type ConformanceLevel = (typeof ALL_LEVELS)[number]
 export type ConformanceRole = "client" | "host"
 
-export const CLAIM_STATES = ["claimed", "not-yet-claimed"] as const
+/**
+ * `not-yet-claimed` and `demoted` are BOTH declared exclusions and are deliberately NOT the same
+ * state. `not-yet-claimed` means the claim was never made — task 10 read the source and found
+ * nothing to claim. `demoted` means the claim WAS made, task 11 ran the checklist against real
+ * transport, and no host record discharged it. Collapsing the two would destroy exactly the
+ * information an assessment produces, and would make "we never tried" indistinguishable from "we
+ * tried and it failed". A demotion therefore costs an evidence record (`ItemClaim.assessment`);
+ * `not-yet-claimed` costs nothing, which is why it is not an available exit from a claim.
+ */
+export const CLAIM_STATES = ["claimed", "not-yet-claimed", "demoted"] as const
 export type ClaimState = (typeof CLAIM_STATES)[number]
+
+/** Neither green nor a failure: reported, and reported as excluded (acceptance criterion 3). */
+export const DECLARED_EXCLUSION_STATES = ["not-yet-claimed", "demoted"] as const
 
 /** Where an assessor looks. Every one of these is a record the host produces, never the agent. */
 export const EVIDENCE_SURFACES = ["audit-log", "host-request-log", "wire-response", "host-egress-log"] as const
@@ -213,11 +225,27 @@ export interface EvidencePredicate {
   predicate: string
 }
 
+/**
+ * What an assessment run observed when it took a claim away. Required on `demoted` and forbidden
+ * everywhere else: a demotion is a finding, and a finding with no record of what was run and what
+ * the host's records failed to show is indistinguishable from giving up.
+ */
+export interface ClaimAssessment {
+  /** The assessment run that demoted the claim, e.g. `F002 task 11`. */
+  assessedBy: string
+  /** What was driven over real transport, and what the host's own records did and did not contain. */
+  observation: string
+  /** The limb of `evidence.predicate` that no host record could answer. */
+  unobservableLimb: string
+}
+
 export interface ItemClaim {
   state: ClaimState
   rationale: string
   /** `path:line` or `path:line-line` references behind the claim state. */
   evidenceRefs: string[]
+  /** Present iff `state` is `demoted`. */
+  assessment?: ClaimAssessment | null
 }
 
 export interface ConformanceItem {
@@ -450,15 +478,310 @@ export function validateManifest(
         if (!EVIDENCE_REF.test(ref)) add(`${where}: evidenceRef \`${ref}\` is not a \`path:line\` reference.`)
       }
     }
-    if (item.level !== "L3" && item.claim.state !== "claimed") {
+    // Task 10's guard, intact: `not-yet-claimed` is an L3 affordance. Task 11 added `demoted` as the
+    // ONLY other exit from a claim, and it is not a cheap one — see the `assessment` rule below.
+    if (item.level !== "L3" && item.claim.state === "not-yet-claimed") {
       add(
         `${where}: ${item.level} items are claimed in full — L0/L1 client items and every L2 host item. ` +
-          "A per-item claim state is an L3 affordance only.",
+          "A per-item `not-yet-claimed` is an L3 affordance only; a claim that an assessment " +
+          "refuted is `demoted` with an assessment record, which records that the claim was made " +
+          "and failed rather than erasing that it was ever made.",
+      )
+    }
+
+    // ── Demotion: a finding, and never free ──
+    const assessment = item.claim.assessment ?? null
+    if (item.claim.state === "demoted") {
+      if (assessment === null) {
+        add(
+          `${where}: claim.state \`demoted\` carries no \`assessment\`. A demotion is the recorded ` +
+            "outcome of a run; without what was driven and which predicate limb went unobserved it " +
+            "is indistinguishable from abandoning the item.",
+        )
+      } else {
+        for (const field of ["assessedBy", "observation", "unobservableLimb"] as const) {
+          if ((assessment[field] ?? "").trim().length === 0) {
+            add(`${where}: claim.assessment.${field} is empty.`)
+          }
+        }
+      }
+    } else if (assessment !== null) {
+      add(
+        `${where}: claim.state \`${item.claim.state}\` carries an \`assessment\` record. An ` +
+          "assessment record is the evidence behind a demotion and means nothing attached to a " +
+          "state that was not demoted.",
       )
     }
   }
 
   return violations
+}
+
+// ── AssessConformance (task 11) ───────────────────────────────────────────────────────────────
+
+/**
+ * A Conformance Item Id. DELIBERATELY not the Scenario Identifier shape (`EAP-<AREA>-<NNN>`, where
+ * `<AREA>` is letters only): the two identifier spaces name different things — a clause of Apêndice
+ * D versus a row of the Scenario Register — and share nothing but a prefix. `L0`..`L3` contain a
+ * digit, so no Conformance Item Id can be mistaken for a Scenario Identifier by either regex, and
+ * an annotation that puts one in the other's channel is named rather than silently counted.
+ */
+export const CONFORMANCE_ITEM_ID = /^EAP-L[0-3]-\d{3}$/
+
+/** The fields of a Discharge Annotation record this assessment reads. Nothing else is consulted. */
+export interface AnnotationRecordLike {
+  /** Repo-relative test file. */
+  file: string
+  /** The test case name, carried as data. Never parsed for identifiers. */
+  test: string
+  /** Conformance Item ids the case declares it discharges. */
+  items: readonly string[]
+}
+
+export const ITEM_VERDICTS = ["discharged", "undischarged", "declared-exclusion"] as const
+export type ItemVerdict = (typeof ITEM_VERDICTS)[number]
+
+/** File plus test name. A reference identifying only a suite or a file is not attribution. */
+export interface DischargingCase {
+  testFile: string
+  testName: string
+}
+
+export interface AssessedItem {
+  itemId: string
+  level: ConformanceLevel
+  role: ConformanceRole
+  claimState: ClaimState
+  verdict: ItemVerdict
+  dischargedBy: DischargingCase[]
+}
+
+export interface LevelTally {
+  level: ConformanceLevel
+  total: number
+  discharged: number
+  undischarged: number
+  declaredExclusions: number
+}
+
+export interface RoleAssessment {
+  role: ConformanceRole
+  levels: LevelTally[]
+  total: number
+  discharged: number
+  undischarged: number
+  declaredExclusions: number
+}
+
+export interface OffendingAnnotation {
+  itemId: string
+  testFile: string
+  testName: string
+}
+
+/**
+ * The result of running the checklist. There is **no field here that merges the two roles**, and
+ * that absence is load-bearing (acceptance criterion 2): ADR-0007 certifies clients at L0–L1 and
+ * hosts at L2–L4, so a single figure spanning both would be a number about nothing. `byRole` is a
+ * pair of independent verdicts and the renderer prints them under separate headings.
+ */
+export interface Assessment {
+  byRole: { client: RoleAssessment; host: RoleAssessment }
+  items: AssessedItem[]
+  /** Annotations naming a well-formed item id that is not in the manifest. */
+  unknownItemIds: OffendingAnnotation[]
+  /** Annotations whose "item id" is not a Conformance Item Id at all — usually a conflated Scenario. */
+  malformedItemIds: OffendingAnnotation[]
+}
+
+const isDeclaredExclusion = (state: ClaimState): boolean =>
+  (DECLARED_EXCLUSION_STATES as readonly string[]).includes(state)
+
+const caseOrder = (a: DischargingCase, b: DischargingCase): number =>
+  a.testFile.localeCompare(b.testFile) || a.testName.localeCompare(b.testName)
+
+/**
+ * Attributes each manifest item to the annotated test cases that discharge it.
+ *
+ * Pure: it takes the manifest and the annotation records and reads nothing from disk, so the gate's
+ * behaviour is pinned by fixtures rather than by whatever a concurrent test run happened to append.
+ *
+ * Two rules that look like details and are not:
+ *
+ *  - **An annotation cannot promote.** A test case naming a `not-yet-claimed` or `demoted` item
+ *    leaves it a declared exclusion. Promotion is not this assessment's authority, and a green row
+ *    conjured by an annotation would be a claim made by a test about itself.
+ *  - **A declared exclusion is never counted as a failure.** It is reported, in its own tally, and
+ *    it is never folded into the discharged count either.
+ */
+export function assessConformance(
+  manifest: ConformanceManifest,
+  records: readonly AnnotationRecordLike[],
+): Assessment {
+  const known = new Map(manifest.items.map((item) => [item.itemId, item]))
+  const byItem = new Map<string, Map<string, DischargingCase>>()
+  const unknownItemIds: OffendingAnnotation[] = []
+  const malformedItemIds: OffendingAnnotation[] = []
+  const seenOffence = new Set<string>()
+
+  for (const record of records) {
+    for (const itemId of record.items ?? []) {
+      const offence: OffendingAnnotation = { itemId, testFile: record.file, testName: record.test }
+      const offenceKey = `${itemId} ${record.file} ${record.test}`
+      if (!CONFORMANCE_ITEM_ID.test(itemId)) {
+        if (!seenOffence.has(offenceKey)) {
+          seenOffence.add(offenceKey)
+          malformedItemIds.push(offence)
+        }
+        continue
+      }
+      if (!known.has(itemId)) {
+        if (!seenOffence.has(offenceKey)) {
+          seenOffence.add(offenceKey)
+          unknownItemIds.push(offence)
+        }
+        continue
+      }
+      const cases = byItem.get(itemId) ?? new Map<string, DischargingCase>()
+      // The sink accumulates across runs; file plus test name is the identity of a discharging case.
+      cases.set(`${record.file} ${record.test}`, { testFile: record.file, testName: record.test })
+      byItem.set(itemId, cases)
+    }
+  }
+
+  const items: AssessedItem[] = manifest.items.map((item) => {
+    const dischargedBy = [...(byItem.get(item.itemId)?.values() ?? [])].sort(caseOrder)
+    const verdict: ItemVerdict = isDeclaredExclusion(item.claim.state)
+      ? "declared-exclusion"
+      : dischargedBy.length > 0
+        ? "discharged"
+        : "undischarged"
+    return {
+      itemId: item.itemId,
+      level: item.level,
+      role: item.role,
+      claimState: item.claim.state,
+      // An exclusion carries no attribution: naming it in a test does not make it evidence.
+      verdict,
+      dischargedBy: verdict === "declared-exclusion" ? [] : dischargedBy,
+    }
+  })
+
+  const tally = (role: ConformanceRole): RoleAssessment => {
+    const mine = items.filter((item) => item.role === role)
+    const levels: LevelTally[] = TRANSCRIBED_LEVELS.filter((level) => roleForLevel(level) === role).map(
+      (level) => {
+        const rows = mine.filter((item) => item.level === level)
+        return {
+          level,
+          total: rows.length,
+          discharged: rows.filter((item) => item.verdict === "discharged").length,
+          undischarged: rows.filter((item) => item.verdict === "undischarged").length,
+          declaredExclusions: rows.filter((item) => item.verdict === "declared-exclusion").length,
+        }
+      },
+    )
+    return {
+      role,
+      levels,
+      total: mine.length,
+      discharged: mine.filter((item) => item.verdict === "discharged").length,
+      undischarged: mine.filter((item) => item.verdict === "undischarged").length,
+      declaredExclusions: mine.filter((item) => item.verdict === "declared-exclusion").length,
+    }
+  }
+
+  return {
+    byRole: { client: tally("client"), host: tally("host") },
+    items,
+    unknownItemIds,
+    malformedItemIds,
+  }
+}
+
+/**
+ * Acceptance criterion 1, as a gate: a `claimed` item that no annotated test case discharges fails.
+ * Declared exclusions contribute nothing here — criterion 3 — so the only way to make this list
+ * shorter is to discharge the item or to demote it with evidence.
+ */
+export function assessmentViolations(assessment: Assessment): string[] {
+  const violations: string[] = []
+  for (const item of assessment.items) {
+    if (item.verdict !== "undischarged") continue
+    violations.push(
+      `${item.itemId} (${item.level}, ${item.role}) is \`claimed\` but no annotated test case ` +
+        "discharges it. Either attribute a test case that observes the clause in the host's own " +
+        "records, or demote the claim with an assessment record. A claim nothing discharges is " +
+        "exactly the self-declared conformance ADR-0007 rejected.",
+    )
+  }
+  for (const entry of assessment.malformedItemIds) {
+    violations.push(
+      `${entry.testFile} :: ${entry.testName} discharges "${entry.itemId}", which is not a ` +
+        "Conformance Item Id of the form EAP-L<0-3>-<NNN>. Scenario Identifiers and Conformance " +
+        "Item Ids are different identifier spaces and are not interchangeable.",
+    )
+  }
+  for (const entry of assessment.unknownItemIds) {
+    violations.push(
+      `${entry.testFile} :: ${entry.testName} discharges ${entry.itemId}, which the manifest does ` +
+        "not carry. The attribution points at no clause of Apêndice D.",
+    )
+  }
+  return violations
+}
+
+const ASSESSMENT_POLICY =
+  "AssessConformance (F002 task 11). The checklist run black-box over real transport; every item " +
+  "is attributed to the annotated test case that discharges it, or reported as undischarged or " +
+  "declared-excluded. Client (L0-L1) and host (L2-L3) verdicts are INDEPENDENT and are never " +
+  "merged into one pass rate: ADR-0007 certifies clients at L0-L1 and hosts at L2-L4, so a single " +
+  "figure across both would describe nothing. Declared exclusions are neither failures nor green."
+
+function renderRole(role: RoleAssessment): string[] {
+  const lines = [
+    `${role.role === "client" ? "CLIENT" : "HOST"} verdict — ${role.levels
+      .map((level) => level.level)
+      .join(", ")} (ADR-0007: no agent certifies as a host)`,
+    `  items ${role.total}   discharged ${role.discharged}   undischarged ${role.undischarged}   ` +
+      `declared exclusions ${role.declaredExclusions}`,
+  ]
+  for (const level of role.levels) {
+    lines.push(
+      `    ${level.level}  ${level.total} item(s): ${level.discharged} discharged, ` +
+        `${level.undischarged} undischarged, ${level.declaredExclusions} declared exclusion(s)`,
+    )
+  }
+  return lines
+}
+
+/** The per-level, per-role verdict. Two roles, two sections, and no figure spanning both. */
+export function renderAssessment(assessment: Assessment): string {
+  const lines: string[] = ["EAP Conformance Assessment — Apêndice D run against real transport", "", ASSESSMENT_POLICY, ""]
+  lines.push(...renderRole(assessment.byRole.client), "")
+  lines.push(...renderRole(assessment.byRole.host), "")
+
+  lines.push("Discharged items and the test case(s) that discharge them:")
+  const discharged = assessment.items.filter((item) => item.verdict === "discharged")
+  if (discharged.length === 0) lines.push("  (none)")
+  for (const item of discharged) {
+    lines.push(`  ${item.itemId} (${item.level}/${item.role})`)
+    for (const entry of item.dischargedBy) lines.push(`      ${entry.testFile} :: ${entry.testName}`)
+  }
+
+  lines.push("", "Declared exclusions — reported, never counted as failures and never as green:")
+  const exclusions = assessment.items.filter((item) => item.verdict === "declared-exclusion")
+  if (exclusions.length === 0) lines.push("  (none)")
+  for (const item of exclusions) {
+    lines.push(`  ${item.itemId} (${item.level}/${item.role})  ${item.claimState}`)
+  }
+
+  lines.push("", "Undischarged claims — claimed, and discharged by nothing:")
+  const undischarged = assessment.items.filter((item) => item.verdict === "undischarged")
+  if (undischarged.length === 0) lines.push("  (none)")
+  for (const item of undischarged) lines.push(`  ${item.itemId} (${item.level}/${item.role})`)
+
+  return lines.join("\n")
 }
 
 // ── Reporting ─────────────────────────────────────────────────────────────────────────────────
@@ -517,6 +840,37 @@ export function renderReport(manifest: ConformanceManifest, violations: readonly
 
 // ── Entry point ───────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The per-run Discharge Annotation sink (task 05), which is where a test case's declared Conformance
+ * Item ids arrive. Read here and never in the test file: `bun test` writes this while the suite is
+ * running, so only a process that starts AFTER a run can read it consistently.
+ */
+export const ANNOTATION_SINK_PATH = ".verification/annotations.jsonl"
+
+export function parseAnnotationSink(raw: string): AnnotationRecordLike[] {
+  const records: AnnotationRecordLike[] = []
+  const lines = raw.split(/\r?\n/)
+  for (const [index, line] of lines.entries()) {
+    const trimmed = line.trim()
+    if (trimmed.length === 0) continue
+    let parsed: { file?: unknown; test?: unknown; items?: unknown }
+    try {
+      parsed = JSON.parse(trimmed) as typeof parsed
+    } catch {
+      throw new Error(
+        `conformance: ${ANNOTATION_SINK_PATH} line ${index + 1} is not valid JSON. The sink is ` +
+          "append-only; a malformed line means a writer was interrupted mid-record.",
+      )
+    }
+    records.push({
+      file: String(parsed.file ?? "unknown"),
+      test: String(parsed.test ?? "unknown"),
+      items: Array.isArray(parsed.items) ? parsed.items.map(String) : [],
+    })
+  }
+  return records
+}
+
 function main(): number {
   const root = repoRoot()
   const check = process.argv.includes("--check")
@@ -530,15 +884,42 @@ function main(): number {
   const paper = readFileSync(join(root, ...WORKING_PAPER_PATH.split("/")), "utf8")
   const section = extractAppendixD(paper)
   const manifest = loadManifest(readFileSync(manifestFile, "utf8"))
-  const violations = validateManifest(manifest, section, loadRefusalTaxonomy(root))
+  const violations = [...validateManifest(manifest, section, loadRefusalTaxonomy(root))]
+
+  // ── The assessment ──
+  // "No discharging test was found" and "no run was looked at" must never be the same output, so an
+  // absent sink refuses rather than reporting 22 undischarged claims against a run that never
+  // happened. Same stance `derive-status.ts` takes toward the JUnit report.
+  const sinkFile = join(root, ...ANNOTATION_SINK_PATH.split("/"))
+  if (!existsSync(sinkFile)) {
+    console.log(renderReport(manifest, violations))
+    console.error(
+      `conformance: FAIL — ${ANNOTATION_SINK_PATH} does not exist, so no assessment was run. Run ` +
+        "`bun test` first: an empty sink and an unattributed checklist are different facts and this " +
+        "gate will not report one as the other.",
+    )
+    return 1
+  }
+
+  const assessment = assessConformance(manifest, parseAnnotationSink(readFileSync(sinkFile, "utf8")))
+  violations.push(...assessmentViolations(assessment))
 
   console.log(renderReport(manifest, violations))
+  console.log("")
+  console.log(renderAssessment(assessment))
 
   if (violations.length > 0) {
     console.error(`conformance: FAIL — ${violations.length} violation(s) in ${MANIFEST_PATH}.`)
     return 1
   }
-  if (check) console.log(`conformance: PASS — ${manifest.items.length} item(s) transcribed verbatim.`)
+  if (check) {
+    console.log(
+      `conformance: PASS — ${manifest.items.length} item(s) transcribed verbatim; ` +
+        `client ${assessment.byRole.client.discharged}/${assessment.byRole.client.total} and host ` +
+        `${assessment.byRole.host.discharged}/${assessment.byRole.host.total} discharged, reported ` +
+        "separately and never summed.",
+    )
+  }
   return 0
 }
 
