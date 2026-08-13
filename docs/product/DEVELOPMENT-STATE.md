@@ -20,8 +20,8 @@
 | F002 | 05 | open-graph-mcp | Implement the Discharge Annotation Surface | cognitive_line_test_automation | - | COMPLETED |
 | F002 | 06 | open-graph-mcp | Annotate the Existing EAP Corpus | cognitive_line_test_automation | - | COMPLETED |
 | F002 | 07 | open-graph-mcp | Build the Bidirectional Traceability Map | cognitive_line_test_automation | - | COMPLETED |
-| F002 | 08 | open-graph-mcp | Add the Quarantine Violation Gate | cognitive_line_test_automation | IMPLEMENTATION | IN_PROGRESS |
-| F002 | 09 | open-graph-mcp | Derive Scenario Status From Evidence | cognitive_line_test_automation | - | NOT_STARTED |
+| F002 | 08 | open-graph-mcp | Add the Quarantine Violation Gate | cognitive_line_test_automation | - | COMPLETED |
+| F002 | 09 | open-graph-mcp | Derive Scenario Status From Evidence | cognitive_line_test_automation | IMPLEMENTATION | IN_PROGRESS |
 | F002 | 10 | open-graph-mcp | Transcribe Apendice D Into a Conformance Manifest | cognitive_line_test_automation | - | NOT_STARTED |
 | F002 | 11 | open-graph-mcp | Execute Conformance Assessment Against the Manifest | cognitive_line_test_automation | - | NOT_STARTED |
 | F002 | 12 | open-graph-mcp | Implement the Assertion Fingerprint Tool | cognitive_line_test_automation | - | COMPLETED |

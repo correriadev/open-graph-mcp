@@ -21,6 +21,24 @@ jobs:
       # and `bun run verify` is that plus the task 01 typecheck gate. Do not "simplify" this back
       # to `bun test`: the indirection through the script IS the property being enforced.
       - run: bun run test
+      # F002 task 08 — Quarantine Violation Gate. BLOCKING BY DECISION, not by accident: no
+      # `continue-on-error`, no `if:` that could turn it advisory. A test case that discharges a
+      # Scenario inside one of the seven Quarantined Ambiguity families QA1-QA7 settles an open
+      # architectural question by fiat, and a green suite would record that decision nowhere.
+      #
+      # `!cancelled()` rather than the default: a RED suite must not be able to hide a quarantine
+      # violation. The step still fails the job when it fails — `!cancelled()` changes when it runs,
+      # never whether it blocks.
+      #
+      # Placed AFTER `bun run test` deliberately. The gate needs no run: it reads the committed
+      # docs/verification/traceability-map.json and statically scans the declared EAP Test Corpus,
+      # both of which a fresh clone has. Running it here additionally gives it the live
+      # .verification/annotations.jsonl sink from the suite above, which is strictly stronger and
+      # never weaker. It does NOT need the `--reporter=junit` flags task 07's map regeneration
+      # needs, so no step above has to change.
+      - name: Quarantine Violation Gate (blocking)
+        if: ${{ !cancelled() }}
+        run: bun scripts/verification/quarantine-gate.ts
       # Was `bunx tsc --noEmit` in packages/mcp-web, which resolved an unpinned TypeScript 7.0.2
       # from bunx's registry fallback (no `typescript` was declared at the repo root). F002 task 01
       # pinned typescript@5.8.2 at the root; this now runs THAT compiler. mcp-web has no frozen
