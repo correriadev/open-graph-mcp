@@ -1,0 +1,210 @@
+{
+  "feature": "F002 cognitive_line_test_automation",
+  "task": 10,
+  "title": "Transcribe Apêndice D Into a Conformance Manifest",
+  "status": "COMPLETE",
+  "branch": "f002-test-automation",
+  "filesChanged": [
+    {
+      "path": "docs/verification/conformance-manifest.json",
+      "change": "created",
+      "note": "schemaVersion 1; 27 items; pins sha256 6b50bc090c61c9a2bdbb6d1357b6984d9a0847eb36b2d372a53fe0de8f312bf4 of Apêndice D, lines 1164-1176"
+    },
+    {
+      "path": "scripts/verification/conformance-report.ts",
+      "change": "created",
+      "note": "loads, validates and reports the manifest; --check exit-code discipline; import.meta.main entry; all logic in exported pure functions"
+    },
+    {
+      "path": "scripts/verification/conformance-report.test.ts",
+      "change": "created",
+      "note": "33 tests, 638 expect() calls"
+    },
+    {
+      "path": "docs/product/DECISIONS.md",
+      "change": "appended (append-only)",
+      "note": "8 entries: completion, design, R9 verification verdict, further unclaimed L3 clauses, three findings, pendingCiGates extension"
+    },
+    {
+      "path": "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-10.json",
+      "change": "created",
+      "note": "this report"
+    }
+  ],
+  "filesNotTouched": [
+    "docs/PRD/OpenGraph_Working_Paper_v1_0.md",
+    "docs/adr/ADR.md",
+    "docs/specs/cognitive_line/**",
+    "packages/**",
+    "package.json",
+    ".github/**",
+    ".gitignore",
+    "every other file under docs/verification/ and scripts/verification/"
+  ],
+  "tdd": {
+    "red": "bun test scripts/verification/conformance-report.test.ts -> 0 pass, 1 fail, 1 error: Cannot find module './conformance-report'",
+    "green": "bun test scripts/verification/conformance-report.test.ts -> 33 pass, 0 fail, 638 expect() calls",
+    "note": "No existing test was weakened, skipped or deleted."
+  },
+  "verification": {
+    "bunRunVerify": {
+      "exitCode": 0,
+      "result": "964 pass / 1 todo / 0 fail / 965 tests across 144 files",
+      "flakeRun": "one earlier run showed 2 failures, both in packages/client/test/target-repo.test.ts (a 5s timeout and an ECONNRESET) — the pre-existing client-reconnection flakes named in the brief. Re-run clean twice; NOT masking any failure of this task's own."
+    },
+    "conformanceReportCheck": {
+      "command": "bun scripts/verification/conformance-report.ts --check",
+      "exitCode": 0,
+      "result": "conformance: PASS — 27 item(s) transcribed verbatim; Violations: none."
+    }
+  },
+  "itemCounts": {
+    "total": 27,
+    "byLevel": { "L0": 4, "L1": 5, "L2": 9, "L3": 9, "L4": 0 },
+    "byRole": { "client": 9, "host": 18 },
+    "byClaimState": { "claimed": 22, "not-yet-claimed": 5 },
+    "byLevelAndClaimState": {
+      "L0": { "claimed": 4, "not-yet-claimed": 0 },
+      "L1": { "claimed": 5, "not-yet-claimed": 0 },
+      "L2": { "claimed": 9, "not-yet-claimed": 0 },
+      "L3": { "claimed": 4, "not-yet-claimed": 5 }
+    },
+    "l4": "ABSENT by construction. The five L4 clauses at Working Paper line 1176 are transcribed by nothing; `excludedLevels` records the reason, and validateManifest fails if an L4 row is ever added.",
+    "graduation": {
+      "marker": "[E → G2]",
+      "graduated": false,
+      "recordedInManifest": true
+    }
+  },
+  "r9BudgetVerification": {
+    "itemId": "EAP-L3-007",
+    "clause": "budgets com R9",
+    "specClaim": "not-yet-claimed — the Horizon Budget Ledger is stored but never enforced and `HorizonBudgetExhausted` is never recorded",
+    "verdict": "CONFIRMED — the code agrees with the spec's claim. Verified independently rather than transcribed.",
+    "howVerified": "Grepped `HorizonBudgetExhausted`, `BUDGET_EXHAUSTED`, `budget`, `requestPromotion`, `new Horizon(` and `BudgetLedger` across packages/, then read the host promotion path end to end.",
+    "evidence": [
+      {
+        "ref": "packages/graph-core/src/eap/horizon.ts:79-85",
+        "finding": "`Horizon.requestPromotion` is the ONLY code that consumes budget and records `HorizonBudgetExhausted`: `if (this.budget.isExhausted() || !this.budget.consume(cost)) { this.recordEvent(\"HorizonBudgetExhausted\", ...); return { outcome: \"escalate\", reason: \"BUDGET_EXHAUSTED\" } }`."
+      },
+      {
+        "ref": "packages/graph-core/test/horizon.test.ts:31",
+        "finding": "`requestPromotion`, `new Horizon(` and `BudgetLedger` have NO caller anywhere outside this unit test. The host never constructs the aggregate, so the enforcement branch is unreachable in production."
+      },
+      {
+        "ref": "packages/mcp-server/src/tools/eap.ts:547",
+        "finding": "The host promotion tool calls `services.promotions.promote(...)` — no budget read, no consumption, no exhaustion branch on the path."
+      },
+      {
+        "ref": "packages/mcp-server/src/tools/eap.ts:152-153",
+        "finding": "`initiate` persists `budgetAllocated: args.budget?.limit ?? 100, budgetConsumed: 0` — the ledger is STORED at creation."
+      },
+      {
+        "ref": "packages/mcp-server/src/eap/horizon-store.ts:124-150",
+        "finding": "`update` accepts `budgetConsumed` only as an explicit caller argument and defaults to `current.budgetConsumed`; nothing on the promotion path passes it. The counter is persisted and never moves."
+      },
+      {
+        "ref": "packages/graph-core/src/eap/refusals.ts:24",
+        "finding": "`BUDGET_EXHAUSTED` IS in the closed taxonomy with the obligation \"escalonamento — nunca promoção\", and is emitted by nothing reachable from the wire."
+      }
+    ],
+    "conclusion": "Stored, never enforced. `HorizonBudgetExhausted` cannot appear in a host log and `BUDGET_EXHAUSTED` cannot appear on the wire. `not-yet-claimed` written down as the truth, not as the spec's number."
+  },
+  "otherUnclaimedItems": [
+    {
+      "itemId": "EAP-L3-002",
+      "clause": "horizontes com perfis semânticos (§19)",
+      "why": "The horizon record carries id, parent, state, seq and budget only — no semantic profile field on the store or on any EAP payload, so nothing in a host log distinguishes one profile from another.",
+      "evidence": ["packages/mcp-server/src/eap/horizon-store.ts:13-14"]
+    },
+    {
+      "itemId": "EAP-L3-003",
+      "clause": "`PromotionProposal` com as cinco regras da §7",
+      "why": "`promoteKnowledge` enforces exactly TWO of the five rules — immediate-parent targeting (HORIZON_SKIP) and base freshness (STALE_BASE) — then mints the proposal. Three rules have no distinguishable refusal on the promotion path.",
+      "evidence": ["packages/graph-core/src/eap/promotion.ts:70-86"]
+    },
+    {
+      "itemId": "EAP-L3-004",
+      "clause": "`CHANGE_READY` por predicado",
+      "why": "`CHANGE_READY` is named in the problem-space spec and appears NOWHERE in the shipped packages — no transition, event, refusal code or predicate evaluator carries the name. Nothing exists for a host log to record.",
+      "evidence": ["docs/specs/cognitive_line/001-problem-space.md:184"]
+    },
+    {
+      "itemId": "EAP-L3-009",
+      "clause": "propriedades de propagação da §11 verificáveis",
+      "why": "No propagation module, propagation event or per-property observation exists. Recall closure is the only propagation-adjacent record and it does not carry the §11 properties.",
+      "evidence": ["packages/graph-core/src/eap/recall.ts:142"]
+    }
+  ],
+  "clausesWithoutACleanHostLogPredicate": [
+    {
+      "itemId": "EAP-L2-007",
+      "clause": "verificação 100% offline",
+      "finding": "A host PROPERTY, not a per-request behaviour. The only honest observable is zero outbound requests on the host's EGRESS log between submission and verdict, which requires running the corpus under denied egress. A predicate was written (surface `host-egress-log`) but the assessment affordance does not exist today.",
+      "severity": "finding, not failure",
+      "referredTo": "task 11"
+    },
+    {
+      "itemId": "EAP-L2-008",
+      "clause": "audit separado do grafo",
+      "finding": "Also a property. Observable only as audit rows for recalled claim ids surviving a graph recall/rollback — a two-phase observation, not a single log row. Predicate written; the harness capability to force the recall and re-read the audit does not exist yet.",
+      "severity": "finding, not failure",
+      "referredTo": "task 11"
+    },
+    {
+      "itemId": "EAP-L2-009",
+      "clause": "aciclicidade do grafo de derivação na admissão",
+      "finding": "Given a host-log observable predicate (a refusal row timestamped inside the same admission decision, no admitted row), but the closed taxonomy has NO cycle-specific refusal code, so the item had to name `MALFORMED_CONTRACT`. The obligation that code carries is the wrong obligation for the situation.",
+      "severity": "finding, not failure",
+      "referredTo": "human architect / candidate ADR amendment"
+    },
+    {
+      "itemId": "EAP-L0-003",
+      "clause": "distingue recusa de erro de transporte",
+      "finding": "Observable only across a PAIR of log entries (a retried transport error next to a non-retried refusal), never from a single row. The predicate is sound but needs the assessment to inject a transport fault deliberately.",
+      "severity": "finding, not failure",
+      "referredTo": "task 11"
+    },
+    {
+      "itemId": "EAP-L1-005",
+      "clause": "recusa como resultado de primeira classe — exibe código e razões, cumpre a obrigação da taxonomia, não re-submete cegamente",
+      "finding": "\"exibe código e razões\" is a CLIENT-SIDE display obligation and is by nature invisible to a host log. Only the other two limbs — discharging the obligation and not blindly resubmitting — were given an observable predicate. The display limb is unobservable by the governing rule and is recorded here rather than faked.",
+      "severity": "finding, not failure",
+      "referredTo": "human architect"
+    }
+  ],
+  "pendingCiGates": [
+    {
+      "gate": "conformance-report --check",
+      "command": "bun scripts/verification/conformance-report.ts --check",
+      "wiredIntoVerify": false,
+      "wiredIntoCi": false,
+      "orderingDependency": "NONE",
+      "why": "Its only inputs are the committed Working Paper, the committed manifest and packages/graph-core/src/eap/refusals.ts — all present in a fresh clone. It needs no test run, no junit reporter flags and no ordering; it can run anywhere in the job. Unlike task 07's and task 09's gates, it adds no new constraint to `bun run verify`.",
+      "whatItCatches": "an edit to Apêndice D that a transcription no longer matches (sha256 pin), a reworded or dropped clause, an L4 row smuggled in, an agent certifying as a host, a refusal code renamed out of the taxonomy, and any evidence predicate rewritten into a self-report.",
+      "runningList": "register-scenarios --check, quarantine --check, assertion-fingerprint --check, reconcile-traceability --check, derive-status --check, conformance-report --check"
+    }
+  ],
+  "foundButNotOwned": [
+    {
+      "finding": "The client and host declare DIVERGENT refusal vocabularies. `packages/client/src/eap.ts:16` has `HORIZON_BUDGET_EXHAUSTED`, `STALE_SEQUENCE`, `INVALID_TRANSITION`; the host taxonomy at `packages/graph-core/src/eap/refusals.ts:7-32` has `BUDGET_EXHAUSTED`, `STALE_BASE`, `ILLEGAL_TRANSITION`. Two vocabularies across the boundary directly undermines L1's \"exibe código e razões\" and L2's \"recusa com código da taxonomia\".",
+      "owner": "no F002 task",
+      "actionTaken": "The manifest validates against the HOST taxonomy only, and records the split in DECISIONS.md."
+    },
+    {
+      "finding": "`scripts/` sits outside the workspace's module resolution — `import { REFUSAL_CODES } from \"@open-graph-mcp/graph-core/eap/refusals\"` fails to resolve from a script or a script test (probed and confirmed). The taxonomy is therefore parsed out of the source file as text rather than imported.",
+      "owner": "task 20 / build config",
+      "actionTaken": "Parsed from the single source of truth rather than copied, so a renamed code fails the manifest instead of silently diverging. `loadRefusalTaxonomy` throws if the `REFUSAL_CODES` literal cannot be found, so a refactor cannot turn the check into a no-op."
+    },
+    {
+      "finding": "The L2 clause \"gate cego ao chamador\" (EAP-L2-001) is claimed on the reading that identity enters the host only through tenant scoping and not through the verdict. That reading was NOT proved by an N-identity run — no such test exists in the corpus. It is the weakest of the 22 claimed rows.",
+      "owner": "task 11",
+      "actionTaken": "Claimed with the predicate that would falsify it written into the row; flagged here rather than hidden."
+    },
+    {
+      "finding": "The Working Paper's Apêndice D ends the document (line 1176 is the last line). `extractAppendixD` handles both the next-`## `-heading and the end-of-document cases, but the end-of-document path is the one exercised in production today, so the heading-boundary path is covered only by a synthetic fixture.",
+      "owner": "none — noted for future readers",
+      "actionTaken": "A dedicated test pins the heading-boundary behaviour against a synthetic document."
+    }
+  ]
+}

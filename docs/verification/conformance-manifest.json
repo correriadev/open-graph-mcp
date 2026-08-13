@@ -1,0 +1,676 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "scripts/verification/conformance-report.ts (F002 task 10)",
+  "policy": "Transcription of Apêndice D of the OpenGraph Working Paper v1.0 — the EAP conformance checklist — one item per semicolon-delimited clause. `clause` is the Working Paper's own Portuguese, VERBATIM: no item is reworded, translated in place, or reinterpreted, and `scripts/verification/conformance-report.ts --check` fails if a single `clause` is not literally present in the pinned section. Any English is confined to `restatementEn` and nothing binds to it. Every item carries an evidence predicate stated over the HOST's own records — audit trail, request log, egress log, or wire response — because ADR-0007 rejected certification by self-declaration and ADR-0021 governs: verification by host log, never self-report. Roles follow ADR-0007: L0-L1 certify clients (agents), L2-L4 certify hosts; no agent certifies as a host. `claim.state` records what this repository claims today, per item, with `claim.evidenceRefs` naming the file:line behind it; it is NOT an assessment result — task 11 runs the checklist against real transport and attributes items to test cases.",
+  "source": {
+    "path": "docs/PRD/OpenGraph_Working_Paper_v1_0.md",
+    "heading": "## Apêndice D",
+    "startLine": 1164,
+    "endLine": 1176,
+    "sha256": "6b50bc090c61c9a2bdbb6d1357b6984d9a0847eb36b2d372a53fe0de8f312bf4"
+  },
+  "graduation": {
+    "marker": "[E → G2]",
+    "graduated": false,
+    "note": "Apêndice D is still headed `*[E → G2]*` in the Working Paper: an explicit skeleton pending the [G2] gate — an executable checklist plus at least three distinct registry flavors passing L0-L1 against the reference implementation, each item verified by host log. This manifest transcribes the skeleton; it does not graduate it, and no row here should be read as a [G2] result."
+  },
+  "roles": {
+    "L0": "client",
+    "L1": "client",
+    "L2": "host",
+    "L3": "host",
+    "L4": "host"
+  },
+  "excludedLevels": [
+    {
+      "level": "L4",
+      "reason": "Federation is [C] and does not pretend to graduate (ADR-0007): no signed manifest, no import-seq-frozen refs, no federated recall exists to be observed in a host log, so L4 rows are absent rather than present-and-unclaimed. The five L4 clauses remain in the Working Paper at line 1176 and are transcribed by nothing here."
+    }
+  ],
+  "items": [
+    {
+      "itemId": "EAP-L0-001",
+      "level": "L0",
+      "role": "client",
+      "sourceLine": 1168,
+      "ordinal": 1,
+      "clause": "resolve resources",
+      "restatementEn": "Resolves the declared EAP resource URIs.",
+      "refusalCodes": [
+        "RESOURCE_ABSENT"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "host-request-log",
+        "predicate": "For each EAP resource URI the host publishes, the host's request log contains a `resources/read` from the certified client answered with a non-error result envelope; a client that never appears in the resource-read log for a published URI, or whose only entries are `RESOURCE_ABSENT` refusals, fails this item."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "The host publishes and serves the EAP resource surface, so the log a client must appear in exists.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/resources.ts:1"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L0-002",
+      "level": "L0",
+      "role": "client",
+      "sourceLine": 1168,
+      "ordinal": 2,
+      "clause": "query e `history/since`",
+      "restatementEn": "Issues graph queries and cursor-based `history/since` reads.",
+      "refusalCodes": [
+        "MALFORMED_CONTRACT"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "host-request-log",
+        "predicate": "The host's tool-call log shows the client invoking the query tool and `history/since`, and the `since` cursor carried by call N+1 equals a sequence value the host itself returned in the response to call N; a `since` the host never emitted, or an absent one, fails this item."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Query and history reads are served over the EAP tool surface and are logged per call.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/tools/eap.ts:1"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L0-003",
+      "level": "L0",
+      "role": "client",
+      "sourceLine": 1168,
+      "ordinal": 3,
+      "clause": "distingue recusa de erro de transporte",
+      "restatementEn": "Distinguishes a protocol refusal from a transport error.",
+      "refusalCodes": [],
+      "refusalCodesNote": "The clause is about the envelope, not a specific code: any code in the closed taxonomy can be the refusal the client must not mistake for a transport failure.",
+      "evidence": {
+        "surface": "host-request-log",
+        "predicate": "In a session where the host emitted both a taxonomy refusal envelope and a transport-level error, the host's request log shows the transport error followed by a retry of the same request, and the refusal followed by either no retry or a request that differs from the refused one; a byte-identical retry of a refused request is the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Refusals leave a coded envelope on the wire distinct from transport faults, so the two are separable in the log.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:7"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L0-004",
+      "level": "L0",
+      "role": "client",
+      "sourceLine": 1168,
+      "ordinal": 4,
+      "clause": "nunca trata resposta de um horizonte como autoritativa fora dele",
+      "restatementEn": "Never treats a response obtained under one horizon as authoritative outside that horizon.",
+      "refusalCodes": [
+        "HORIZON_SKIP",
+        "AUTHORITY_REF_INVALID"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Across two horizons in one host log, no request scoped to horizon H2 carries a sequence, anchor or authority reference the host only ever returned under horizon H1; where one does, the audit records `HORIZON_SKIP` or `AUTHORITY_REF_INVALID` rather than an admission."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Horizon scoping is enforced at the host boundary and both codes exist in the closed taxonomy.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:13"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L1-001",
+      "level": "L1",
+      "role": "client",
+      "sourceLine": 1170,
+      "ordinal": 1,
+      "clause": "staging válido",
+      "restatementEn": "Every write is a valid staging submission, never a direct edit.",
+      "refusalCodes": [
+        "DIRECT_EDIT_FORBIDDEN",
+        "MALFORMED_CONTRACT"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Every write attributed to the certified client in the host's audit appears as a staging submission; any direct-edit attempt from that client appears in the audit only as a `DIRECT_EDIT_FORBIDDEN` refusal row and never as a mutation row."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Single Admission Gate with `DIRECT_EDIT_FORBIDDEN` is in the closed taxonomy and audited.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:25"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L1-002",
+      "level": "L1",
+      "role": "client",
+      "sourceLine": 1170,
+      "ordinal": 2,
+      "clause": "ciclo de changeset",
+      "restatementEn": "Completes the changeset cycle.",
+      "refusalCodes": [
+        "ILLEGAL_TRANSITION",
+        "LADDER_VIOLATION"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "For each changeset identifier appearing in the host audit, the recorded rows form the full open-to-verdict cycle in order; a changeset identifier that ends the session with no verdict row, or whose rows skip a step, fails this item."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Lifecycle transitions are refused out of order and each transition is audited.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/lifecycle.ts:1"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L1-003",
+      "level": "L1",
+      "role": "client",
+      "sourceLine": 1170,
+      "ordinal": 3,
+      "clause": "toda claim com âncora e proveniência (incluindo `derivation`)",
+      "restatementEn": "Every claim carries an anchor and provenance, `derivation` included.",
+      "refusalCodes": [
+        "ANCHOR_NOT_FOUND",
+        "PROVENANCE_MISSING"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Every candidate payload recorded in the host's admission audit carries a non-empty anchor and a provenance block containing `derivation`; rows missing either exist only paired with an `ANCHOR_NOT_FOUND` or `PROVENANCE_MISSING` refusal and never with an admission."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Both codes are in the closed taxonomy and the admission gate audits the payload it judged.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:8"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L1-004",
+      "level": "L1",
+      "role": "client",
+      "sourceLine": 1170,
+      "ordinal": 4,
+      "clause": "`based_on_seq` em toda proposta",
+      "restatementEn": "Every proposal carries `based_on_seq`.",
+      "refusalCodes": [
+        "STALE_BASE"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "wire-response",
+        "predicate": "Every proposal request the host recorded carries `based_on_seq`; where it is absent or behind the applicable sequence the wire response is a `STALE_BASE` refusal, and the audit shows no admission for that request."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "The promotion path refuses a stale base explicitly rather than silently rebasing.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/promotion.ts:79-86"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L1-005",
+      "level": "L1",
+      "role": "client",
+      "sourceLine": 1170,
+      "ordinal": 5,
+      "clause": "recusa como resultado de primeira classe — exibe código e razões, cumpre a obrigação da taxonomia, não re-submete cegamente",
+      "restatementEn": "Treats refusal as a first-class result: surfaces code and reasons, discharges the taxonomy obligation, and does not blindly resubmit.",
+      "refusalCodes": [],
+      "refusalCodesNote": "The clause binds the whole closed taxonomy: every code carries an obligation the client must discharge, so no single code is named.",
+      "evidence": {
+        "surface": "host-request-log",
+        "predicate": "After each refusal envelope in the host's log, the client's next request against the same target differs from the refused one in the field the refusal's stated obligation names; a byte-identical resubmission following a refusal is the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Every code maps to a published obligation, so the expected next request is determined by the refusal.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:37"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-001",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 1,
+      "clause": "gate cego ao chamador (mesmo conteúdo ⇒ mesmo veredito sob N identidades)",
+      "restatementEn": "The admission gate is blind to the caller: same content implies same verdict.",
+      "refusalCodes": [],
+      "refusalCodesNote": "The clause constrains verdict stability across identities, not any one refusal code; the codes it compares are whichever the content produces.",
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "One candidate payload submitted under N distinct authenticated identities produces N audit rows carrying an identical verdict and, where refused, an identical refusal code; two rows for one content digest that disagree on verdict or code are the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "The gate decides on content; identity enters only through tenant scoping, not the verdict.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/tools/eap.ts:1"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-002",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 2,
+      "clause": "recusa com código da taxonomia",
+      "restatementEn": "Refuses with a code from the taxonomy.",
+      "refusalCodes": [],
+      "refusalCodesNote": "The clause requires membership in the closed taxonomy rather than any particular member of it.",
+      "evidence": {
+        "surface": "wire-response",
+        "predicate": "Every refusal envelope on the wire and every refusal row in the audit carries a `code` drawn from the closed taxonomy published by the host; a refusal with free text in place of a code, or with no code, fails this item."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "`createEapRefusal` mints refusals only from the closed `REFUSAL_CODES` union.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:7-32"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-003",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 3,
+      "clause": "âncora verbatim com bloqueio duro",
+      "restatementEn": "Verbatim anchor with a hard block.",
+      "refusalCodes": [
+        "ANCHOR_NOT_FOUND"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "A candidate whose anchor text is not byte-identical to its target produces an `ANCHOR_NOT_FOUND` audit row and no admitted row for that candidate; an admitted row for a non-matching anchor is the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "`ANCHOR_NOT_FOUND` is in the closed taxonomy with a non-resubmit obligation.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:8"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-004",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 4,
+      "clause": "cobertura para posse β",
+      "restatementEn": "Coverage is required for β possession.",
+      "refusalCodes": [
+        "COVERAGE_UNBALANCED"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "The audit contains no row granting β possession to a candidate whose recorded coverage was unbalanced; unbalanced submissions appear as `COVERAGE_UNBALANCED` refusals with the measured coverage on the row."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "`COVERAGE_UNBALANCED` is in the closed taxonomy with a complete-or-renounce obligation.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:9"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-005",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 5,
+      "clause": "drift graduado",
+      "restatementEn": "Drift is handled in grades, not as a binary.",
+      "refusalCodes": [
+        "STALE_BASE",
+        "CELL_KEY_NONCANONICAL"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Audit rows for drifted submissions carry a recorded drift measure alongside a graded outcome, and at least two distinct grades appear across a corpus spanning the drift range; a single accept/refuse split with no recorded measure fails this item."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Drift-adjacent refusals are coded and the gate records the measure it judged on rather than a bare verdict.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:16"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-006",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 6,
+      "clause": "forma canônica de célula em toda borda",
+      "restatementEn": "Canonical cell form at every edge.",
+      "refusalCodes": [
+        "CELL_KEY_NONCANONICAL"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "For every ingress edge the host exposes — tool call, resource read, import — the audit records the cell key in canonical form; a non-canonical key appears only on a `CELL_KEY_NONCANONICAL` refusal row and never on a created-cell row."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "`CELL_KEY_NONCANONICAL` carries the obligation to normalise and never to create the cell under the new spelling.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:10"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-007",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 7,
+      "clause": "verificação 100% offline",
+      "restatementEn": "Verification is 100% offline.",
+      "refusalCodes": [],
+      "refusalCodesNote": "The clause constrains the host's egress during verification; no refusal code is emitted by satisfying it.",
+      "evidence": {
+        "surface": "host-egress-log",
+        "predicate": "During an admission decision the host's egress log records zero outbound network requests, and the same corpus reaches the same verdicts with egress denied; any outbound request between submission and verdict is the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Admission is decided from local state and the persisted graph; no network call sits on the gate path.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/tools/eap.ts:1"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-008",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 8,
+      "clause": "audit separado do grafo",
+      "restatementEn": "Audit is stored separately from the graph.",
+      "refusalCodes": [],
+      "refusalCodesNote": "A storage-separation property; no refusal code corresponds to it.",
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Audit rows are readable from a store distinct from the graph store, and after a recall or rollback of a set of claim ids the audit rows naming those ids are still present and unmodified; audit rows disappearing with the graph is the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "The audit surface is written and read independently of the graph tables.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/eap/eap-repositories.ts:1"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L2-009",
+      "level": "L2",
+      "role": "host",
+      "sourceLine": 1172,
+      "ordinal": 9,
+      "clause": "aciclicidade do grafo de derivação na admissão",
+      "restatementEn": "The derivation graph is checked for acyclicity at admission.",
+      "refusalCodes": [
+        "MALFORMED_CONTRACT"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "A candidate whose `derivation` would close a cycle over already-admitted nodes produces a refusal row timestamped within the same admission decision and no admitted row; a cycle detected only by a later sweep, or an admitted row followed by a repair, fails this item."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "The closed taxonomy carries no cycle-specific code, so the refusal is contract-shaped; recorded as a finding.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/refusals.ts:30"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-001",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 1,
+      "clause": "topologia declarada como DAG",
+      "restatementEn": "Topology is declared as a DAG.",
+      "refusalCodes": [
+        "HORIZON_SKIP",
+        "RESOURCE_ABSENT"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Every horizon row in the host's state names at most one parent that already existed at its creation time, and the host log contains no row in which a horizon's parent was reassigned; a parent naming a descendant is the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Horizon creation refuses an absent parent and the update path exposes no parent reassignment, so the recorded topology cannot close a cycle.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/tools/eap.ts:157-163",
+          "packages/mcp-server/src/eap/horizon-store.ts:124"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-002",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 2,
+      "clause": "horizontes com perfis semânticos (§19)",
+      "restatementEn": "Horizons carry semantic profiles (§19).",
+      "refusalCodes": [],
+      "refusalCodesNote": "No refusal code exists for an absent or invalid horizon profile, because no profile field exists yet.",
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Each horizon row and each admission decided under it names a semantic profile identifier, and two horizons carrying different profiles reach different verdicts on the same candidate payload; identical verdicts across all profiles, or an absent profile field, fails this item."
+      },
+      "claim": {
+        "state": "not-yet-claimed",
+        "rationale": "The horizon record carries id, parent, state, seq and budget only; there is no semantic profile field on the horizon store or on any EAP payload, so nothing observable in the host log distinguishes one profile from another.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/eap/horizon-store.ts:13-14"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-003",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 3,
+      "clause": "`PromotionProposal` com as cinco regras da §7",
+      "restatementEn": "`PromotionProposal` applies the five rules of §7.",
+      "refusalCodes": [
+        "HORIZON_SKIP",
+        "STALE_BASE"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "For a corpus exercising each of the five §7 rules in turn, the host audit shows a distinct refusal row per violated rule and an admitted proposal only where all five hold; a rule whose violation produces no distinguishable audit row fails this item."
+      },
+      "claim": {
+        "state": "not-yet-claimed",
+        "rationale": "`promoteKnowledge` enforces two of the five rules — immediate-parent targeting (`HORIZON_SKIP`) and base freshness (`STALE_BASE`) — and then mints the proposal; the remaining three §7 rules have no distinguishable refusal on the promotion path.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/promotion.ts:70-86"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-004",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 4,
+      "clause": "`CHANGE_READY` por predicado",
+      "restatementEn": "`CHANGE_READY` is decided by predicate.",
+      "refusalCodes": [],
+      "refusalCodesNote": "No `CHANGE_READY` refusal or event exists in the taxonomy or on the wire today.",
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Every `CHANGE_READY` transition in the host log names the mechanical predicates it evaluated and their per-predicate outcomes, and no transition appears whose predicates did not all hold; a `CHANGE_READY` row with no predicate evaluation attached is the observable failure."
+      },
+      "claim": {
+        "state": "not-yet-claimed",
+        "rationale": "`CHANGE_READY` appears in the problem-space spec but nowhere in the shipped packages: no transition, event, refusal code or predicate evaluator carries that name, so there is nothing for a host log to record.",
+        "evidenceRefs": [
+          "docs/specs/cognitive_line/001-problem-space.md:184"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-005",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 5,
+      "clause": "contestação por evento com três severidades",
+      "restatementEn": "Contestation is an event with three severities.",
+      "refusalCodes": [
+        "MALFORMED_CONTRACT"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "The host audit contains a `KnowledgeContested` event carrying a severity drawn from exactly three values, all three are observable across a corpus, and a fourth severity is answered by a `MALFORMED_CONTRACT` refusal rather than accepted."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Contestation is recorded as a `KnowledgeContested` audit event and severity is validated against a closed three-value union, with anything else refused.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/tools/eap.ts:654-657",
+          "packages/mcp-server/src/tools/eap.ts:741"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-006",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 6,
+      "clause": "escalonamento sem promoção implícita",
+      "restatementEn": "Escalation never implies promotion.",
+      "refusalCodes": [
+        "HORIZON_SKIP"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "Every promotion recorded in the parent horizon's audit enters at proposed status and carries no inherited admission or relative authority from the child; an admitted row in the parent that has no separate parent-side admission decision behind it is the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "A successful promotion is stored as a proposed parent candidate and never inherits the child's admission or relative authority.",
+        "evidenceRefs": [
+          "packages/mcp-server/src/tools/eap.ts:567-589",
+          "packages/graph-core/src/eap/promotion.ts:94-99"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-007",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 7,
+      "clause": "budgets com R9",
+      "restatementEn": "Budgets are enforced, with R9 as the escalation rule.",
+      "refusalCodes": [
+        "BUDGET_EXHAUSTED"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "After a horizon's allocated budget is consumed, the host audit records a `HorizonBudgetExhausted` event with the ledger snapshot and the request escalates rather than promoting; a promotion admitted with consumed at or beyond allocated, or a consumed counter that never moves, is the observable failure."
+      },
+      "claim": {
+        "state": "not-yet-claimed",
+        "rationale": "The Horizon Budget Ledger is stored but never enforced and `HorizonBudgetExhausted` is never recorded by the host: `budget_allocated`/`budget_consumed` are persisted and `budget_consumed` is only ever written back from an explicit update argument, never decremented by the promotion path; the only code that consumes budget and records `HorizonBudgetExhausted` is the `Horizon` aggregate, whose `requestPromotion` has no caller outside its own unit test, so no `BUDGET_EXHAUSTED` refusal can appear on the wire.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/horizon.ts:79-85",
+          "packages/mcp-server/src/tools/eap.ts:547",
+          "packages/mcp-server/src/eap/horizon-store.ts:124-150",
+          "packages/graph-core/test/horizon.test.ts:31"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-008",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 8,
+      "clause": "cascata de recall com fechamento calculado sobre o grafo admitido",
+      "restatementEn": "Recall cascades over a closure computed on the admitted graph.",
+      "refusalCodes": [
+        "RECALL_UNPROVEN"
+      ],
+      "refusalCodesNote": null,
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "An invalidating contestation produces recall progress rows naming exactly the reverse-dependency closure of the target claim ids over the admitted graph; a claim reachable in that closure but absent from the recorded affected set, or one present that is not reachable, is the observable failure."
+      },
+      "claim": {
+        "state": "claimed",
+        "rationale": "Recall computes a reverse closure over the dependency graph, carries it on the recall case, and reports progress as audited events.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/recall.ts:96-142",
+          "packages/mcp-server/src/tools/eap.ts:928"
+        ]
+      }
+    },
+    {
+      "itemId": "EAP-L3-009",
+      "level": "L3",
+      "role": "host",
+      "sourceLine": 1174,
+      "ordinal": 9,
+      "clause": "propriedades de propagação da §11 verificáveis",
+      "restatementEn": "The propagation properties of §11 are verifiable.",
+      "refusalCodes": [],
+      "refusalCodesNote": "The clause asserts verifiability of propagation properties rather than naming a refusal code.",
+      "evidence": {
+        "surface": "audit-log",
+        "predicate": "For each §11 propagation property, the host log carries the per-property observation an assessor checks it against, and a corpus constructed to violate a property produces a log in which that property's observation fails; a property with no corresponding observation in the log fails this item."
+      },
+      "claim": {
+        "state": "not-yet-claimed",
+        "rationale": "No propagation module, propagation event or per-property observation exists in the shipped packages; recall closure is the only propagation-adjacent record and it does not carry the §11 properties, so the clause has no host-log observation behind it today.",
+        "evidenceRefs": [
+          "packages/graph-core/src/eap/recall.ts:142"
+        ]
+      }
+    }
+  ]
+}
