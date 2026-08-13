@@ -1,0 +1,27 @@
+{
+  // graph-core had NO tsconfig at all, so no compiler invocation could name it as a project and
+  // only the ~30 of its 45 `src/*.ts` files that mcp-server happens to import were ever visible to
+  // a type-checker (its own `test/` was never checked). F002 task 01's third acceptance criterion
+  // requires the typecheck gate to cover graph-core, which is impossible without a project file.
+  // Options are inlined rather than extending a base package, matching the sibling decision recorded
+  // in packages/mcp-server/tsconfig.json — one self-contained tsconfig per package, no @tsconfig/bun.
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "composite": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "types": ["bun"],
+    "noUncheckedIndexedAccess": false,
+    "moduleResolution": "bundler"
+  },
+  "include": ["src", "test"]
+}

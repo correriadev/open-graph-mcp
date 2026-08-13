@@ -1,0 +1,1390 @@
+{
+  "version": 1,
+  "generator": "scripts/verification/assertion-fingerprint.ts",
+  "policy": "Baseline captured before task 13 renames the retry-era regression tests. Comparison is subset-free equality: a post-rename multiset that is a proper subset FAILS with the missing (matcher, normalized-subject) pairs named. A rename updates `path` and keeps `hash`.",
+  "normalization": "matcher = property chain from the expect() call to the invoked matcher (not/resolves/rejects preserved). subject = expect() arguments re-printed from the TypeScript AST with comments removed, redundant parentheses unwrapped, string literals re-emitted double-quoted, and newline+indentation runs collapsed to one space. Identifiers, argument order and literal values are NOT canonicalised. Order-insensitive; multiplicity is significant.",
+  "files": [
+    {
+      "id": "f001-retry5-concurrency-authz",
+      "path": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "previousPaths": [],
+      "capturedAt": "2026-08-13T02:46:10.060Z",
+      "hash": "6755c8d91a7c0b9569f0bf7ebaa1c8cfc231e47c6576eb7f591b90fd80d7fff1",
+      "expectCount": 56,
+      "distinctAssertions": 41,
+      "assertions": [
+        {
+          "matcher": "not.toBe",
+          "subject": "r1.admitted.seq",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "afterPurge.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "c1.ok && c2.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "candRows.every((r) => r.state === \"proposed\")",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "claims.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "deltas.n",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "env.approvals.getApproval(\"appr-narrow\")?.consumed",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "env.audit.count()",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "full.entries[0].contractRef",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "full.projection",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "ids.size",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "locks.n",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "new Set(seqs).size",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "observed!.aborted",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "proposalRow?.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "proposals.n",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "providerRan",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "r1.ok && r2.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recalls.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "redacted.projection",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.ok",
+          "count": 7
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.refusal.code",
+          "count": 4
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.status",
+          "count": 3
+        },
+        {
+          "matcher": "toBe",
+          "subject": "seqAfter",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "skip.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "threw || true",
+          "count": 1
+        },
+        {
+          "matcher": "toBeDefined",
+          "subject": "observed",
+          "count": 1
+        },
+        {
+          "matcher": "toBeDefined",
+          "subject": "redacted.entries[0].executionId",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "subject": "afterPurge.admitted.seq",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "subject": "res.reasons.length",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "subject": "seqs[i]",
+          "count": 1
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "subject": "reads",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "(redacted.entries[0] as unknown as Record<string, unknown>).contractRef",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "(redacted.entries[0] as unknown as Record<string, unknown>).outcome",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "res.refusedCandidateIds",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "candRows.map((r) => r.candidate_id)",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "full.entries[0].outcome",
+          "count": 1
+        },
+        {
+          "matcher": "toHaveLength",
+          "subject": "full.entries",
+          "count": 1
+        },
+        {
+          "matcher": "toHaveLength",
+          "subject": "redacted.entries",
+          "count": 1
+        },
+        {
+          "matcher": "toThrow",
+          "subject": "() => eapPromote(s.state, { token: a.token, childHorizonId: \"mid\", targetParentHorizonId: \"root\", candidateIds: [\"c1\"] })",
+          "count": 1
+        },
+        {
+          "matcher": "toThrow",
+          "subject": "() => gateway.getAuditLog(undefined as never)",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "f001-retry5-durability",
+      "path": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "previousPaths": [],
+      "capturedAt": "2026-08-13T02:46:10.106Z",
+      "hash": "bd44e386ac1002693a8d3b677a8febb2af60a3d5e739896e90a100d36b2a176a",
+      "expectCount": 43,
+      "distinctAssertions": 40,
+      "assertions": [
+        {
+          "matcher": "not.toBeNull",
+          "subject": "await after.getScar(\"rec-durable-1\")",
+          "count": 1
+        },
+        {
+          "matcher": "not.toBeNull",
+          "subject": "firstBatch",
+          "count": 1
+        },
+        {
+          "matcher": "not.toBeNull",
+          "subject": "restored",
+          "count": 1
+        },
+        {
+          "matcher": "not.toContain",
+          "subject": "remaining",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "\"refused\" in created",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "admitted.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "after.getHorizon(\"hz-child\")?.parentId",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "after.initiateRecall(\"contest-durable-1\").status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "env.approvals.consumeAuthorization(\"appr-durable\").success",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "env.audit.count()",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.status",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "found?.admitted",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "found?.severity",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "progress?.isComplete",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "proposals[0].status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "ranAgain",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "replay.isCached",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "replay.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "restored!.checkpoint.processedClaimIds.length",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "result.success",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "rows.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.success",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "service.getHorizon(\"mid\")?.parentId",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "service.initiateRecall(viaTool.admitted.contestationId).status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "viaTool.ok",
+          "count": 2
+        },
+        {
+          "matcher": "toBeDefined",
+          "subject": "found",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "subject": "processedBeforeRestart",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "subject": "secondSeq",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "(env.approvals as unknown as Record<string, unknown>).approvals",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "gateway.auditLog",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "gateway.executedOutcomes",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "svc.store",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "proposals.map((p) => p.id)",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "remaining",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "new Set(progress!.checkpoint.processedClaimIds)",
+          "count": 1
+        },
+        {
+          "matcher": "toHaveLength",
+          "subject": "after.getEvents()",
+          "count": 1
+        },
+        {
+          "matcher": "toHaveLength",
+          "subject": "proposals",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "f001-retry6-readmodel-and-freshness",
+      "path": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "previousPaths": [],
+      "capturedAt": "2026-08-13T02:46:10.117Z",
+      "hash": "7775a9fde83dc62e011e5926f8f1a065661df0db09cf4471212a6903e462e37b",
+      "expectCount": 53,
+      "distinctAssertions": 39,
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "subject": "advance.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "advance.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "ahead.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "ahead.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "allocator.value",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "authority.value",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "candidateState(s, a.tenantId, \"h1\", \"k1\")",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "candidateState(s, a.tenantId, \"hz\", \"c-dep\")",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "cases.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "contest.ok",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "exact.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.admitted.recallId",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.admitted.seq",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.ok",
+          "count": 3
+        },
+        {
+          "matcher": "toBe",
+          "subject": "promoted.ok",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "promoted.refusal.code",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "proposals.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "providerRan",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recall.admitted.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recall.ok",
+          "count": 4
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recall.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recontest.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recontest.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "replay.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "replay.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.ok",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.refusal.code",
+          "count": 3
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.status",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "rows.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.promotionId",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.replayed",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.ok",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "seqAfterSecond",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "services.approvalRepo.getApproval(\"apS\")?.consumed",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "services.approvalRepo.registerApproval({ id: \"apS\", approver: \"operator-alice\", scope: \"deploy.production\", expiresAt: Date.now() + 60000, basedOnSeq: 99 }).registered",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "subject": "observed.seq",
+          "count": 1
+        },
+        {
+          "matcher": "toBeNull",
+          "subject": "candidateState(s, a.tenantId, \"hb\", \"k2\")",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "recall.admitted.affectedClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "recall.admitted.suspendedCells",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "f001-retry7-closure-gate",
+      "path": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "previousPaths": [],
+      "capturedAt": "2026-08-13T02:46:10.125Z",
+      "hash": "41f0169ca32b8cff7270d2d25591a7b4754d0fd3c8e2a1627d45f907c8f6fcbb",
+      "expectCount": 57,
+      "distinctAssertions": 42,
+      "assertions": [
+        {
+          "matcher": "not.toBe",
+          "subject": "res.admitted.status",
+          "count": 1
+        },
+        {
+          "matcher": "not.toContain",
+          "subject": "Object.keys(schema.properties)",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "(res as any).refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "candidateState(s, a.tenantId, \"h1\", \"k2\")",
+          "count": 3
+        },
+        {
+          "matcher": "toBe",
+          "subject": "candidateState(s, a.tenantId, \"hz\", \"weird\")",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "candidateState(s, a.tenantId, \"root\", \"k3\")",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "cases.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "concretize.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "contest.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "matches([{ kind: \"changeset\", id: \"no-such-changeset\" }], env as any)",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "payload.cellKey",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "promote.ok",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "promote.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "proposals.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recall.ok",
+          "count": 3
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.admitted.batchLimitReached",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.admitted.complete",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.admitted.maxBatches",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.admitted.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.ok",
+          "count": 7
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.refusal.code",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "verify.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "verify.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBeDefined",
+          "subject": "tool",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "subject": "res.admitted.remainingClaimIds.length",
+          "count": 1
+        },
+        {
+          "matcher": "toBeNull",
+          "subject": "candidateState(s, a.tenantId, \"root\", \"k2\")",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "res.admitted.batchLimitReached",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "Object.keys(schema.properties)",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "String(payload.recallId)",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "recall.admitted.affectedClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "res.refusal.reason",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "schema.required",
+          "count": 2
+        },
+        {
+          "matcher": "toContain",
+          "subject": "verify.refusal.reason",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "Object.keys(contest.properties)",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "Object.keys(initiate.properties)",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "Object.keys(schema.properties)",
+          "count": 2
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "contest.properties.severity.enum",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "new Set(emitted.map((e) => e.target_id))",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "new Set(recall.admitted.suspendedCells)",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "recall.admitted.affectedClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "suspended.map((r) => r.cell)",
+          "count": 1
+        },
+        {
+          "matcher": "toHaveLength",
+          "subject": "emitted",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "f001-retry8-resume-index",
+      "path": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
+      "previousPaths": [],
+      "capturedAt": "2026-08-13T02:46:10.139Z",
+      "hash": "0c29ea4e104763b7b693fcc160ad5c964f98a3f3d98d4320e62b97c523163098",
+      "expectCount": 50,
+      "distinctAssertions": 38,
+      "assertions": [
+        {
+          "matcher": "not.toContain",
+          "subject": "details",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "cases.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "contest.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "driven.admitted.complete",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "driven.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "eventsAfter.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "finished.admitted.complete",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.admitted.batchLimitReached",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.admitted.complete",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.admitted.remainingClaimIds.length",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.ok",
+          "count": 3
+        },
+        {
+          "matcher": "toBe",
+          "subject": "partial.admitted.complete",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "promote.ok",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "promote.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "replay.admitted.replayed",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "row.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "scars.n",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.complete",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.replayed",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.resumed",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.ok",
+          "count": 3
+        },
+        {
+          "matcher": "toBe",
+          "subject": "verify.ok",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "verify.refusal.code",
+          "count": 2
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "second.admitted.batchLimitReached",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "second.admitted.replayed",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "second.admitted.resumed",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "details",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "recall.admitted.affectedClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toContain",
+          "subject": "verify.refusal.reason",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "counts.map(([, n]) => n)",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "driven.admitted.degradedClaims.map((d: any) => d.claimId).sort()",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "members.map((m) => m.claim_id)",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "replay.admitted.degradedClaims.map((d: any) => d.claimId).sort()",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "second.admitted.degradedClaims.map((d: any) => d.claimId).sort()",
+          "count": 2
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "second.admitted.remainingClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "{ injectAt, suspended: suspended.n, announced: announced.n }",
+          "count": 1
+        },
+        {
+          "matcher": "toHaveLength",
+          "subject": "membershipSql",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "f001-transport-delegation",
+      "path": "packages/mcp-server/test/f001-transport-delegation.test.ts",
+      "previousPaths": [],
+      "capturedAt": "2026-08-13T02:46:10.147Z",
+      "hash": "f59b4082cffee23c0f1a8b6702c3f9dcb085bb95acb4ad2dbef9e87c07231c2a",
+      "expectCount": 46,
+      "distinctAssertions": 36,
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "subject": "admitted.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "cases.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "cases.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "contest.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "early.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "early.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "executed.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "found?.admitted",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "ok.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "parentCandidate.state",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "present.n",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recall.admitted.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "recall.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.ok",
+          "count": 6
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.refusal.code",
+          "count": 5
+        },
+        {
+          "matcher": "toBe",
+          "subject": "row.reason",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "row.source_horizon_id",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "row.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "rows.n",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.recallId",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.replayed",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.admitted.seq",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "services.auditRepo.count()",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "services.contestations.initiateRecall(viaTool.admitted.contestationId).status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "viaTool.ok",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "subject": "recall.admitted.checkpoint",
+          "count": 1
+        },
+        {
+          "matcher": "toBeInstanceOf",
+          "subject": "services.capabilities",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "JSON.parse(checkpoint.checkpoint).remainingClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "JSON.parse(row.evidence)",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "JSON.parse(scar.scar).affectedClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "admitted.admittedClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "q.reverseClosure([\"c-ok\"])",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "recall.admitted.affectedClaimIds",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "recall.admitted.degradedClaims.map((d: { claimId: string; }) => d.claimId).sort()",
+          "count": 1
+        },
+        {
+          "matcher": "toEqual",
+          "subject": "recall.admitted.suspendedCells",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "f001-validation-audit-vulns",
+      "path": "packages/mcp-server/test/f001-validation-audit-vulns.test.ts",
+      "previousPaths": [],
+      "capturedAt": "2026-08-13T02:46:10.154Z",
+      "hash": "8dc2788e471661592f0bbe4e98dc09f0843a79c3c287c022037ecf10b47950c9",
+      "expectCount": 28,
+      "distinctAssertions": 25,
+      "assertions": [
+        {
+          "matcher": "not.toBeNull",
+          "subject": "await env.recalls.getScar(\"rec-mirror-1\")",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "\"refused\" in recallCase",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "afterRebuild?.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "again.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "again.success",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "beforeRebuild?.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "env.approvals.consumeAuthorization(\"appr-terminal\").success",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "env.approvals.getApproval(\"appr-single-use\")?.consumed",
+          "count": 2
+        },
+        {
+          "matcher": "toBe",
+          "subject": "env.approvals.registerApproval(approval).registered",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "env.audit.count()",
+          "count": 3
+        },
+        {
+          "matcher": "toBe",
+          "subject": "failing.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "first.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "invocations",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "progress.isComplete",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "providerRan",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "providerRanAgain",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "reRegister.registered",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.registered",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "res.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "retried.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.refusal.code",
+          "count": 1
+        },
+        {
+          "matcher": "toBe",
+          "subject": "second.status",
+          "count": 1
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "subject": "results.filter((r) => r.status === \"COMPLETED\").length",
+          "count": 1
+        },
+        {
+          "matcher": "toBeUndefined",
+          "subject": "env.approvals.getApproval(\"appr-garbage-expiry\")",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

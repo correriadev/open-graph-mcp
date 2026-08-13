@@ -11,6 +11,13 @@
   "scripts": {
     "dev": "bun run --cwd packages/mcp-server dev",
     "dev:web": "bun run --cwd packages/mcp-web dev",
-    "test": "bun run --cwd packages/mcp-server test"
+    "test": "bun test",
+    "verify": "bun run typecheck && bun run test",
+    "typecheck": "bun scripts/verification/typecheck-gate.ts",
+    "typecheck:update": "bun scripts/verification/typecheck-gate.ts --update",
+    "typecheck:strict": "bun scripts/verification/typecheck-gate.ts --strict"
+  },
+  "devDependencies": {
+    "typescript": "5.8.2"
   }
 }

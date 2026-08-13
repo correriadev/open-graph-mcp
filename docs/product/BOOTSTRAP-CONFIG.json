@@ -1,9 +1,9 @@
 {
-  "scoreThresholdTL": 0.70,
-  "scoreThresholdAdv": 0.70,
+  "scoreThresholdTL": 0.7,
+  "scoreThresholdAdv": 0.7,
   "maxReworks": 5,
-  "domain": "cognitive_line",
-  "featureId": "F001",
+  "domain": "cognitive_line_test_automation",
+  "featureId": "F002",
   "cycleCounter": {
     "completedCycles": 1
   }

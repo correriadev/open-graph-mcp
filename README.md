@@ -23,8 +23,16 @@ zero mutação via protocolo.
 bun install
 GRAPH_REPO_PATH=/path/to/repo bun run dev   # servidor em :8787
 bun run dev:web                              # cliente web (vite; ?server= p/ apontar)
-bun test                                     # testes de aceite do servidor
+bun run verify                               # ENTRYPOINT local: typecheck + suíte completa
+bun run test                                 # só a suíte (idêntica ao job `test` do CI)
 ```
+
+`bun run verify` é o único comando de verificação local: roda o gate de typecheck contra o
+baseline congelado (`docs/verification/typecheck-baseline.json`) e, em seguida, a suíte inteira do
+monorepo. `bun run test` é exatamente o que o job `test` do CI executa — mesmo conjunto de arquivos,
+mesma contagem. Nenhum script de pacote reduz esse conjunto: `bun run --cwd packages/mcp-server test`
+delega para a raiz. Para rodar só um pacote durante o desenvolvimento, use `bun test` dentro do
+diretório dele e saiba que isso **não** é o que o gate avalia.
 
 Regras de posse de domínio (usadas pra agrupar nós em células no grafo/UI) vêm da env var
 `DOMAINS`, um array JSON — ex. `DOMAINS='[{"pattern":"sdk/*","domain":"sdk"}]'`. Sem ela, todo nó

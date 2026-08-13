@@ -14,16 +14,39 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
-      - run: bun test
-      # NOTE (found during INT-2 T7): `bunx tsc` here resolves an unpinned TypeScript 7.0.2
-      # (bunx's own fallback) rather than the 5.8.2 pinned via packages/client's devDependency,
-      # since mcp-web has no local `typescript` devDependency of its own to resolve first. Still
-      # passes clean today; not fixed here since it was tangential to T7's scope — worth pinning
-      # a `typescript` devDependency here if this ever silently diverges.
-      - run: bunx tsc --noEmit
-        working-directory: packages/mcp-web
+      # F002 task 02 — Unified verification entrypoint. This was a bare `bun test`, while root
+      # package.json's `test` script ran `--cwd packages/mcp-server`: "tests pass" locally and
+      # "tests pass" in CI were different claims. The gate now invokes the SAME script a developer
+      # runs, so the two cannot drift apart again — `bun run test` is `bun test` at the repo root,
+      # and `bun run verify` is that plus the task 01 typecheck gate. Do not "simplify" this back
+      # to `bun test`: the indirection through the script IS the property being enforced.
+      - run: bun run test
+      # Was `bunx tsc --noEmit` in packages/mcp-web, which resolved an unpinned TypeScript 7.0.2
+      # from bunx's registry fallback (no `typescript` was declared at the repo root). F002 task 01
+      # pinned typescript@5.8.2 at the root; this now runs THAT compiler. mcp-web has no frozen
+      # error baseline because it is clean — any diagnostic here fails.
+      - run: bun run typecheck:strict packages/mcp-web/tsconfig.json
       - run: bun run build
         working-directory: packages/mcp-web
+
+  # F002 task 01 — Toolchain Pin + Frozen Error Set ratchet.
+  # BLOCKING BY DECISION, not by accident: no `if:`, no `continue-on-error`. graph-core,
+  # mcp-server and client carry 44 pre-existing type errors that decision D1 freezes rather than
+  # fixes; this job fails when any per-file count rises, when a file absent from the baseline
+  # starts erroring, and — deliberately — when a count falls without the reduction being committed
+  # into docs/verification/typecheck-baseline.json in the same change. Reproduce locally with the
+  # identical command: `bun run typecheck`.
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      # --frozen-lockfile is what makes the compiler version a fact of the repository rather than
+      # of the day the job happened to run: it covers graph-core, mcp-server and client alike.
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
 
   # Node-LTS proof for @open-graph-mcp/client (INT-2 risk #2: Node vs Bun
   # runtime divergence). Runs in parallel with `test`, never replaces it —

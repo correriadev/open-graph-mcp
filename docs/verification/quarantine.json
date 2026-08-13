@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "policy": "Ambiguity Quarantine (F002 task 04). Exactly seven Quarantined Ambiguity families QA1-QA7, the closed union `QuarantineFamilyId` of 003 §Section 2. Each family names the clause its ambiguity is written in and the ADR amendment that would lift it. Binding rules from 001 §5: (1) every family carries a Scenario Identifier at status `declared-untestable`, never `[E]` and never `[B]`; (2) no Traceability Link may exist for a quarantined Scenario — one is a Quarantine Violation and fails the build (task 08); (3) QA6 and QA7 admit measurement without assertion, so a Benchmark Ledger entry recording an observed cost or timing is evidence while a test asserting a bound or an expected outcome is a decision and is forbidden; (4) a family lifts only by a merged ADR amendment naming it, after which its members re-enter the Scenario Register as `proposed`. This file is edited only alongside such an amendment. Membership: none of the 71 registered `004` §1-§3 scenarios falls inside a family — that document states at line 12 that no scenario below silently resolves these questions, and the two near misses (EAP-ERRP-003, EAP-SEC-005) assert normatively decided behaviour rather than an open one — so each family carries one minted EAP-QUAR-NNN member naming the undecided question itself, in the area 003 §Section 2 reserves for exactly that.",
+  "families": [
+    {
+      "id": "QA1",
+      "question": "Promotion already in flight when the Horizon DAG changes.",
+      "whyAPassingTestWouldDecideIt": "The criteria for a legitimate topology extension are unwritten, so a test asserting what becomes of a proposal based on the former DAG would fix the semantics by fiat.",
+      "sourceClauses": [
+        "docs/specs/cognitive_line/004-open-graph-mcp-test-scenarios.md §4 bullet 1 — \"Promotion already in flight when the Horizon DAG changes.\"",
+        "docs/specs/cognitive_line/001-problem-space.md §4 question 2 — Open [A]: the enforcement mechanism is fixed (HORIZON_SKIP, based_on_seq), but \"the semantics of changing the declared DAG itself while promotions are in flight\" is not defined; Working Paper v1.0-rc4 §35 records the criteria for a legitimate topology extension as \"not written\".",
+        "docs/specs/cognitive_line_test_automation/001-problem-space.md §5 table row QA1; docs/specs/cognitive_line_test_automation/004-open-graph-mcp-test-scenarios.md §4.1 table row QA1."
+      ],
+      "liftingAdr": "docs/adr/ADR.md — ADR-0008 (Topologia de horizontes como DAG de fronteiras de promoção), read with ADR-0010 (STALE_BASE bifurcado).",
+      "liftingCondition": "A merged amendment to ADR-0008 that names QA1 and defines the criteria for a legitimate topology extension together with the fate of promotions in flight across it. On merge, QA1's members re-enter the Scenario Register as `proposed`.",
+      "measurement": {
+        "mayMeasure": false,
+        "mayAssert": false,
+        "note": null
+      },
+      "members": [
+        "EAP-QUAR-001"
+      ]
+    },
+    {
+      "id": "QA2",
+      "question": "The exact destination status of indirect dependents in a Recall cascade.",
+      "whyAPassingTestWouldDecideIt": "The question is Open: §10.1 names `contested` for the targets while §11 rule 1 says only that a dependent \"does not remain admitted\". A test would pick one of the candidate statuses and thereby decide whether the scar is uniform or graduated by distance.",
+      "sourceClauses": [
+        "docs/specs/cognitive_line/004-open-graph-mcp-test-scenarios.md §4 bullet 2 — \"The exact destination status of indirect dependents in a Recall cascade.\"",
+        "docs/adr/ADR.md Apêndice A — A5 (Status de destino da cascata rio abaixo): §10.1 takes target claims admitted → contested; §11 rule 1 names no destination for indirect dependents.",
+        "docs/specs/cognitive_line_test_automation/001-problem-space.md §5 table row QA2; docs/specs/cognitive_line_test_automation/004-open-graph-mcp-test-scenarios.md §4.1 table row QA2."
+      ],
+      "liftingAdr": "docs/adr/ADR.md — Apêndice A ambiguity A5, decided into ADR-0013 (Recall: cascata calculada).",
+      "liftingCondition": "A merged amendment to ADR-0013 resolving Apêndice A ambiguity A5 by name, naming QA2 and fixing the destination status of indirect dependents. On merge, QA2's members re-enter the Scenario Register as `proposed`.",
+      "measurement": {
+        "mayMeasure": false,
+        "mayAssert": false,
+        "note": null
+      },
+      "members": [
+        "EAP-QUAR-002"
+      ]
+    },
+    {
+      "id": "QA3",
+      "question": "Whether `RecallNotice` and an invalidating Contestation are one admitted object or two.",
+      "whyAPassingTestWouldDecideIt": "Identity determines the audit shape — one gate crossing or two, and who may legitimately emit the second. Asserting either shape settles it.",
+      "sourceClauses": [
+        "docs/specs/cognitive_line/004-open-graph-mcp-test-scenarios.md §4 bullet 3 — \"Whether `RecallNotice` and an invalidating Contestation are one admitted object or two.\"",
+        "docs/adr/ADR.md Apêndice A — A6 (`RecallNotice` e `Contestation(invalidante)`): §5.1 makes an admitted invalidating Contestation the precondition of RECALL while §10 presents RecallNotice as an object of its own; the relation is not written, and A6 carries no recommendation.",
+        "docs/specs/cognitive_line_test_automation/001-problem-space.md §5 table row QA3; docs/specs/cognitive_line_test_automation/004-open-graph-mcp-test-scenarios.md §4.1 table row QA3."
+      ],
+      "liftingAdr": "docs/adr/ADR.md — Apêndice A ambiguity A6, spanning ADR-0012 (Contestação por evento tipado) and ADR-0013 (Recall).",
+      "liftingCondition": "A merged amendment resolving Apêndice A ambiguity A6 by name, naming QA3 and declaring whether RecallNotice is the payload of the invalidating Contestation or a second separately admitted object. On merge, QA3's members re-enter the Scenario Register as `proposed`.",
+      "measurement": {
+        "mayMeasure": false,
+        "mayAssert": false,
+        "note": null
+      },
+      "members": [
+        "EAP-QUAR-003"
+      ]
+    },
+    {
+      "id": "QA4",
+      "question": "Whether unknown `faulty_since_seq` widens the closure or only the audit window.",
+      "whyAPassingTestWouldDecideIt": "Asserting a closure size decides the contamination scope: one reading widens what is investigated, the other widens what is suspended, and the operational costs differ radically.",
+      "sourceClauses": [
+        "docs/specs/cognitive_line/004-open-graph-mcp-test-scenarios.md §4 bullet 4 — \"Whether unknown `faulty_since_seq` expands the closure or only the audit window.\"",
+        "docs/adr/ADR.md Apêndice A — A7 (`faulty_since_seq` desconhecido: janela de auditoria ou fechamento?): §10.1 assumes the worst case is absorbed by the \"janela de auditoria\" without saying whether the closure widens too. A7 carries no recommendation.",
+        "docs/specs/cognitive_line_test_automation/001-problem-space.md §5 table row QA4 (names ambiguity A7 explicitly); docs/specs/cognitive_line_test_automation/004-open-graph-mcp-test-scenarios.md §4.1 table row QA4."
+      ],
+      "liftingAdr": "docs/adr/ADR.md — Apêndice A ambiguity A7, decided into ADR-0013 (Recall).",
+      "liftingCondition": "A merged amendment to ADR-0013 resolving Apêndice A ambiguity A7 by name, naming QA4 and stating whether an unknown `faulty_since_seq` widens the cascade closure or only the audit window. On merge, QA4's members re-enter the Scenario Register as `proposed`.",
+      "measurement": {
+        "mayMeasure": false,
+        "mayAssert": false,
+        "note": null
+      },
+      "members": [
+        "EAP-QUAR-004"
+      ]
+    },
+    {
+      "id": "QA5",
+      "question": "Mapping `LegacyClaimStatus` values into the Epistemic Lifecycle.",
+      "whyAPassingTestWouldDecideIt": "A migration test is a migration specification: asserting where a legacy value lands writes the mapping that nobody has decided.",
+      "sourceClauses": [
+        "docs/specs/cognitive_line/004-open-graph-mcp-test-scenarios.md §4 bullet 5 — \"Mapping `LegacyClaimStatus` values into the proposed Epistemic Lifecycle.\"",
+        "docs/adr/ADR.md Apêndice A — A11 (Vocabulário de status legado no repositório): packages/graph-core/src/claim-store.ts:27 defines \"pending-verification\" | \"verified\" | \"contradicts-floor\" | \"test-spec\", which the paper's Apêndice A does not map onto proposed · admitted · contested · superseded · revoked; \"test-spec\" in particular encodes a category the normative dimension has no slot for.",
+        "docs/specs/cognitive_line_test_automation/001-problem-space.md §5 table row QA5; docs/specs/cognitive_line_test_automation/004-open-graph-mcp-test-scenarios.md §4.1 table row QA5."
+      ],
+      "liftingAdr": "docs/adr/ADR.md — Apêndice A ambiguity A11, read with ADR-0014 (Três coordenadas ortogonais de autoridade).",
+      "liftingCondition": "A merged amendment resolving Apêndice A ambiguity A11 by name, naming QA5 and fixing the value-by-value mapping from LegacyClaimStatus into the Epistemic Lifecycle, including the disposition of `test-spec`. On merge, QA5's members re-enter the Scenario Register as `proposed`.",
+      "measurement": {
+        "mayMeasure": false,
+        "mayAssert": false,
+        "note": null
+      },
+      "members": [
+        "EAP-QUAR-005"
+      ]
+    },
+    {
+      "id": "QA6",
+      "question": "Page size, batching limits, and completion bounds for very large closures.",
+      "whyAPassingTestWouldDecideIt": "Measurement is permitted and is recorded in the Benchmark Ledger; an assertion that bounds is a decision. A test asserting a maximum batch size, a page size, or a completion bound writes the pagination contract that no ADR has decided.",
+      "sourceClauses": [
+        "docs/specs/cognitive_line/004-open-graph-mcp-test-scenarios.md §4 bullet 6 — \"Page size, batching limits, and completion bounds for very large reverse-dependency closures.\"",
+        "docs/specs/cognitive_line/TL.json open point 3 — SqlitePromotionRepository.getEvents and getProposalsForParent accumulate without pagination cursors; heap footprint and response time over a long-running tenant lifecycle are unbounded and unspecified.",
+        "docs/specs/cognitive_line_test_automation/001-problem-space.md §5 table row QA6 and §5 rule 3; docs/specs/cognitive_line_test_automation/004-open-graph-mcp-test-scenarios.md §4.1 table row QA6; docs/specs/cognitive_line_test_automation/003-open-graph-mcp-tactical-design.md \"Open Inputs Carried Forward\" SQ9 (all five observables are recorded; which one is the failure signal is undecided, and QA6 forbids asserting a bound regardless)."
+      ],
+      "liftingAdr": "docs/adr/ADR.md — ADR-0013 (Recall: cascata calculada) read with ADR-0021 (verificação por log do host), whichever amendment introduces the pagination and completion contract.",
+      "liftingCondition": "A merged ADR amendment naming QA6 and fixing the page size, batching limit, and completion bound for large reverse-dependency closures, informed by — never inferred from — the Benchmark Ledger samples. On merge, QA6's members re-enter the Scenario Register as `proposed`.",
+      "measurement": {
+        "mayMeasure": true,
+        "mayAssert": false,
+        "note": "Measurement without assertion (001 §5 rule 3). A probe may build the volume fixture, observe row count, wall time, peak heap, fixture-build time and closure re-derivation time, and append the observation to the Benchmark Ledger with its runner fingerprint — that entry is evidence. A test asserting a maximum batch size, page size or completion bound is a decision and is forbidden; no observed value may be promoted into an expected one."
+      },
+      "members": [
+        "EAP-QUAR-006"
+      ]
+    },
+    {
+      "id": "QA7",
+      "question": "Whether refusal codes, timing, or closure counts leak protected content.",
+      "whyAPassingTestWouldDecideIt": "A timing-differential probe may measure and record; specifying its expected outcome would decide the open threat-model question of whether the refusal vocabulary, its latency, or a closure count is itself a side channel.",
+      "sourceClauses": [
+        "docs/specs/cognitive_line_test_automation/001-problem-space.md §4 SQ14 — Settled: \"A timing-differential probe may measure and record, but it may not assert an expected security outcome.\"",
+        "docs/specs/cognitive_line_test_automation/003-open-graph-mcp-tactical-design.md Section \"Settled Decisions\" D3 — the SQ14 refusal-code / timing side channel becomes a seventh Declared Untestable family QA7, under the same rules as QA1-QA6.",
+        "docs/specs/cognitive_line_test_automation/001-problem-space.md §5 table row QA7 and §5; docs/specs/cognitive_line_test_automation/004-open-graph-mcp-test-scenarios.md §4.1 table row QA7. QA7 is the one family with no counterpart bullet in docs/specs/cognitive_line/004-open-graph-mcp-test-scenarios.md §4, which lists six.",
+        "docs/adr/ADR.md — ADR-0006 (Taxonomia fechada de recusas com obrigação de cliente) supplies the refusal vocabulary whose observability is in question; the threat catalogue T1-T14 has no entry for the side channel."
+      ],
+      "liftingAdr": "docs/adr/ADR.md — ADR-0006 (Taxonomia fechada de recusas), amended with the missing threat-catalogue entry for the refusal-code / timing / closure-count side channel.",
+      "liftingCondition": "A merged amendment to ADR-0006 that names QA7 and states the threat model for refusal code, response timing and closure count as observables — what an unauthorized observer may distinguish and what must be indistinguishable. On merge, QA7's members re-enter the Scenario Register as `proposed`.",
+      "measurement": {
+        "mayMeasure": true,
+        "mayAssert": false,
+        "note": "Measurement without assertion. A timing-differential probe may measure and record an observation — refusal code, response timing, closure count, with its runner fingerprint — into the Benchmark Ledger, and that record is evidence. It may never assert an expected outcome: no expected timing, no bound on the differential, no assertion that the code or count does or does not leak. Asserting any of those silently decides the open architectural question."
+      },
+      "members": [
+        "EAP-QUAR-007"
+      ]
+    }
+  ]
+}

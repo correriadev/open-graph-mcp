@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "open-graph-mcp",
+      "devDependencies": {
+        "typescript": "5.8.2",
+      },
     },
     "packages/client": {
       "name": "@open-graph-mcp/client",

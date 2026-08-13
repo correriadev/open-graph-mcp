@@ -1,0 +1,62 @@
+{
+  "featureId": "F002",
+  "taskId": "12",
+  "title": "Implement the Assertion Fingerprint Tool",
+  "status": "SUCCESS",
+  "metrics": {
+    "totalTests": 785,
+    "passed": 784,
+    "failed": 0,
+    "todo": 1,
+    "coverage": 0.0,
+    "taskSuiteTests": 31,
+    "taskSuitePassed": 31,
+    "taskSuiteFailed": 0
+  },
+  "modifiedFiles": [
+    "scripts/verification/assertion-fingerprint.ts",
+    "scripts/verification/assertion-fingerprint.test.ts",
+    "docs/verification/assertion-fingerprints.json"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The fingerprint is an order-insensitive multiset of matcher plus normalised subject and is stable across reformatting and test reordering",
+      "met": true,
+      "evidence": "31/31 tests in scripts/verification/assertion-fingerprint.test.ts pass, including a per-file matrix that reprints and reverse-orders each of the seven f001-* files through the TypeScript printer and asserts an unchanged hash, plus a five-case trailing-comma matrix."
+    },
+    {
+      "criterion": "Removing a single expect() call from any fingerprinted file changes the hash and is reported with the missing assertion listed",
+      "met": true,
+      "evidence": "Unit tests assert hash change, expectCount-1 and a named missing pair. Proven end-to-end via CLI against a temp COPY: removing `expect(result.success).toBe(true)` produced `AssertionSetReduced ... [missing x1] expect(result.success).toBe(...)` and exit 1. The seven source files were never modified (git status clean)."
+    },
+    {
+      "criterion": "Baseline fingerprints are captured for all seven f001-* files before any rename occurs",
+      "met": true,
+      "evidence": "docs/verification/assertion-fingerprints.json holds exactly the seven f001-* paths, 333 expect() calls total; `--check` exits 0. Task 13 has not run, so no rename has occurred."
+    }
+  ],
+  "normalizationRule": {
+    "matcher": "Property chain from the expect() call to the invoked matcher; not/resolves/rejects preserved as distinct matchers.",
+    "subject": "expect() argument list re-printed from the TypeScript AST with comments removed, redundant parentheses unwrapped, string literals re-emitted double-quoted, trailing commas dropped from object literals, array literals and binding patterns, and newline+indentation runs collapsed to one space.",
+    "notCanonicalised": [
+      "identifiers",
+      "argument order",
+      "literal values",
+      "await / non-null / as-casts"
+    ],
+    "knownBlindSpots": [
+      "Matcher arguments are not part of the pair: toBe(true) and toBe(false) collide.",
+      "Numeric separators are normalised (1_000 == 1000); radix is not (0x10 != 16).",
+      "The owning test case is not part of the pair, so identical assertions merge into one entry with multiplicity; deletion is still caught via the count."
+    ]
+  },
+  "constraintsRespected": {
+    "sevenF001FilesUnmodified": true,
+    "otherTaskScopeUntouched": true,
+    "committed": false
+  },
+  "knownFlakes": [
+    "reconnect-after-restart.test.ts EBUSY Windows temp-dir teardown race — hit once, cleared on rerun. Not suppressed."
+  ],
+  "reworksCount": 1
+}
