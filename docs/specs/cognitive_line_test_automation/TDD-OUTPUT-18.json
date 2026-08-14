@@ -1,0 +1,259 @@
+{
+  "featureId": "F002",
+  "task": 18,
+  "title": "Cancellation Fault Injection Probe",
+  "status": "COMPLETE",
+
+  "doubleIgnoreDefinition": {
+    "statement": "A provider DOUBLE-IGNORES cancellation when it refuses BOTH of the gateway's cancellation mechanisms.",
+    "refusal1_signal": "It adds no 'abort' listener, never reads signal.aborted, and does not stop when CapabilityGateway calls controller.abort(). The provider is handed the signal and does not look at it.",
+    "refusal2_deadline": "Its promise never settles: no resolve, no reject, no timer. It therefore outlives timeoutMs, outlives the execute() call that started it, and is STILL IN FLIGHT when the client's retry is admitted.",
+    "bothRequired": true,
+    "whyThisIsTheFaithfulFault": "Either refusal alone is a milder, different fault. Ignoring only the signal but settling at the deadline is cancellable in effect — the gateway's Promise.race observes an outcome once the external work finishes. Hanging while honouring the signal stops the external work the moment controller.abort() fires, which is exactly what the gateway's cancel-then-reject ordering (capability-gateway.ts:200-201) was written for. Only both together leave an uncancellable external effect running while a second one is admitted. TL.json open point 2 states the fault in its own two clauses: 'ignores the passed AbortSignal' AND 'hangs beyond timeoutMs'.",
+    "declaredInCode": "DOUBLE_IGNORE_DEFINITION in packages/mcp-server/test/probes/cancellation-probe.ts, asserted by a test so it cannot silently become prose."
+  },
+
+  "idempotencyKeyReleasedOnTimeout": {
+    "answer": "YES — unconditionally, on every timeout.",
+    "evidence": {
+      "file": "packages/mcp-server/src/eap/capability-gateway.ts",
+      "line": 212,
+      "code": "this.audit.release(request.idempotencyKey)",
+      "context": "Inside the catch arm of the Promise.race between request.providerAction(controller.signal) and the timeout promise (lines 204-224). The catch cannot distinguish a provider that threw from a provider that timed out, because the timeout rejects into the same catch (line 201).",
+      "existingComment": "'No outcome was produced, so the key is free again: a failed call must stay retryable.'",
+      "whyTheCommentIsWrongForThisCase": "It is true of a provider that FAILED and false of one that HUNG. Nothing was produced TO THE GATEWAY; the provider is still running and its external effect is still in flight.",
+      "implementation": "SqliteCapabilityAuditRepository.release, eap-repositories.ts:723-727 — DELETE FROM capability_executions WHERE tenant_id = ? AND idempotency_key = ? AND status = 'reserved'."
+    },
+    "observedNotInferred": "The probe does not read this off the source. It queries the capability_executions row for a 'reserved' status immediately after the first attempt returns and before the retry is issued (ArmObservation.keyReservedAfterFirstAttempt), and observes false on all three arms.",
+    "whatCorrectBehaviourWouldBe": "Neither 'release' nor 'do not release'. The gateway must distinguish a provider that FAILED (settled with a rejection — nothing is in flight, the key is genuinely safe to reuse) from one that TIMED OUT (still running, uncancellable). A settled rejection may release; a timeout should leave the key in a terminal 'abandoned' state that a retry must REFUSE, forcing a new idempotency key and an explicit reconciliation of the in-flight effect. The mutation below shows that simply not releasing eliminates the duplicate, but at the cost the existing comment guards against — a hung provider would render its key permanently unusable. This is an architectural decision, is RECORDED, and was NOT taken."
+  },
+
+  "effectCountPerIdempotencyKey": {
+    "method": "Three arms, each with its own tenant, environment and single idempotency key. Two execute() calls per arm: attempt 1 times out, attempt 2 is the client's retry with the SAME key. The double-ignoring provider appends one record per invocation to an append-only JSONL effect-ledger FILE and PERFORMS NOTHING. Counts are read back off that file after every call returned (ADR-0021), never from an in-process counter.",
+    "timeoutMs": 25,
+    "arms": [
+      {
+        "arm": "reversible-same-key",
+        "key": "probe-key-reversible-same-key",
+        "classification": "reversible",
+        "approvals": [],
+        "providerInvocations": 2,
+        "settled": 0,
+        "inFlight": 2,
+        "duplicate": true,
+        "attempt1": "FAILED / PROVIDER_UNAVAILABLE",
+        "attempt2": "FAILED / PROVIDER_UNAVAILABLE",
+        "reservationHeldAfterTimeout": false,
+        "completedAuditRows": 0,
+        "safety": "UNSAFE",
+        "why": "A reversible capability needs no operator approval, so once the timeout releases the reservation NOTHING stands between the retry and a second provider invocation. The idempotency key — the one control whose entire purpose is to make a retry safe — provides zero protection, and the first invocation is still running when the second starts."
+      },
+      {
+        "arm": "irreversible-same-key-same-approval",
+        "key": "probe-key-irreversible-same-key-same-approval",
+        "classification": "irreversible",
+        "approvals": ["approval-1"],
+        "providerInvocations": 1,
+        "settled": 0,
+        "inFlight": 1,
+        "duplicate": false,
+        "attempt1": "FAILED / PROVIDER_UNAVAILABLE",
+        "attempt2": "REFUSED / APPROVAL_ALREADY_USED",
+        "reservationHeldAfterTimeout": false,
+        "completedAuditRows": 0,
+        "safety": "SAFE",
+        "why": "The duplicate is avoided, but NOT by the idempotency key, which was released and freely re-reserved. It is avoided because the operator's grant is single-use and was consumed by the first attempt. The refusal code proves which control fired: APPROVAL_ALREADY_USED, never IDEMPOTENCY_CONFLICT."
+      },
+      {
+        "arm": "irreversible-same-key-new-approval",
+        "key": "probe-key-irreversible-same-key-new-approval",
+        "classification": "irreversible",
+        "approvals": ["approval-1", "approval-2"],
+        "providerInvocations": 2,
+        "settled": 0,
+        "inFlight": 2,
+        "duplicate": true,
+        "attempt1": "FAILED / PROVIDER_UNAVAILABLE",
+        "attempt2": "FAILED / PROVIDER_UNAVAILABLE",
+        "reservationHeldAfterTimeout": false,
+        "completedAuditRows": 0,
+        "safety": "UNSAFE",
+        "why": "The client is told PROVIDER_UNAVAILABLE, whose stated obligation is 'Audit failure and retry provider when available'. The operator issues a fresh grant — the sanctioned response. That re-arms the single-use barrier, and the idempotency key does not re-arm with it. A second IRREVERSIBLE effect is admitted under the SAME idempotency key while the first is in flight."
+      }
+    ],
+    "duplicateOccurred": true,
+    "duplicateIsConcurrentNotSequential": "In both duplicating arms the second invocation starts while the first has not settled (inFlight = 2). This is strictly worse than a replay: no compensating action can be ordered against an effect that has not finished."
+  },
+
+  "answerToTlOpenPoint2": "Releasing the idempotency key on timeout does NOT prevent duplicate execution. It is the mechanism that permits it. For a reversible capability the retry produces a second concurrent provider invocation under the same key with nothing standing in its way. For an irreversible capability the duplicate is prevented only by single-use operator approval — an authorization control with a different purpose and a different lifetime, doing an idempotency control's job — and that barrier is defeated the moment an operator legitimately re-approves in response to the PROVIDER_UNAVAILABLE the client was handed.",
+
+  "acceptance": {
+    "1_effectsCountedNeverPerformed": {
+      "satisfied": true,
+      "how": "The fault provider's entire body is one appendFileSync into the probe's own temporary JSONL ledger. It contacts no external system, mutates nothing outside that file, and there is no code path in the probe that could perform a real irreversible effect. The duplicate is observable without being executed."
+    },
+    "2_deterministicAndBlocking": {
+      "satisfied": true,
+      "how": "Observations are counts of discrete events, refusal codes and a reservation row — no duration, no timestamp difference, no rate. CancellationObservation carries no duration field, so a verdict cannot be a function of a timing even by accident (pinned by a test). analyzeCancellation is a pure function over the durable record and its verdict is asserted in two annotated, blocking test cases in the suite. NO Benchmark Ledger sample is recorded by this probe.",
+      "pinnedInBothDirections": "CHARACTERISED records today's effect count, refusal codes and reservation outcome per arm, each labelled SAFE or UNSAFE. analyzeCancellation refuses any departure in EITHER direction: a change that adds a third effect fails, and so does one that removes the duplicate. A safety-critical duplicate-effect property must not change without the change being stated."
+    },
+    "3_tlOpenPoint2Discharged": {
+      "resolution": "REAL OPEN POINT FOUND — no substitution was needed.",
+      "artefact": "docs/specs/cognitive_line/TL.json",
+      "openPointIndex": 2,
+      "verbatim": "In `CapabilityGateway.execute`, if an external capability provider action ignores the passed `AbortSignal` and hangs beyond `timeoutMs`, how will releasing the idempotency key upon timeout prevent duplicate execution or race conditions for irreversible side-effects when retried by a client?",
+      "note": "The task brief warned this might not exist because Phase C was not run in F002. It DOES exist: TL.json is an F001 Phase C artefact, present in the F001 spec directory, and open point 2 is verbatim this task.",
+      "namedDischargingTestCase": {
+        "testFile": "packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts",
+        "testName": "TL.json open point 2 — a provider that double-ignores cancellation lets ONE idempotency key produce TWO provider effects",
+        "scenarioLinks": [
+          { "id": "EAP-CAPB-002", "kind": "covers-partially" },
+          { "id": "EAP-CAPB-003", "kind": "covers-partially" }
+        ],
+        "defectId": "TL-F001-OPEN-2",
+        "visibleInMap": "The string 'TL.json open point 2' now appears verbatim as a testName in docs/verification/traceability-map.json, so the citation is mechanically present in the derived artefact rather than only in prose."
+      },
+      "whyNotAsserts": "EAP-CAPB-002 reads 'Should avoid duplicate effects when the Capability Provider receives the same idempotency key'. The probe observes that after a timeout the system does NOT avoid them. An `asserts` link would record in a derived, committed artefact that a Scenario the system FAILS has been proven — the precise silent pass this feature exists to prevent. EAP-CAPB-003's 'no successful outcome is fabricated' clause IS observed in full (0 completed audit rows on every arm) but its 'the failure is auditable' clause is not, so that link is partial too."
+    }
+  },
+
+  "capabilityGatewayTouched": {
+    "modifiedInFinalChange": false,
+    "why": "The probe observes everything it needs through the gateway's public execute() API, the provider's own ledger file and the capability_executions reservation row. No production change was required — the outcome the task named as better. `git diff --stat packages/mcp-server/src/` is empty.",
+    "temporaryMutationOnly": "It was mutated temporarily to demonstrate the probe can fail, then restored byte-identically. See `mutations` below. No timeout or idempotency semantic was weakened to make anything pass."
+  },
+
+  "mutations": [
+    {
+      "id": "M1",
+      "target": "packages/mcp-server/src/eap/capability-gateway.ts:212",
+      "change": "Commented out `this.audit.release(request.idempotencyKey)`.",
+      "witness1_bytesChanged": {
+        "what": "sha256 of capability-gateway.ts, recorded by the probe into CancellationObservation.gatewayDigest",
+        "before": "d8f900bf6dd1af98a946bcb2359166b47c362b782c2d89e0b577955fd656df21",
+        "after": "edbff712ce7ae91e895bd9913590b522f4dfdabc6c83ff7af72733a2b1fea95b",
+        "proves": "The file on disk changed. On its own this proves ONLY that a file changed."
+      },
+      "witness2_loadedCodeBehavedDifferently": {
+        "what": "The behavioural signature of the arms",
+        "observed": "keyReservedAfterFirstAttempt flipped false -> true on ALL THREE arms; attempt 2's refusal changed from PROVIDER_UNAVAILABLE to IDEMPOTENCY_CONFLICT on both duplicating arms; provider invocations dropped 2 -> 1 on both duplicating arms.",
+        "proves": "The code the runtime actually loaded behaved differently. On its own this proves ONLY that behaviour changed."
+      },
+      "conclusion": "Together the two witnesses prove the mutation reached the code under probe. Neither alone would have been sufficient, which is the standard task 17 set and this feature's mutation rule requires.",
+      "probeResult": "FAILED — 7 named characterisation breaks; both discharging test cases failed.",
+      "restored": "Yes. Digest back to d8f900bf...df21 and `git diff` on the file is empty."
+    },
+    {
+      "id": "M2-fixtures",
+      "target": "analyzeCancellation, via six fixture observations in probes/cancellation-probe.test.ts",
+      "change": "Each fixture differs from the characterisation in exactly ONE way: one extra provider start, one fewer, a reservation still held, a fabricated COMPLETED audit row, a changed refusal code.",
+      "witness": "Each fixture is constructed by transforming the characterised observation and the resulting object is passed directly to the analyser, so the changed input is the analyser's literal argument — there is no intermediate that could discard it.",
+      "probeResult": "Every fixture produces ok === false with the offending arm named. This is the primary 'the probe can fail' demonstration and it costs no production mutation, so it runs on every suite run."
+    }
+  ],
+
+  "traceabilityDelta": {
+    "regeneratedNotHandEdited": "bun scripts/verification/reconcile-traceability.ts, verified byte-identical with --check.",
+    "links": { "before": 148, "after": 151 },
+    "asserts": { "before": 39, "after": 39 },
+    "coversPartially": { "before": 109, "after": 112 },
+    "unlinkedScenarios": { "before": 13, "after": 13 },
+    "unclaimedTests": { "before": 21, "after": 21 },
+    "corpusFiles": { "before": 21, "after": 22 },
+    "corpusTestCases": { "before": 137, "after": 139 },
+    "annotatedTestCases": { "before": 116, "after": 118 },
+    "newLinks": [
+      "EAP-CAPB-002 | covers-partially | packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts :: TL.json open point 2 — a provider that double-ignores cancellation lets ONE idempotency key produce TWO provider effects",
+      "EAP-CAPB-003 | covers-partially | packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts :: TL.json open point 2 — a provider that double-ignores cancellation lets ONE idempotency key produce TWO provider effects",
+      "EAP-CAPB-002 | covers-partially | packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts :: single-use operator approval, not the idempotency key, is the only barrier left after a timeout"
+    ],
+    "unchangedAndWhy": {
+      "derivedStatus": "34 evidenced / 24 covers-partially-only / 13 unlinked / 7 declared-untestable — UNCHANGED. EAP-CAPB-002 and EAP-CAPB-003 already held asserts links from other cases, so adding covers-partially links promotes nothing.",
+      "conformance": "client 3/9, host 5/18 — UNCHANGED. No Conformance Item ids were claimed.",
+      "coverage": "2994/3257 lines, 223/245 functions — UNCHANGED and reproduced exactly by an instrumented run. No file under packages/**/src was modified, and the probe exercises only gateway paths already covered.",
+      "assertionFingerprint": "7 files match the baseline — UNCHANGED. The new files are not in the fingerprint baseline set and no existing test file was edited.",
+      "benchmarkLedger": "19 records, 17 samples, 1 band — UNCHANGED. This probe records NO sample and never reaches appendToLedger, so task 17's assertSoleLedgerWriter serialisation question does not arise."
+    }
+  },
+
+  "verification": {
+    "configuration": "CI-equivalent: OG_TARGET_REPO=\"C:/nonexistent-target-repo\", as the task brief specifies. Confirmed used for every run reported here.",
+    "bunRunVerify": { "exitCode": 0, "result": "1086 pass, 20 skip, 1 todo, 0 fail, 5501 expect() calls across 1107 tests in 150 files" },
+    "suiteDelta": "1072 pass -> 1086 pass. +14 = the probe's 14 new test cases (12 analyser/fixture cases outside the corpus, 2 discharging cases inside it). Skips unchanged at 20; failures 0.",
+    "gates": [
+      { "gate": "register-scenarios.ts --check", "exitCode": 0, "result": "PASS — 71 headings, byte-identical" },
+      { "gate": "quarantine.ts --check", "exitCode": 0, "result": "PASS — 7 families, 7 declared-untestable members" },
+      { "gate": "assertion-fingerprint.ts --check", "exitCode": 0, "result": "PASS — 7 files match the baseline" },
+      { "gate": "reconcile-traceability.ts --check", "exitCode": 0, "result": "PASS — byte-identical; 151 links (39 asserts, 112 covers-partially), 13 unlinked, 21 unclaimed" },
+      { "gate": "derive-status.ts --check", "exitCode": 0, "result": "PASS — 34 evidenced, 0 asserts-without-passing-execution, 24 covers-partially only, 13 unlinked, 7 declared-untestable" },
+      { "gate": "conformance-report.ts --check", "exitCode": 0, "result": "PASS — 27 items verbatim; client 3/9, host 5/18" },
+      { "gate": "quarantine-gate.ts", "exitCode": 0, "result": "PASS — 7 families checked against annotation-sink, traceability-map, corpus-source, benchmark-ledger" },
+      { "gate": "measure-coverage.ts --check", "exitCode": 0, "result": "PASS — 5 declared paths, 0 exclusions" },
+      { "gate": "coverage-gate.ts", "exitCode": 0, "result": "PASS — instrumented run reproduced 2994/3257 lines, 223/245 functions exactly" },
+      { "gate": "benchmark-ledger.ts --check", "exitCode": 0, "result": "PASS — 19 records, 17 samples, 1 band, chain intact, no band breached" }
+    ],
+    "gatesFailing": 0,
+    "redBeforeGreen": "Both test files were written and run BEFORE probes/cancellation-probe.ts existed: 0 pass, 2 fail, 'Cannot find module ./cancellation-probe'. After the module landed: 14 pass, 0 fail. One test then failed for a real reason during GREEN — the timing-key check substring-matched 'ms' inside 'duplicatingArms' — and the TEST was corrected to split camelCase into words, not the code.",
+    "knownFlakesObserved": "One intermediate full run showed the documented EBUSY teardown flake in reconnect-after-restart.test.ts (~1 run in 3-4, pre-existing, environmental). Two subsequent full runs were clean at 0 fail. No timeout was raised and nothing was skipped."
+  },
+
+  "filesChanged": {
+    "created": [
+      "packages/mcp-server/test/probes/cancellation-probe.ts",
+      "packages/mcp-server/test/probes/cancellation-probe.test.ts",
+      "packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts"
+    ],
+    "modified": [
+      "docs/verification/traceability-map.json (REGENERATED, never hand-edited)",
+      "docs/product/DECISIONS.md (append-only, 12 entries)"
+    ],
+    "notModified": [
+      "packages/mcp-server/src/eap/capability-gateway.ts — mutated temporarily and restored byte-identically",
+      "packages/mcp-server/test/probes/host.ts — used as-is; only removeStateDir was reused, nothing needed extending",
+      ".verification/annotations.jsonl — never deleted or rotated"
+    ],
+    "twoTestFilesNotOne": "Deliberate. probes/cancellation-probe.test.ts holds the analyser fixtures and imports NO annotation surface, so it is outside the EAP Test Corpus and contributes nothing to the map — exactly task 17's convention. probes/cancellation-duplicate-effect.test.ts holds the two discharging cases and does import it. Putting the fixtures in the corpus file would have added 12 unclaimed test cases and moved a committed baseline for no evidence."
+  },
+
+  "inSuiteCost": {
+    "runsInSuite": true,
+    "measuredMs": [640, 664, 631],
+    "aggregation": "three consecutive runs on the reference machine",
+    "shareOfCleanSuite": "about 0.8% of ~81 s",
+    "breakdown": "At most 150 ms is deliberate timeout (6 execute calls at 25 ms). The remaining ~490 ms is three createEapEnv environments (mkdtemp, openDb, schema).",
+    "rejectedOptimisation": "Sharing one environment across the arms would recover most of the 490 ms and is REJECTED: the arms differ in approval state, and an arm inheriting another's consumed approvals would be measuring the previous arm.",
+    "whyNotASeparateInvocation": "Task 17's reason applies with more force here: a probe that runs only when someone remembers proves nothing about the commit that broke the thing, and this probe guards a duplicate-irreversible-effect property.",
+    "runOncePerSuite": "The two discharging cases share a single probe run rather than taking one each."
+  },
+
+  "pendingCiGates": [
+    "reconcile-traceability.ts --check and derive-status.ts --check read .verification/annotations.jsonl and .verification/junit.xml, both git-ignored. CI MUST run `bun test --reporter=junit --reporter-outfile=.verification/junit.xml` from the repository root BEFORE either gate. A per-package run reports package-relative paths that cannot be attributed after the fact.",
+    "All verification runs for this task used the CI-equivalent OG_TARGET_REPO pointing at a nonexistent path. CI topology — including whether that variable is set, and whether EAP_BENCHMARK_RECORD is ever set — is task 20's, not this task's.",
+    "This probe records NO benchmark sample, so it adds no CI recording requirement and no ledger-write serialisation constraint.",
+    "The Windows EBUSY teardown flake in reconnect-after-restart.test.ts (~1 run in 3-4) is unowned and will intermittently fail CI. Pre-existing; not this task's."
+  ],
+
+  "foundButNotOwned": [
+    {
+      "severity": "HIGH",
+      "finding": "PRODUCTION BEHAVIOUR IS UNSAFE. A retry after a capability timeout can produce a duplicate, CONCURRENT external effect under a single idempotency key. For reversible capabilities nothing prevents it at all. For irreversible capabilities the only barrier is single-use operator approval, which an operator legitimately re-arms in response to the PROVIDER_UNAVAILABLE the client is told to retry on.",
+      "notFixedBecause": "Whether the gateway should stop releasing the key on timeout is an architectural decision with a real cost, and it is not a probe task's to take. The probe pins the behaviour so it cannot change silently; it does not bless it.",
+      "suggestedDirection": "Distinguish a settled provider rejection (safe to release) from a timeout (still in flight). Leave a timed-out key in a terminal 'abandoned' state that a retry must REFUSE, forcing a new idempotency key and explicit reconciliation of the in-flight effect."
+    },
+    {
+      "severity": "MEDIUM",
+      "finding": "Not releasing the key eliminates the duplicate outright — mutation M1 dropped all three arms to exactly 1 invocation. So the unsafe behaviour costs one line and buys only retryability-after-a-genuine-failure. The cost/benefit is more lopsided than the existing comment at capability-gateway.ts:211 suggests.",
+      "notFixedBecause": "Same as above — architectural, and the naive fix trades one defect for another (a hung provider permanently burns its idempotency key)."
+    },
+    {
+      "severity": "LOW",
+      "finding": "CapabilityGateway abandons the provider promise on timeout. `Promise.race` rejects and the provider's promise is never awaited again, so a provider that later rejects produces an unhandled rejection, and one that never settles is retained for the process's lifetime. The probe deliberately creates three of these per run and they are harmless here because they hold only a closure, but a real provider holding a socket or worker would leak.",
+      "notFixedBecause": "Out of scope; production code was deliberately left untouched."
+    },
+    {
+      "severity": "LOW",
+      "finding": "Third recurrence of the naive-text-oracle problem already recorded for tasks 07, 12 and 17: my own timing-key guard used substring matching and failed on 'duplicatingArms' containing 'ms'. Corrected here by splitting camelCase into words. reconcile-traceability.ts still decides corpus membership by a raw substring scan for the annotation import path, so a comment mentioning that path still enrols a file into the corpus. Unowned and unfixed.",
+      "notFixedBecause": "reconcile-traceability.ts is outside this task's scope."
+    }
+  ]
+}

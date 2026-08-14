@@ -14,11 +14,11 @@
     },
     "annotationSink": {
       "path": ".verification/annotations.jsonl",
-      "distinctRecords": 116
+      "distinctRecords": 118
     },
     "executedTests": {
       "path": ".verification/junit.xml",
-      "corpusTestCases": 137
+      "corpusTestCases": 139
     }
   },
   "corpus": {
@@ -40,15 +40,16 @@
       "packages/mcp-server/test/f001-validation-audit-vulns.test.ts",
       "packages/mcp-server/test/horizon-durability.test.ts",
       "packages/mcp-server/test/persistent-delta.test.ts",
+      "packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts",
       "packages/mcp-server/test/promotion.test.ts",
       "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "packages/mcp-server/test/recall-closure-gate.test.ts",
       "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
       "packages/mcp-server/test/recall.test.ts"
     ],
-    "fileCount": 21,
-    "testCaseCount": 137,
-    "annotatedTestCaseCount": 116,
+    "fileCount": 22,
+    "testCaseCount": 139,
+    "annotatedTestCaseCount": 118,
     "undeclaredCandidates": []
   },
   "counts": {
@@ -58,8 +59,8 @@
     "unclaimedTests": 21,
     "links": {
       "asserts": 39,
-      "coversPartially": 109,
-      "total": 148
+      "coversPartially": 112,
+      "total": 151
     }
   },
   "links": [
@@ -100,6 +101,18 @@
       "kind": "asserts"
     },
     {
+      "scenario": "EAP-CAPB-002",
+      "testFile": "packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts",
+      "testName": "single-use operator approval, not the idempotency key, is the only barrier left after a timeout",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-CAPB-002",
+      "testFile": "packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts",
+      "testName": "TL.json open point 2 — a provider that double-ignores cancellation lets ONE idempotency key produce TWO provider effects",
+      "kind": "covers-partially"
+    },
+    {
       "scenario": "EAP-CAPB-003",
       "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "CapabilityGateway times out a hanging provider and cancels it via AbortSignal",
@@ -109,6 +122,12 @@
       "scenario": "EAP-CAPB-003",
       "testFile": "packages/mcp-server/test/f001-validation-audit-vulns.test.ts",
       "testName": "a failed execution releases its reservation so the key can be retried",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-CAPB-003",
+      "testFile": "packages/mcp-server/test/probes/cancellation-duplicate-effect.test.ts",
+      "testName": "TL.json open point 2 — a provider that double-ignores cancellation lets ONE idempotency key produce TWO provider effects",
       "kind": "covers-partially"
     },
     {
@@ -980,13 +999,13 @@
     {
       "id": "EAP-CAPB-002",
       "assertsLinks": 2,
-      "coversPartiallyLinks": 1,
+      "coversPartiallyLinks": 3,
       "coverage": "asserts"
     },
     {
       "id": "EAP-CAPB-003",
       "assertsLinks": 1,
-      "coversPartiallyLinks": 1,
+      "coversPartiallyLinks": 2,
       "coverage": "asserts"
     },
     {
