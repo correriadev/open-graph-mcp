@@ -468,5 +468,25 @@
       "neverLoaded"
     ],
     "sha256": "17ed20d43e7ca4adb7f0438f04c63899b6355fefd467970a1b41f3455b0bdee3"
+  },
+  "ratchet": {
+    "version": 1,
+    "gate": "coverage",
+    "blocking": true,
+    "units": [
+      "aggregate",
+      "scope-path",
+      "file"
+    ],
+    "metrics": [
+      "lines",
+      "functions"
+    ],
+    "workingTree": "A fresh instrumented run must reproduce this figure EXACTLY — integer covered/total counts, for lines and for functions, at the aggregate, at every declared scope path, and per file. A measured figure below the recorded one is a regression and fails. A measured figure ABOVE the recorded one also fails, until the new figure is committed into this file in the same change: an improvement nobody recorded is indistinguishable from a ratchet drifting on its own.",
+    "history": "The committed figure is additionally compared against the previously committed one, read out of git at the merge-base. The ratio may not fall, at the aggregate or at any declared scope path. Without this, lowering coverage and re-running the measurement would produce a run that agrees with the file and a build that is green. Per-file history is NOT ratcheted: files are legitimately added and deleted, and a history ratchet over a moving set fails on every honest refactor. A prior figure whose scope digest differs is INCOMPARABLE and fails as such, because moving the denominator is the cheapest way to make a figure look better.",
+    "rounding": "NONE OF THE PERCENTAGES IN THIS DOCUMENT DECIDE A BUILD. The `pct` fields are rounded to two decimal places for humans. The working-tree check compares integer counts, so rounding cannot enter it; the history check compares ratios as exact rationals by cross-multiplication (covered_now * total_prior >= covered_prior * total_now), so a fall too small to show at two decimal places is caught all the same. There is therefore no tolerance band and no epsilon: there is nothing for one to absorb.",
+    "countsVersusPercentages": "Counts ratchet against the working tree; the ratio ratchets across history. A count ratchet across history would fail on any change adding a single uncovered line, and a gate that expensive is switched off within a week. The known consequence, stated rather than discovered: deleting a poorly covered file raises the ratio and the history check permits it. That is not laundering — the working-tree check forces the new baseline into the same commit, so the deletion appears in the diff as a row leaving `files[]`, which is a reviewable fact.",
+    "unmeasured": "A run that produced no figure is NOT a figure that did not change. `measure-coverage.ts` refuses to write a figure from a red suite, so a gate treating a missing measurement as an unchanged one would silently stop measuring the first time the suite went flaky and report PASS for ever after. `unmeasured` is a distinct verdict with exit code 1 and its own message. There is no flag, environment variable or condition in the gate that makes it green.",
+    "sha256": "4e0b1421b7e075f99ffd9f7b3f5351ed3bc2cb2bfe70f3cd57cdfee1d621b9a1"
   }
 }

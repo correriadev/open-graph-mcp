@@ -1,0 +1,301 @@
+{
+  "task": 15,
+  "name": "Add the Coverage Baseline Ratchet Gate",
+  "feature": "cognitive_line_test_automation",
+  "branch": "f002-test-automation",
+  "status": "COMPLETE",
+  "summary": "Task 14's recorded figure is now a monotonic ratchet enforced by scripts/verification/coverage-gate.ts, wired into .github/workflows/ci.yml as its own explicitly-blocking `coverage` job. The ratchet is TWO checks, because either alone is trivially defeated: (A) a fresh instrumented run must reproduce the committed figure EXACTLY at aggregate, scope-path and per-file granularity, for lines and functions — measured-below fails as `regressed`, measured-above fails as `unrecorded`; (B) the committed figure is compared against the previously committed one read out of git at the merge-base, and the ratio may not fall. `unmeasured` is a first-class verdict with exit code 1, never conflated with `measured and equal`. This session INHERITED an implementation from an interrupted prior session and re-verified every claim rather than trusting it; doing so found and fixed a real defect in the proof (see mutationTesting.M4).",
+
+  "provenance": {
+    "note": "The gate source, the baseline `ratchet` block, the ci.yml job and eleven DECISIONS entries were already present in the working tree at session start, produced by an interrupted prior session. TDD-OUTPUT-15.json did not exist and no claim had been independently verified.",
+    "whatThisSessionDid": [
+      "Re-ran all five source mutations against the real gate binary — one SURVIVED, exposing a defective test, which was fixed.",
+      "Re-ran all six end-to-end mutations against the real gate binary from scratch (the prior session's harness result was unreproducible until a bug in MY harness was fixed).",
+      "Ran the full definition of done: bun run verify plus all nine gates.",
+      "Raised, tested and REFUTED a CI-parity risk nobody had considered (targetRepoAvailable)."
+    ],
+    "implementationUnchangedThisSession": true,
+    "testChangedThisSession": "scripts/verification/coverage-gate.test.ts — one fixture corrected; see mutationTesting.M4."
+  },
+
+  "ratchetPolicy": {
+    "declaredIn": "docs/verification/coverage-baseline.json -> `ratchet`",
+    "livesIn": "scripts/verification/coverage-gate.ts -> RATCHET_POLICY (a constant of the executable)",
+    "enforcement": "The baseline records a COPY of the policy. evaluateRatchet recomputes ratchetPolicyDigest() over the DECLARED fields and compares it to the digest of the executable's constant. Editing `ratchet.rounding` in the JSON to add a tolerance band does not loosen the gate — it stops the gate with outcome `policy-mismatch`. Note that the stored `ratchet.sha256` is NOT consulted by the gate (only by a unit test): recomputing it after tampering does not help, because the comparison is against the executable, not against the stored digest.",
+    "checkA_workingTree": {
+      "compares": "committed figure vs a fresh instrumented run",
+      "units": ["aggregate", "scope-path", "file"],
+      "metrics": ["lines", "functions"],
+      "on": "INTEGER covered/total counts",
+      "belowFails": "regressed",
+      "aboveFails": "unrecorded"
+    },
+    "checkB_history": {
+      "compares": "committed figure vs the previously committed figure, read out of git at the merge-base",
+      "units": ["aggregate", "scope-path"],
+      "on": "the ratio, as an EXACT RATIONAL by cross-multiplication (covered_now * total_prior >= covered_prior * total_now)",
+      "fileLevelExcluded": "files are legitimately added and deleted; a history ratchet over a moving set fails on every honest refactor. Per-file movement is still caught, by check A, in the same commit.",
+      "incomparableScope": "a prior figure whose scope.sha256 differs is refused as INCOMPARABLE, not assumed benign"
+    }
+  },
+
+  "judgementCalls": [
+    {
+      "call": "Ratchet granularity: aggregate only, or per-scope-path too?",
+      "decision": "Check A ratchets aggregate AND every declared scope path AND every file. Check B ratchets aggregate and scope path only.",
+      "justification": "Aggregate-only would let graph-core rot while mcp-server improves and the total stay flat. That is not hypothetical here: graph-core is already the worst path at 84.35% lines / 76.79% functions, and mcp-server/src/eap is at 94.44/93.89 — a 13-line rot in graph-core offset by a 13-line gain in mcp-server is exactly the shape this repository would produce, and aggregate-only would pass it silently. The cost is noise, and it is bounded: check A's per-file granularity only ever fires when the figure has to be recommitted anyway.",
+      "provenBy": "mutation M2 (per-file granularity removed from compareUnits) kills 3 tests; E1 reports the same regression at all three levels simultaneously."
+    },
+    {
+      "call": "Tolerance: exact monotonicity or an epsilon band?",
+      "decision": "NONE, and no epsilon is needed — the question dissolves rather than being answered.",
+      "justification": "Percentages move on rounding alone, so the gate never compares percentages. Check A compares integer counts, where rounding cannot enter. Check B compares ratios as exact rationals by cross-multiplication. No `pct` field in any artefact decides a build; they exist for humans. An epsilon band would have to be justified against a real invisible-at-2dp drop, and it cannot be: prior 2997/3260 and current 2994/3257 BOTH round to 91.93 while the exact ratio falls, and the gate catches it.",
+      "roundingStatedInBaseline": "yes — `ratchet.rounding`, as acceptance requires the policy on what counts to live in the baseline.",
+      "provenBy": "mutation M4 (history compares rounded percentages) — see mutationTesting.M4, which is also where this session found the proof to be defective and fixed it."
+    },
+    {
+      "call": "Where the ratchet runs: bun run verify, CI only, or both?",
+      "decision": "CI ONLY, as its own job running in PARALLEL with `test`.",
+      "justification": "Instrumentation itself costs +1501 ms / +1.85% (task 14's measurement) — trivially worth paying. The RUN is the real cost: a second full suite, measured at 83 s in this session. As a step inside `test` that is +83 s on the existing critical path; as a parallel job it is wall-clock free. It is deliberately NOT on `bun run verify`: 83 s on every local verify is the cost that gets gates switched off, and package.json is out of this task's scope besides.",
+      "consequenceRecorded": "A developer gets no local signal before pushing unless they run `bun scripts/verification/coverage-gate.ts` by hand. Wiring it into a cheaper local path is task 20's to weigh."
+    },
+    {
+      "call": "Whether counts or percentages ratchet — noting that percentages can rise while covered lines fall, and that deleting a poorly-covered file raises the percentage.",
+      "decision": "Counts ratchet the working tree (check A); the RATIO ratchets history (check B).",
+      "justification": "A count ratchet across history would fail on any change that adds a single uncovered line — intolerable, and a gate that expensive is switched off within a week; a switched-off gate measures nothing. A ratio ratchet against the working tree would be meaningless, because 'the same run happened twice' is a statement about counts.",
+      "knownConsequenceStatedNotDiscovered": "DELETING A POORLY COVERED FILE RAISES THE RATIO AND CHECK B PERMITS IT. This is deliberate and is not laundering: check A forces the new baseline into the SAME commit, so the deletion appears in the diff as a row leaving `files[]` — a reviewable fact, unlike a percentage that merely went up. Recorded in `ratchet.countsVersusPercentages` so nobody discovers it as a surprise."
+    }
+  ],
+
+  "acceptance": [
+    {
+      "id": 1,
+      "criterion": "A change lowering line or function coverage inside the declared scope fails the gate, with baseline, measured and delta all reported.",
+      "verdict": "PROVEN",
+      "howProven": "End-to-end mutation E1 against the REAL gate binary: 4 covered lines and 3 covered functions removed from packages/mcp-server/src/gates.ts in the lcov the gate consumes. Result exit=1, outcome `regressed`, SIX units reported — aggregate/scope-path/file x lines/functions — each carrying all three numbers.",
+      "verbatimEvidence": [
+        "aggregate AGGREGATE (lines): baseline 2994/3257 (91.93%), measured 2990/3257 (91.80%), delta -4 covered / +0 total (-0.13 pp) — regressed.",
+        "aggregate AGGREGATE (functions): baseline 223/245 (91.02%), measured 220/245 (89.80%), delta -3 covered / +0 total (-1.22 pp) — regressed.",
+        "file packages/mcp-server/src/gates.ts (functions): baseline 23/23 (100.00%), measured 20/23 (86.96%), delta -3 covered / +0 total (-13.04 pp) — regressed."
+      ]
+    },
+    {
+      "id": 2,
+      "criterion": "Raising the figure requires committing the new baseline in the same change, so the ratchet cannot drift silently.",
+      "verdict": "PROVEN",
+      "howProven": "End-to-end mutation E2: +4 covered lines on gates.ts, baseline untouched. Result exit=1, outcome `unrecorded`. The gate cannot itself write a figure — `measureNow()` builds a measurement in memory and writes nothing, and the only writing path, `--restate-policy`, writes the POLICY and refuses to touch a baseline that does not load. Tampering with the recorded figure instead is refused one layer earlier: E4 hand-edited 2994 -> 3200 and `loadCoverageBaseline` rejected it on `integrity.sha256` before any comparison ran (ADR-0021).",
+      "verbatimEvidence": [
+        "coverage gate: FAIL (BLOCKING) — 3 unit(s) measured ABOVE the figure committed in docs/verification/coverage-baseline.json:",
+        "aggregate AGGREGATE (lines): baseline 2994/3257 (91.93%), measured 2998/3257 (92.05%), delta +4 covered / +0 total (0.12 pp) — improved.",
+        "E4: coverage gate: FAIL (BLOCKING) — the committed figure does not load: measure-coverage: the recorded figures do not match `integrity.sha256`."
+      ],
+      "notSatisfiableByEditingTheBaseline": "Three independent refusals: integrity.sha256 (figures), scope.sha256 (denominator), and policy-digest disagreement (rules). E4, E6 and E5 respectively."
+    },
+    {
+      "id": 3,
+      "criterion": "The gate's blocking status is declared explicitly in the workflow rather than inherited.",
+      "verdict": "PROVEN",
+      "howProven": "ci.yml parsed with a real YAML parser (Bun.YAML.parse) and the coverage job inspected programmatically, rather than eyeballed.",
+      "verbatimEvidence": [
+        "parsed jobs: test, typecheck, client-node, e2e, coverage, load",
+        "coverage.continue-on-error = false",
+        "coverage.if = undefined",
+        "gate step = {\"name\":\"Coverage Baseline Ratchet Gate (blocking)\",\"continue-on-error\":false,\"run\":\"bun scripts/verification/coverage-gate.ts\"}",
+        "checkout fetch-depth = 0"
+      ],
+      "whatMakesItDeclaredRatherThanInherited": "`continue-on-error: false` is written out at BOTH job and step level even though false is the default, so a reader deciding whether a red mark stops a merge answers from this file rather than from knowledge of Actions defaults. Equally deliberate is what is ABSENT: no `if:` at job or step level, so no branch, event or upstream result can make it advisory. The comment states that the absence of `if:` IS the declaration and that any future addition of one changes the gate's blocking status."
+    }
+  ],
+
+  "unmeasuredIsNeverGreen": {
+    "constraint": "`measure-coverage.ts` refuses to write a figure from a red suite, so a CI job treating 'no figure' as 'figure unchanged' would silently stop measuring the first time the suite went flaky and report PASS for ever after. Same defect class as task 08's 'no violations found' vs 'nothing was looked at'.",
+    "design": "`unmeasured` is a first-class RatchetOutcome with its own exit code 1 and its own message. `drift.length === 0` is NOT the pass condition anywhere in the gate — `outcome === \"pass\"` is (exitCodeFor). The report also carries `measured: boolean` and `unmeasuredReason` as separate fields.",
+    "distinguishabilityEvidence": {
+      "unitTest": "`an EMPTY drift list does not make an unmeasured run pass` asserts that BOTH reports carry drift === [] (so nothing distinguishes them by drift), that exactly one exits 0, and that their outcomes AND their messages differ.",
+      "endToEnd": "E3 — gate pointed at a nonexistent lcov: exit=1, outcome UNMEASURED, header line `measured NO — ... does not exist, so nothing was measured.`, versus A0 on the pristine lcov: exit=0, outcome PASS, header line `measured yes`.",
+      "mutationProof": "M1 replaced the unmeasured branch with `return pass` (the exact 'no figure means unchanged' defect). 4 tests failed. The property is load-bearing, not decorative."
+    },
+    "noEscapeHatch": "There is no flag, environment variable or condition in the gate that makes an unmeasured run green, and the ci.yml comment instructs a reader to RE-RUN the job on a known flake and explicitly forbids adding `continue-on-error: true`."
+  },
+
+  "mutationTesting": {
+    "method": "Two layers. SOURCE mutations against scripts/verification/coverage-gate.ts run the unit suite; END-TO-END mutations run the REAL gate binary against mutated lcov and mutated baselines. All files were backed up and restored BY FILE COPY, never by git. `measure-coverage.ts --check` re-verified the baseline afterwards: PASS.",
+    "sourceMutations": [
+      { "id": "M1", "mutation": "unmeasured branch returns pass (missing figure treated as unchanged)", "result": "KILLED — 18 pass / 4 fail" },
+      { "id": "M2", "mutation": "per-file granularity removed from compareUnits", "result": "KILLED — 19 pass / 3 fail" },
+      { "id": "M3", "mutation": "unrecorded improvement allowed (better.length branch disabled)", "result": "KILLED — 20 pass / 2 fail" },
+      {
+        "id": "M4",
+        "mutation": "atLeastAsGood compares rounded 2dp percentages instead of exact rationals",
+        "resultFirstRun": "SURVIVED — 22 pass / 0 fail",
+        "diagnosis": "A defect in the TEST, not the gate. The fixture used prior 2994/3256 vs current 2994/3257, which round to 91.95 and 91.93 — VISIBLY different at two decimal places, so a rounded-comparison gate catches them too and the test proved nothing about rounding. The test even asserted `.not.toBe()` on the two rounded values, pinning the opposite of its own name.",
+        "fix": "Fixture replaced with prior 2997/3260 vs current 2994/3257: both round to 91.93, and 2994*3260 = 9760440 < 2997*3257 = 9761229, so the exact ratio falls. The test now asserts the rounded values are EQUAL and the cross-multiplication inequality holds.",
+        "resultAfterFix": "KILLED — 21 pass / 1 fail",
+        "significance": "The gate's implementation was always correct; only the proof was not. This is the third instance in F002 of a mutation suite scoring a no-op as a pass (task 14 logged two), so the pattern is systemic: a surviving mutant must be investigated as a defective TEST before it is accepted as a defensible design."
+      },
+      { "id": "M5", "mutation": "declared-policy digest comparison disabled", "result": "KILLED — 21 pass / 1 fail" }
+    ],
+    "endToEndMutations": [
+      { "id": "A0", "mutation": "pristine lcov (control)", "exit": 0, "outcome": "PASS" },
+      { "id": "E1", "mutation": "lcov: gates.ts -4 covered lines, -3 covered functions", "exit": 1, "outcome": "REGRESSED", "detail": "6 units reported with baseline / measured / delta" },
+      { "id": "E2", "mutation": "lcov: gates.ts +4 covered lines, baseline not recommitted", "exit": 1, "outcome": "UNRECORDED", "detail": "message names the baseline path and 'in the same change'" },
+      { "id": "E3", "mutation": "no lcov at all", "exit": 1, "outcome": "UNMEASURED" },
+      { "id": "E4", "mutation": "baseline figure hand-edited 2994 -> 3200", "exit": 1, "outcome": "refused before evaluating — integrity.sha256 (ADR-0021)" },
+      { "id": "E5", "mutation": "declared ratchet policy hand-loosened with a 0.5pp tolerance band", "exit": 1, "outcome": "POLICY-MISMATCH", "detail": "'disagrees with this executable's on: rounding'" },
+      { "id": "E6", "mutation": "ratchet block deleted from the baseline", "exit": 1, "outcome": "refused before evaluating — scope.sha256", "caveat": "BLOCKED FOR THE WRONG REASON: the JSON round-trip used to delete the block also reformatted the scope, so the loader caught that first. The intended path (declaredPolicy === null -> policy-mismatch) is covered by unit test, not end to end." }
+    ],
+    "harnessDefectSelfReported": "My FIRST end-to-end run reported E1 and E2 as PASS. The cause was in MY harness, not the gate: the PowerShell helper took a parameter named `$args`, which is a PowerShell automatic variable, so `--from-lcov` was silently dropped and each invocation ran the full instrumented suite (83 s) against the real tree. Detected by the elapsed time and by the reported figure being the true one. Recorded because an unnoticed version of this bug would have produced three false PASS results and a report claiming the gate was proven when nothing had been mutated at all — the same class of failure as M4."
+  },
+
+  "ciDiff": {
+    "file": ".github/workflows/ci.yml",
+    "stat": "1 file changed, 44 insertions(+), 0 deletions(-)",
+    "purelyAdditive": true,
+    "jobsBefore": ["test", "typecheck", "client-node", "e2e", "load"],
+    "jobsAfter": ["test", "typecheck", "client-node", "e2e", "coverage", "load"],
+    "existingJobsOrStepsRemovedReorderedOrMadeConditional": "none",
+    "addedJob": {
+      "name": "coverage",
+      "runsOn": "ubuntu-latest",
+      "timeoutMinutes": 20,
+      "jobLevel": { "continue-on-error": false, "if": "ABSENT BY DECISION" },
+      "steps": [
+        "actions/checkout@v4 with fetch-depth: 0",
+        "oven-sh/setup-bun@v2 with bun-version: 1.3.14",
+        "bun install --frozen-lockfile",
+        "name: Coverage Baseline Ratchet Gate (blocking) / continue-on-error: false / run: bun scripts/verification/coverage-gate.ts"
+      ]
+    },
+    "whyItsOwnJobRatherThanAStepInTest": "The gate runs a second full instrumented suite (83 s measured). In a parallel job that costs wall-clock nothing on the existing critical path; appended to `test` it would have added 83 s to it.",
+    "whyFetchDepthZeroIsLoadBearing": "Check B reads the previously committed figure at the merge-base with the base branch. Actions' default shallow clone has no merge-base, so the gate would report the prior figure as unavailable and check B would contribute nothing. It says so out loud rather than reporting a comparison it never made.",
+    "noCheapModeOnPurpose": "There is no `--check`-style cheap path in CI. A run that produces no figure exits 1 as `unmeasured`, because a missing measurement means the suite failed — never that coverage is unchanged."
+  },
+
+  "definitionOfDone": {
+    "bunRunVerify": {
+      "firstRun": "exit=1 (91s) — ONE failure: `reconnect after restart: presence is gone, server.restarted is delivered, durable changesets survive`, the known pre-existing Windows EBUSY flake.",
+      "reRun": "exit=0 (90s) — 1041 pass / 0 fail / 1 todo across 1042 tests in 146 files.",
+      "flakeConfirmedNotMasked": "The same suite run with --reporter=junit in between was 0 fail, and all six full instrumented runs this session were green. The flake was neither fixed nor suppressed."
+    },
+    "nineGates": [
+      { "gate": "register-scenarios.ts --check", "exit": 0, "output": "PASS — 71 heading(s), byte-identical." },
+      { "gate": "quarantine.ts --check", "exit": 0, "output": "PASS — 7 families, 7 declared-untestable member(s)." },
+      { "gate": "assertion-fingerprint.ts --check", "exit": 0, "output": "PASS — 7 file(s) match the baseline." },
+      { "gate": "reconcile-traceability.ts --check", "exit": 0, "output": "PASS — byte-identical; 148 link(s) (39 asserts, 109 covers-partially), 13 unlinked scenario(s), 21 unclaimed test case(s)." },
+      { "gate": "derive-status.ts --check", "exit": 0, "output": "PASS — 34 evidenced, 0 with an asserts link but no passing execution, 24 covers-partially only, 13 unlinked, 7 declared-untestable.", "note": "run after bun test --reporter=junit --reporter-outfile=.verification/junit.xml (exit 0, 81s)" },
+      { "gate": "conformance-report.ts --check", "exit": 0, "output": "PASS — 27 item(s) transcribed verbatim; client 3/9 and host 5/18 discharged, reported separately and never summed." },
+      { "gate": "quarantine-gate.ts", "exit": 0, "output": "PASS — 7 families (QA1..QA7) checked against annotation-sink, traceability-map, corpus-source." },
+      { "gate": "measure-coverage.ts --check", "exit": 0, "output": "PASS — figure loads with its scope intact (5 declared path(s), 0 exclusion(s))." },
+      { "gate": "coverage-gate.ts", "exit": 0, "output": "PASS — an instrumented run reproduced the committed figure exactly (2994/3257 lines, 223/245 functions over 5 declared scope path(s), 24 file(s))." }
+    ],
+    "committedBaselinesThatDidNotMove": {
+      "traceability": "148 links (39 asserts, 109 covers-partially), 13 unlinked, 21 unclaimed — held",
+      "derivedStatus": "34 / 24 / 13 / 7 — held",
+      "conformance": "client 3/9, host 5/18 — held",
+      "coverage": "91.93% lines (2994/3257), 91.02% functions (223/245) — held"
+    },
+    "testsFailBeforeImplementationExists": "Demonstrated by mutation rather than by deletion, since the implementation was inherited: each of the five behaviours the gate provides was removed from the real source in turn and the suite went red for that behaviour and no other (M1 4 failures, M2 3, M3 2, M4 1 after fix, M5 1). A behaviour whose removal breaks no test is not tested; none of the five is in that state."
+  },
+
+  "figureReproducibility": {
+    "claim": "Task 14's figure is reproducible, not a one-off.",
+    "evidence": "SIX independent full instrumented runs this session all produced 2994/3257 lines and 223/245 functions across 24 files, at a commit with tasks 10-14 landed and with an uncommitted working tree. Runs: the first gate run (83s), the three wasted runs from the broken harness, the definition-of-done gate run (83s), and the CI-parity run (49s)."
+  },
+
+  "ciParityExperiment": {
+    "riskRaised": "Check A demands EXACT integer reproduction. The baseline was measured on Windows where `targetRepoAvailable()` is TRUE (C:\\Users\\User\\Documents\\harness-kit exists); it is FALSE on ubuntu-latest, so a set of `skipIf(!targetRepoAvailable())` tests that RAN when the figure was recorded will be SKIPPED in CI. If any of them touched the 24 scoped EAP files, the coverage job would have gone red as `regressed` on its very first run with no code change at all.",
+    "test": "OG_TARGET_REPO pointed at a nonexistent path; full instrumented run through the real gate.",
+    "result": "REFUTED — exit 0, PASS, 2994/3257 lines and 223/245 functions, IDENTICAL, in 49 s rather than 83 s. The target-repo corpus contributes zero coverage to the declared EAP scope.",
+    "residualNotClosed": "This tested the ENVIRONMENT delta, not the OS delta. No Linux run has ever produced this figure, and check A leaves no tolerance for one if Bun's instrumentation differs across platforms. The first CI run is the experiment. If it fails as `regressed`/`unrecorded` with no source change, THAT is the cause, and the remedy is to re-measure on the platform the gate runs on — never to loosen check A.",
+    "sourceHasNoPlatformBranches": "Grepped the scoped surface for process.platform / win32 / os.platform / EOL / path.sep: no OS conditional exists inside the 24 scoped files."
+  },
+
+  "weakSpots": [
+    {
+      "id": "W1",
+      "severity": "highest",
+      "spot": "`--from-lcov` is an escape hatch that reads a figure from a caller-supplied file and STILL prints `measured yes — one instrumented run`, which is false in that mode.",
+      "mitigation": "CI never passes the flag — ci.yml pins the invocation and is reviewed — and the flag is what makes six end-to-end mutations affordable instead of six 83 s suites.",
+      "honestAssessment": "A gate governed by ADR-0021 (verification by host log, never self-report) should not describe a file it was handed as a run it performed. The label should distinguish the two modes. Not fixed: it is a wording change to a file I would then have to re-prove, and the CI path does not reach it."
+    },
+    {
+      "id": "W2",
+      "severity": "high",
+      "spot": "THE HISTORY CHECK IS INERT IN THIS REPOSITORY TODAY. docs/verification/coverage-baseline.json does not exist at the merge-base with main (task 14 introduced it on this branch), so check B reports `no prior figure could be read` and only check A runs. An absent prior is not itself a failure.",
+      "evidence": "Live gate output: `prior figure  no prior figure — no prior figure could be read. Tried: origin/main@ba1fda60f5cc (no docs/verification/coverage-baseline.json at that commit); main@ba1fda60f5cc (...)`",
+      "honestAssessment": "Check B is proven by unit test, never by a live comparison, and will not become live until this branch merges. The gate names the refs it tried and does not print a comparison it never made, which is the right behaviour for the first commit — but it means the defence against 'lower the coverage and re-measure' is currently untested in production. A `--require-prior` mode for post-merge CI would close it and is task 20's to weigh."
+    },
+    {
+      "id": "W3",
+      "severity": "medium",
+      "spot": "The `ratchet` block is NOT covered by `integrity.sha256`.",
+      "why": "That digest is task 14's and its field list (INTEGRITY_COVERS) is frozen in measure-coverage.ts, which is out of scope for this task.",
+      "mitigation": "The block is protected instead by the gate recomputing the policy digest from the declared fields and refusing to run on disagreement — equivalent in effect (E5 proves it) but a SECOND mechanism where one would be better."
+    },
+    {
+      "id": "W4",
+      "severity": "medium",
+      "spot": "Re-running `measure-coverage.ts` REWRITES the baseline WITHOUT the `ratchet` block, after which the gate fails `policy-mismatch` until `coverage-gate.ts --restate-policy` is run.",
+      "honestAssessment": "A real papercut on the improve-coverage path — the exact path acceptance 2 forces people onto. `--restate-policy` refuses to touch a baseline that does not load and writes no figure, so it cannot launder one, but the two-command dance should be collapsed when measure-coverage.ts is next in scope."
+    },
+    {
+      "id": "W5",
+      "severity": "low",
+      "spot": "Outcome precedence puts an incomparable-scope prior ABOVE `unmeasured`, so a run that measured nothing AND has an incomparable prior reports `regressed`.",
+      "honestAssessment": "Both exit 1, so no green is at risk; the reported reason is simply the less urgent of the two."
+    },
+    {
+      "id": "W6",
+      "severity": "low",
+      "spot": "E6 blocked for the wrong reason (scope.sha256 rather than the missing policy), because the JSON round-trip used to delete the ratchet block also reformatted the scope. The intended path is covered by unit test only."
+    }
+  ],
+
+  "pendingCiGates": {
+    "wiredIntoCiToday": ["quarantine-gate.ts", "coverage-gate.ts (NEW, this task, own blocking job)"],
+    "stillUnwired": [
+      "register-scenarios.ts --check",
+      "quarantine.ts --check",
+      "assertion-fingerprint.ts --check",
+      "reconcile-traceability.ts --check",
+      "derive-status.ts --check",
+      "conformance-report.ts --check",
+      "measure-coverage.ts --check"
+    ],
+    "notesForTask20": [
+      "coverage-gate.ts has NO ordering dependency — it runs the instrumented suite itself and needs no prior step.",
+      "coverage-gate.ts has a CHECKOUT dependency no other gate has: fetch-depth: 0. Without it the history ratchet silently has nothing to compare against. Any job topology change that drops it weakens the gate without failing it.",
+      "reconcile-traceability --check, derive-status --check and conformance-report --check need the suite to have run with --reporter=junit --reporter-outfile=.verification/junit.xml IN THE SAME JOB.",
+      "The coverage job duplicates the full suite run. If task 20 consolidates, note that the instrumented run is the ONLY acceptable source for the figure (ADR-0021) and that merging it into `test` puts 83 s on the critical path.",
+      "Consider a --require-prior mode for post-merge runs, per W2."
+    ]
+  },
+
+  "foundNotOwned": [
+    "The M4 defect class is systemic in F002: three mutation-suite no-ops scored as passes across tasks 14 and 15. A cheap standing rule would help — a surviving mutant is a defective test until proven otherwise. Not owned here; belongs in the harness guidance.",
+    ".verification/annotations.jsonl was NOT rotated or deleted, as instructed. Six full suite runs this session appended to it and every downstream gate still passes byte-identically (traceability 148 links held), so its append behaviour is idempotent for the reconciler's purposes. Flagging only that nobody has stated a rotation policy for it.",
+    "packages/stdio-proxy/test/live.test.ts and the target-repo suites are environment-conditional (OG_TARGET_REPO). They run on this machine and are skipped in CI, so local and CI 'tests pass' are different claims — the exact drift F002 task 02 fixed for `bun run test`. Proven harmless for coverage; not proven harmless generally.",
+    "`ratchet.sha256` stored in the baseline is never read by the gate (only by a unit test). It is harmless and arguably decorative — the real protection is recomputation against the executable's constant. Worth either documenting as informational or wiring in."
+  ],
+
+  "filesCreatedOrModified": [
+    "docs/verification/coverage-baseline.json — `ratchet` policy block (inherited from prior session; unchanged by me)",
+    "scripts/verification/coverage-gate.ts — the gate (inherited from prior session; unchanged by me)",
+    "scripts/verification/coverage-gate.test.ts — 22 tests; ONE FIXTURE CORRECTED BY ME (the rounding test, see mutationTesting.M4)",
+    ".github/workflows/ci.yml — +44 lines, 0 deletions, new `coverage` job (inherited from prior session; unchanged by me)",
+    "docs/product/DECISIONS.md — append-only; 3 further entries appended by me (M4 defect, CI-parity experiment, residual weak spots)",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-15.json — this file"
+  ],
+  "filesModifiedBeyondEnumeratedScope": "none",
+
+  "prohibitionsObserved": [
+    "No git stash / checkout -- / reset / clean / commit was run. Backups and restores were done BY FILE COPY into the scratchpad, and the restore was verified with `measure-coverage.ts --check` (PASS).",
+    "Nothing under docs/harness-history/** was read, created or modified.",
+    ".verification/annotations.jsonl was not deleted or rotated.",
+    "docs/specs/** (other than this output file), packages/**, package.json, bunfig.toml, .gitignore and scripts/verification/measure-coverage.ts were not modified.",
+    "No existing test was weakened, skipped or deleted. The one test edited was made STRICTER: its fixture previously could not detect the defect it names, and now kills that mutant.",
+    "No existing CI job or step was removed, reordered or disabled; the diff is purely additive.",
+    "The instrumented suite was never run through a pipe — the gate uses a file descriptor, exactly as measure-coverage.ts does.",
+    "Coverage remains opt-in; bunfig.toml was not touched and no default-on instrumentation was introduced."
+  ]
+}
