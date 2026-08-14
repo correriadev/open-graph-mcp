@@ -11,7 +11,11 @@ export class AsyncRingBuffer {
   private capacity: number;
   private batchSize: number;
   private flushIntervalMs: number;
-  private buffer: ProductionLogEvent[];
+  private buffer: (ProductionLogEvent | undefined)[];
+  private head = 0;
+  private tail = 0;
+  private count = 0;
+  private droppedEventsCount = 0;
   private sink?: LogSink;
   private timer?: ReturnType<typeof setInterval>;
   private isFlushing = false;
@@ -20,7 +24,7 @@ export class AsyncRingBuffer {
     this.capacity = options.capacity || 10000;
     this.batchSize = options.batchSize || 100;
     this.flushIntervalMs = options.flushIntervalMs || 50;
-    this.buffer = [];
+    this.buffer = new Array(this.capacity);
     this.sink = options.sink;
 
     if (this.flushIntervalMs > 0 && this.sink) {
@@ -45,35 +49,60 @@ export class AsyncRingBuffer {
   }
 
   public push(event: ProductionLogEvent): boolean {
-    if (this.buffer.length >= this.capacity) {
-      this.buffer.shift();
+    if (this.count >= this.capacity) {
+      // Overwrite oldest item in O(1) time
+      this.head = (this.head + 1) % this.capacity;
+      this.count--;
+      this.droppedEventsCount++;
     }
-    this.buffer.push(event);
 
-    if (this.sink && this.buffer.length >= this.batchSize) {
+    this.buffer[this.tail] = event;
+    this.tail = (this.tail + 1) % this.capacity;
+    this.count++;
+
+    if (this.sink && this.count >= this.batchSize) {
       void this.flush();
     }
     return true;
   }
 
   public async flush(): Promise<void> {
-    if (this.isFlushing || this.buffer.length === 0 || !this.sink) return;
+    if (this.isFlushing || this.count === 0 || !this.sink) return;
     this.isFlushing = true;
 
     try {
-      while (this.buffer.length > 0) {
-        const toFlush = this.buffer.splice(0, this.batchSize);
-        await this.sink(toFlush);
+      while (this.count > 0) {
+        const batch: ProductionLogEvent[] = [];
+        const toTake = Math.min(this.count, this.batchSize);
+
+        for (let i = 0; i < toTake; i++) {
+          const item = this.buffer[this.head];
+          this.buffer[this.head] = undefined;
+          this.head = (this.head + 1) % this.capacity;
+          this.count--;
+          if (item) batch.push(item);
+        }
+
+        if (batch.length > 0) {
+          try {
+            await this.sink(batch);
+          } catch (err) {
+            this.droppedEventsCount += batch.length;
+            console.error("[AsyncRingBuffer] Error flushing batch, dropped events:", err);
+          }
+        }
       }
-    } catch (err) {
-      console.error("[AsyncRingBuffer] Error flushing telemetry batch:", err);
     } finally {
       this.isFlushing = false;
     }
   }
 
   public size(): number {
-    return this.buffer.length;
+    return this.count;
+  }
+
+  public getDroppedEventsCount(): number {
+    return this.droppedEventsCount;
   }
 
   public async shutdown(): Promise<void> {
@@ -81,7 +110,7 @@ export class AsyncRingBuffer {
       clearInterval(this.timer);
       this.timer = undefined;
     }
-    while (this.buffer.length > 0) {
+    while (this.count > 0) {
       await this.flush();
     }
   }

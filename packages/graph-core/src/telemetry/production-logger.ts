@@ -1,6 +1,6 @@
 import { defaultRedactor, PIIRedactor } from "./pii-redactor";
 import { AsyncRingBuffer } from "./ring-buffer";
-import { getTraceContext } from "./trace-context";
+import { generateSpanId, generateTraceId, getTraceContext } from "./trace-context";
 import type {
   Environment,
   LogLevel,
@@ -115,8 +115,8 @@ export class ProductionLogger {
       level,
       service: this.serviceName,
       environment: this.environment,
-      traceId: activeCtx?.traceId || "00000000000000000000000000000000",
-      spanId: activeCtx?.spanId || "0000000000000000",
+      traceId: activeCtx?.traceId || generateTraceId(),
+      spanId: activeCtx?.spanId || generateSpanId(),
       parentSpanId: activeCtx?.parentSpanId,
       tenantId,
       horizonId: activeCtx?.horizonId,
