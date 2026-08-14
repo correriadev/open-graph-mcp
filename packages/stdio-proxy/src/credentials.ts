@@ -35,16 +35,28 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { fileTokenStore } from "@open-graph-mcp/client/node-store"
 
+import { formatW3CTraceParent, getTraceContext } from "@open-graph-mcp/graph-core/telemetry/index"
+
 export type Credentials = { server: string; token: string; userId: string; tenantId: string }
 
 /** POST a JSON-RPC body to `${server}/mcp`. Just the fetch-construction boilerplate shared by every
  * call site (cli.ts's forward()/ensureToolSchemaCache(), and registerSession() below) — each caller
  * still owns its own response-parsing and error handling, which genuinely diverge. Not a full
  * "post+parse" abstraction on purpose. */
-export function postMcp(server: string, body: unknown): Promise<Response> {
+export function postMcp(server: string, body: unknown, extraHeaders: Record<string, string> = {}): Promise<Response> {
+  const ctx = getTraceContext()
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    ...extraHeaders,
+  }
+  if (ctx) {
+    headers["traceparent"] = formatW3CTraceParent(ctx.traceId, ctx.spanId)
+    headers["x-tenant-id"] = ctx.tenantId
+    if (ctx.horizonId) headers["x-horizon-id"] = ctx.horizonId
+  }
   return fetch(`${server}/mcp`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   })
 }

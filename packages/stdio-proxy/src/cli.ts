@@ -33,6 +33,7 @@ import { isJSONRPCRequest, type JSONRPCMessage } from "@modelcontextprotocol/sdk
 import { connect, type OgHandle } from "@open-graph-mcp/client"
 import { fileTokenStore } from "@open-graph-mcp/client/node-store"
 import { type Credentials, postMcp, reregisterCredentials, resolveCredentials } from "./credentials"
+import { createTraceContext, runWithTraceContext } from "@open-graph-mcp/graph-core/telemetry/index"
 
 const KNOWN_AGENT_KINDS = new Set(["claude-code", "opencode", "cursor", "windsurf", "copilot", "zed", "gemini-cli", "codex-cli", "antigravity-cli", "web", "unknown"])
 
@@ -424,41 +425,33 @@ async function main(): Promise<void> {
       }
       if (message === null) break
 
-      // Live-layer session interception (presence.focus / presence.beat): checked FIRST, before any
-      // token-bootstrap decision, and regardless of whether --name was passed — see
-      // isLiveLayerToolCall's doc. WITHOUT --live (`og` is null), this is still the unchanged
-      // INT-1-scoped stub: never forwarded to the server, no fetch ever attempted. WITH --live, it's
-      // routed through the real OgHandle instead — see routeLiveLayerCall.
-      if (isLiveLayerToolCall(message)) {
-        const id = (message as JSONRPCMessage & { id: string | number }).id
-        if (og) {
-          await routeLiveLayerCall(og, message)
-        } else {
-          sendProxyToolError(id, "live layer requires companion — see docs")
+      const traceCtx = createTraceContext({ tenantId: tenant || "default" })
+      await runWithTraceContext(traceCtx, async () => {
+        // Live-layer session interception (presence.focus / presence.beat)
+        if (isLiveLayerToolCall(message)) {
+          const id = (message as JSONRPCMessage & { id: string | number }).id
+          if (og) {
+            await routeLiveLayerCall(og, message)
+          } else {
+            sendProxyToolError(id, "live layer requires companion — see docs")
+          }
+          return
         }
-        continue
-      }
 
-      // Opt-in token bootstrap: only ever touches tools/call requests, and only when --name was
-      // passed. Without --name this block is skipped entirely — pure Task 1 pass-through, unchanged.
-      let outgoing: JSONRPCMessage = message
-      if (name && isJSONRPCRequest(message) && message.method === "tools/call") {
-        const injectionResult = await maybeInjectToken(server, name, tenant, message)
-        if (injectionResult === null) continue // injection failed; a proxy-side isError reply already went to stdout
-        if (injectionResult.injected) {
-          // Retry-on-expiry ONLY ever applies to calls where THIS proxy injected the token — a
-          // caller-supplied token's expiry is not this proxy's identity to re-register for, and must
-          // pass through forward()'s ordinary path unmodified (see forwardInjectedToolCall's doc).
-          await forwardInjectedToolCall(server, injectionResult.message, name, tenant)
-          continue
+        // Opt-in token bootstrap
+        let outgoing: JSONRPCMessage = message
+        if (name && isJSONRPCRequest(message) && message.method === "tools/call") {
+          const injectionResult = await maybeInjectToken(server, name, tenant, message)
+          if (injectionResult === null) return // injection failed; a proxy-side isError reply already went to stdout
+          if (injectionResult.injected) {
+            await forwardInjectedToolCall(server, injectionResult.message, name, tenant)
+            return
+          }
+          outgoing = injectionResult.message
         }
-        outgoing = injectionResult.message
-      }
 
-      // Deliberately sequential: awaiting each forward() before reading the next buffered message
-      // means pipelined stdin requests are still processed one at a time, in order. Not an oversight —
-      // don't parallelize this without checking whether later token/ordering logic depends on it.
-      await forward(server, outgoing)
+        await forward(server, outgoing)
+      })
     }
   }
   og?.close()

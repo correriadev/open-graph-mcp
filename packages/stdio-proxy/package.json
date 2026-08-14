@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
-    "@open-graph-mcp/client": "workspace:*"
+    "@open-graph-mcp/client": "workspace:*",
+    "@open-graph-mcp/graph-core": "workspace:*"
   },
   "devDependencies": {
     "@open-graph-mcp/mcp-server": "workspace:*",

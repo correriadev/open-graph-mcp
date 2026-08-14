@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "bun run --cwd packages/mcp-server dev",
     "dev:web": "bun run --cwd packages/mcp-web dev",
+    "log:tail": "bun scripts/log-tail.ts",
     "test": "bun test",
     "verify": "bun run typecheck && bun run test",
     "typecheck": "bun scripts/verification/typecheck-gate.ts",
