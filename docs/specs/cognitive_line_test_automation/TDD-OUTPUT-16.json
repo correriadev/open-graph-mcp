@@ -1,0 +1,331 @@
+{
+  "task": 16,
+  "name": "Define the Benchmark Ledger and Its Noise Policy",
+  "feature": "cognitive_line_test_automation",
+  "branch": "f002-test-automation",
+  "status": "COMPLETE",
+  "summary": "Created docs/verification/benchmark-ledger.jsonl (append-only, hash-chained, committed), scripts/verification/benchmark-ledger.ts (the policy, the loader, the band algebra, the k rule, the reconciliation check and the --check gate), scripts/verification/benchmark-ledger.test.ts (41 tests) and packages/mcp-server/test/probes/host.ts (the shared probe harness tasks 17/18/19 build on). The ledger holds 10 records: a genesis policy record, 8 REAL samples of probe.host.boot.wall taken from real hosts started through startServer(), and 1 band derived from the first 5 of them. Every acceptance criterion was proven by mutating the real committed file and observing the real binary, with independent evidence in each case that the mutation changed the bytes the checker reads.",
+
+  "criticalDependencyQuarantineGate": {
+    "statedRisk": "quarantine-gate.ts (task 08) has read a benchmark ledger as one of its four violation sources since task 08, but the file did not exist, so its measurement-versus-assertion rule had never seen a real ledger line.",
+    "before": "quarantine gate: PASS — 7 families (QA1..QA7) checked against annotation-sink, traceability-map, corpus-source; no test case discharges a quarantined Scenario. EXIT=0  [THREE sources; benchmark-ledger absent]",
+    "after": "quarantine gate: PASS — 7 families (QA1..QA7) checked against annotation-sink, traceability-map, corpus-source, benchmark-ledger; no test case discharges a quarantined Scenario. EXIT=0  [FOUR sources]",
+    "formatAdaptedToTheGate": "The gate's readObservations JSON.parses every non-empty line and keeps only records with a string familyId. The ledger's shape was chosen to satisfy that exactly: sample records carry the gate's MeasurementObservation fields verbatim (familyId, metric, value, unit, runId, commit, runnerFingerprint, at, testFile, testName); policy and band records carry NO familyId and are therefore ignored by the gate rather than misread as observations. quarantine-gate.ts was NOT modified.",
+    "noMismatchFound": "The gate's expected shape and this ledger's shape agree. Nothing had to be reported as a mismatch.",
+    "task08RuleHonouredHarder": "Task 08 fails a QA6/QA7 observation that carries expected, bound or asserted. This ledger refuses those fields on EVERY sample regardless of family, refuses any sample containing a Scenario Identifier anywhere in its JSON, and refuses a BAND on any metric whose samples name a quarantine family at all — because a band IS a bound. A benchmark sample can therefore never discharge a Scenario Identifier by construction, not by convention."
+  },
+
+  "runnerFingerprint": {
+    "form": "fp-<first 16 hex of sha256 over the canonical JSON of the nine components>",
+    "observedOnThisMachine": "fp-06fa7e373efab259",
+    "in": [
+      { "component": "os", "why": "process.platform. A Windows teardown race and a Linux one are not the same measurement." },
+      { "component": "arch", "why": "process.arch." },
+      { "component": "cpuModel", "why": "Names the part. Whitespace-collapsed so a formatting difference is not a different machine." },
+      { "component": "cpuCount", "why": "The single biggest lever on a concurrency probe (task 17)." },
+      { "component": "memGiB", "why": "Rounded to GiB because the exact byte count wobbles under a hypervisor; memory pressure changes timings." },
+      { "component": "runtime", "why": "Constant today; present so a future runtime cannot be pooled with Bun silently." },
+      { "component": "runtimeVersion", "why": "Bun.version. A runtime upgrade changes timings and must not be averaged across." },
+      { "component": "environment", "why": "ci or local. A shared hosted runner and an idle laptop are different populations." },
+      { "component": "ciImage", "why": "GitHub's ImageOS (e.g. win22). The hosted image changes under you; the name is stable." }
+    ],
+    "out": [
+      { "component": "pid", "why": "Changes every process. Nothing about a pid changes a timing." },
+      { "component": "timestamp", "why": "Changes every sample. Recorded as `at`, compared by nobody." },
+      { "component": "runId", "why": "Changes every run by definition; it identifies the sample, not the runner." },
+      { "component": "commit", "why": "The subject under measurement, not the instrument measuring it." },
+      { "component": "hostname", "why": "THE IMPORTANT ONE. Hosted CI runners get a fresh random hostname per job, so including it would partition the ledger into populations of one: no two samples ever comparable, no band ever evaluable, ledger inert while looking maximally rigorous. The information it adds locally (telling two developer machines apart) is already carried by cpuModel + cpuCount + memGiB." },
+      { "component": "osRelease", "why": "A Windows or kernel patch bumps it, discarding all prior history for a change that usually moves nothing. Recorded as non-fingerprint `context` instead." },
+      { "component": "cpuSpeed", "why": "os.cpus()[].speed reports the CURRENT clock on several platforms, so it moves with thermal and power state within one run." },
+      { "component": "freemem / loadavg", "why": "Ambient conditions — precisely the noise the band absorbs, not something to partition on." },
+      { "component": "cwd / branch", "why": "Properties of the invocation, not of the machine that ran it." }
+    ],
+    "exclusionsAreData": "FINGERPRINT_EXCLUSIONS is an exported array of {field, why} and is written into the ledger's genesis policy record, so a reader sees what was deliberately left out beside what was put in."
+  },
+
+  "band": {
+    "expression": "median +/- max(BAND_MAD_MULTIPLIER * MAD, BAND_RELATIVE_FLOOR * |median|)",
+    "madMultiplier": 5,
+    "relativeFloor": 0.1,
+    "minDerivationWindow": 5,
+    "whyMedianAndMad": "A single flake-inflated observation moves a mean and a standard deviation and barely moves a median and a MAD. The estimator has to survive the noise it is estimating. For a normal sample MAD ~ 0.6745 sigma, so 5 MADs ~ 3.4 sigma, about 1 sample in 1300 outside by chance; timing distributions are right-skewed with heavy upper tails so that nominal rate understates reality, which is what k is for.",
+    "whyARelativeFloor": "A coarsely quantised window can have MAD 0 (five boots that all round to 50 ms), and a zero-width band breaches on a one-millisecond difference. 10 percent is the smallest floor that comfortably covers observed host-to-host jitter on an otherwise idle machine.",
+    "observedOnRealData": "centre 30.61 ms, MAD 0.158 ms. 5*MAD = 0.79 ms, floor = 3.061 ms, so the FLOOR DOMINATES and the band is [27.549, 33.671]. Stated because it matters: a MAD computed over medians-of-15 understates run-to-run variance, and without the floor this band would have been about four times too tight.",
+    "derivedNeverAuthored": "deriveBand computes the band from named sample records; validateBand recomputes centre, spread, lower and upper from those same records on every load and refuses any disagreement. A hand-widened band does not load. The only way to move a band is to append a NEW band record derived from NEW samples; the old band stays in the file for ever and the supersession is visible in the diff.",
+    "wideningIsPossibleButNeverQuiet": "A superseding band wider than its predecessor must carry widenedBecause (non-empty) or it is refused, and --check reprints that reason on every run from then on, for ever.",
+    "policyParametersLiveInTheExecutable": "k, the multiplier and the floor are constants of benchmark-ledger.ts. The band and the genesis record carry copies so a reviewer reads the rule beside the threshold; editing a copy does not loosen the gate, it stops the gate (a load-time refusal). Same discipline as tasks 04, 14 and 15."
+  },
+
+  "k": {
+    "value": 3,
+    "recordedIn": "every band record, as the field `k`, and in the genesis policy record",
+    "measuredFlakeRate": "~1 run in 3-4 (p ~ 0.29), from seven consecutive full-suite runs at one commit: 1041/0, 1041/0, 1040/1, then four clean.",
+    "falseBreachRateTable": {
+      "k=1": "p^1 = 0.29 -> 1 alert in 3.4 runs. Indistinguishable from the flake set; ignored within a day.",
+      "k=2": "p^2 = 0.09 -> 1 alert in 11 runs. Still routine on a suite that misbehaves 1 run in 3-4.",
+      "k=3": "p^3 = 0.027 -> 1 alert in 37 runs. Roughly one false alarm per month of nightly probes.",
+      "k=4": "p^4 = 0.008 -> 1 alert in 124 runs, at the cost of three runs of latency before a real regression."
+    },
+    "justification": "k=3 is the smallest k whose worst-case false-breach rate under the repository's OWN measured noise falls below ~3 percent. p=0.29 is a conservative proxy: the named flakes are teardown and connection races rather than timing dispersion, so the true per-sample out-of-band rate is lower and k=3 is stricter than the table implies. A k that a known-noisy suite trips routinely is a k that will be ignored, and an ignored gate measures nothing — the failure mode task 15 named for UNMEASURED and task 08 named for 'nothing was looked at'.",
+    "statedPrice": "A genuine regression is reported on the THIRD consecutive run, not the first. This ledger optimises for a signal that is believed over a signal that is fast.",
+    "consecutiveMeansWithinAPartition": "verdictFor partitions by (metric, runnerFingerprint) BEFORE looking at anything. A sample from another fingerprint is not an out-of-band sample; it is not a member of the comparison at all, so it neither counts toward a breach nor interrupts a run of them."
+  },
+
+  "zeroOrOneSampleBehaviour": {
+    "rule": "Only samples appended AFTER the band record count toward the k-window. Evaluating a band against the window it was derived from is circular: the median of a window is inside its own band by construction.",
+    "verdicts": [
+      { "outcome": "unbanded", "meaning": "Samples recorded, no band declared. Nothing is claimed. Correct for a metric inside a quarantined family; a gap for any other. Exit 0, reported explicitly.", "exit": 0 },
+      { "outcome": "insufficient-history", "meaning": "A band is declared but fewer than k post-band samples exist. THIS IS NOT A PASS — a band with no history behind it has not been tested by anything, and reporting it green would make the gate quiet exactly when it has least evidence. Same rule as task 15's UNMEASURED.", "exit": 1 },
+      { "outcome": "within-band", "meaning": "The last k post-band same-fingerprint samples are not all outside the band. Reports how many WERE outside, so near-misses are visible.", "exit": 0 },
+      { "outcome": "breach", "meaning": "k consecutive same-fingerprint post-band samples outside the band. A signal to INVESTIGATE. It discharges no Scenario, proves no bound and settles no open question.", "exit": 1 }
+    ],
+    "emptyLedgerAndMissingFile": "parseLedger refuses an empty file ('an empty ledger is not a ledger with no regressions in it'), and loadLedger refuses a missing one. Neither reads as a pass.",
+    "seedShapeChosenSoTheFirstCheckIsNonVacuous": "5 samples, then the band derived from those 5, then 3 more samples. The current --check therefore evaluates 3 genuinely post-band observations rather than the derivation window."
+  },
+
+  "appendOnly": {
+    "twoMechanisms": [
+      "HASH CHAIN. Every record carries prev (chain value before it) and sha256 (chain value after it), and seq must equal the line position. An in-place rewrite or a deletion makes a later record's prev disagree with what is recomputed.",
+      "PREFIX RECONCILIATION. The previously committed version, read out of git (git show HEAD:<path>), must be a line-for-line prefix of the current file. This catches the one attack the chain cannot: rewrite a past record and re-chain everything after it, producing an internally consistent file."
+    ],
+    "anchorStatedPlainly": "GIT IS THE ANCHOR. A rewrite of the ledger's git history, force-pushed, defeats both mechanisms. There is no in-repo defence against that and this file does not pretend to one."
+  },
+
+  "mutationProofs": [
+    {
+      "id": "A",
+      "acceptance": 3,
+      "target": "docs/verification/benchmark-ledger.jsonl (the REAL committed file)",
+      "mutation": "Line 3 (seq 2) value 30.61 -> 1, leaving prev and sha256 untouched.",
+      "evidenceTheInputChanged": "File sha256 8a93f6bf4f5c213b... -> a18981820c772ad9e..., and a raw JSON.parse of line 3 by an independent script returned value = 1 where it had returned 30.61. The checker reads that same file and that same field.",
+      "result": "EXIT=1 — 'line 3 (seq 2) declares sha256 593c5a14a064650e but its own content chains to 5c978294df80b0ee. This record was edited in place.'",
+      "restored": "Restored from a pristine copy; sha256 back to 8a93f6bf4f5c213b7bb8429a5b5afc7054a7cca08b1c94473494e54919467607, byte-identical."
+    },
+    {
+      "id": "B",
+      "acceptance": 3,
+      "mutation": "Deleted line 5 (seq 4, value 30.452). 10 records -> 9.",
+      "evidenceTheInputChanged": "The checker now reads 9 lines instead of 10, and line 5 parses to seq 5 where it had parsed to seq 4.",
+      "result": "EXIT=1 — 'line 5 declares seq 5. Sequence numbers are positions, so a gap means a past record was DELETED.'"
+    },
+    {
+      "id": "C",
+      "acceptance": 3,
+      "mutation": "Re-chained forgery: seq 2 value 30.61 -> 1, then the WHOLE chain recomputed with the real sealAll.",
+      "result": "REFUSED AT SEALING, and not by the chain — 'record 6 (band probe.host.boot.wall) declares center=30.61 but the samples it names derive center=30.452'. UNEXPECTED SECOND LINE OF DEFENCE, found by attempting the forgery rather than by design: a re-chained rewrite of a sample INSIDE a band's derivation window is caught because validateBand recomputes centre and spread from the samples the band names. Derived-not-authored bands protect the samples they are derived from.",
+      "nothingWasWritten": "sealAll threw before the file was written; file sha256 unchanged, verified."
+    },
+    {
+      "id": "C2",
+      "acceptance": 3,
+      "mutation": "Re-chained forgery against a sample in NO derivation window: seq 9 (post-band) value 30.799 -> 999, whole chain recomputed and written.",
+      "evidenceTheInputChanged": "File sha256 -> 68fc6bb41eb7c471..., and parseLedger of the written file returned seq 9 value = 999.",
+      "result": "The chain does NOT catch it: parseLedger accepted 10 records cleanly. reconcileAppendOnly(pristine, forged) refused it — 'line 10 differs from the previously committed ledger. A past record was REWRITTEN.' This is the honest split between the two mechanisms, demonstrated rather than asserted.",
+      "residualHole": "See weakSpots W1 — with no committed ledger at HEAD yet, --check reported PASS on this forgery."
+    },
+    {
+      "id": "D",
+      "acceptance": 1,
+      "mutation": "Deleted runnerFingerprint from a real recorded sample (seq 7) and re-chained, so the ONLY remaining defect is the missing attribution and the chain cannot be blamed.",
+      "evidenceTheInputChanged": "The record handed to the validator had keys kind,metric,value,unit,runId,commit,runner,at,aggregation,observations,context,note,seq — runnerFingerprint absent, printed and confirmed.",
+      "result": "REFUSED AT APPEND — 'record 7 (probe.host.boot.wall) carries no runnerFingerprint. REJECTED — an unattributed timing is not a weak measurement, it is not a measurement.' File sha256 unchanged: nothing was written."
+    },
+    {
+      "id": "E",
+      "acceptance": 2,
+      "mutation": "Three post-band samples (seq 7,8,9) 30.301/30.282/30.799 -> 90 each, chain fully recomputed so the ONLY thing --check can object to is the breach rule.",
+      "evidenceTheInputChanged": "parseLedger of the written file returned post-band values 90, 90, 90.",
+      "result": "EXIT=1 — BREACH, naming all three samples with their run ids and commits, the band [27.549, 33.671], the centre and the MAD, and the instruction 'Do not widen the band.'"
+    },
+    {
+      "id": "F",
+      "acceptance": 2,
+      "mutation": "From E, restored seq 8 to 30.282 so only k-1 = 2 of the last 3 are outside.",
+      "evidenceTheInputChanged": "parseLedger returned post-band values 90, 30.282, 90.",
+      "result": "EXIT=0 — 'within band ... (2 outside, fewer than the 3 consecutive a breach requires)'. The k rule demonstrated in BOTH directions against the real binary and the real file."
+    },
+    {
+      "id": "G",
+      "acceptance": 2,
+      "mutation": "Three post-band samples all out of band at 90, but the MIDDLE one relabelled to a different runner (cpuCount doubled, cpuModel changed, fingerprint recomputed to fp-fbd110304ad0ff1d).",
+      "evidenceTheInputChanged": "parseLedger returned post-band samples 90@fp-06fa7e3 | 90@fp-fbd1103 | 90@fp-06fa7e3.",
+      "result": "EXIT=1 but NOT a breach — 'insufficient-history: only 2 sample(s) have been recorded since [the band], and a breach needs 3', plus a separate 'unbanded' line for fp-fbd110304ad0ff1d. Under a fingerprint-blind reading this was three consecutive out-of-band samples. The foreign sample was neither counted toward the breach nor treated as breaking the run; it landed in its own partition. Acceptance 2's 'differing runner fingerprints are never compared' proven on the real file."
+    }
+  ],
+
+  "acceptance": [
+    {
+      "id": 1,
+      "criterion": "Every sample carries metric, value, unit, run id, commit and a runner fingerprint; a sample missing the fingerprint is rejected on append.",
+      "verdict": "PROVEN",
+      "howProven": "validateSample runs on every record inside sealAll (the only constructor) AND inside parseLedger (the only loader), so a bad sample can neither be created nor read. Mutation D removed the fingerprint from a real recorded sample and re-chained: refused at append, file unchanged. Unit tests additionally drive the missing-field path for metric, value, unit, runId, commit and runner, and the relabelling path (a fingerprint that is not the digest of the runner components on its own line is refused, so a sample cannot be attributed to a machine that did not produce it). All 8 committed samples carry all six fields plus the full runner component object."
+    },
+    {
+      "id": 2,
+      "criterion": "Samples with differing runner fingerprints are never compared, and a breach requires k consecutive same-fingerprint runs outside the band, with k recorded in the band.",
+      "verdict": "PROVEN",
+      "howProven": "Mutation G on the real file: three consecutive out-of-band samples with the middle one relabelled to another runner produced insufficient-history, not a breach — the foreign sample was excluded from the partition rather than counted or treated as an interruption. Mutation E (k=3 out of band) produced BREACH exit 1; mutation F (k-1=2 out of band) produced within-band exit 0. k is stored in every band record as `k` and refused at load unless it equals the executable's BREACH_K, so a band cannot quietly raise the evidential bar. Unit tests cover the interleaving case, the breach-clears case, and the unbanded verdict for the second fingerprint."
+    },
+    {
+      "id": 3,
+      "criterion": "The ledger is append-only: a rewrite or deletion of past samples fails the reconciliation check.",
+      "verdict": "PROVEN, with one honestly-stated residual hole",
+      "howProven": "Mutation A (in-place rewrite of a past sample) -> exit 1, chain mismatch named at line 3. Mutation B (deletion of a past record) -> exit 1, seq gap named at line 5. Mutation C (re-chained rewrite inside a band's derivation window) -> refused at sealing by band re-derivation. Mutation C2 (re-chained rewrite of a sample in no derivation window) -> the chain accepts it and reconcileAppendOnly refuses it at line 10. Each mutation was shown to change the bytes the checker reads (file sha256 before/after, and an independent JSON.parse of the mutated field). The residual hole is W1: until the ledger exists at HEAD, --check has no prior to compare against and only the chain runs."
+    }
+  ],
+
+  "mutationTestingDiscipline": {
+    "ruleApplied": "Before concluding anything from a gate's behaviour under mutation, independently demonstrate that the mutation changed the input the code under test reads.",
+    "howDemonstratedEachTime": "For every mutation A, B, C2, D, E, F and G the file's sha256 was printed before and after where the file was written, and the mutated field was re-read by an INDEPENDENT script (raw JSON.parse of the line, or parseLedger, printing the value/seq/keys/fingerprint the checker would see). No mutation was scored without that evidence in the same step. Two mutations (C and D) were refused before the file was written; in both cases the evidence is the printed content of the record handed to the validator plus a confirmation that the file's sha256 was unchanged, so nothing was concluded from a green file.",
+    "scopeDiscipline": "Every mutation targeted docs/verification/benchmark-ledger.jsonl — the exact artefact benchmark-ledger.ts reads — and every one was restored from a pristine copy with the sha256 verified back to 8a93f6bf4f5c213b7bb8429a5b5afc7054a7cca08b1c94473494e54919467607. No mutation was made outside the file under test."
+  },
+
+  "probeHostHarness": {
+    "path": "packages/mcp-server/test/probes/host.ts",
+    "notATestFile": "Deliberately not a .test.ts, so bun test never executes it and it stays outside the declared EAP Test Corpus (which is packages/*/test/**/*.test.ts importing verification/annotate). A harness inside the corpus would appear as unclaimed test cases in the Traceability Map for ever. Verified: the map's 148/13/21 figures did not move.",
+    "exposes": {
+      "startProbeHost(options)": "A real host in THIS process via the same startServer() production uses, on a fresh temp state dir. Returns {url, server, stateDir, stop}. For probes 18 and 19, which need server.state.db to observe read-model volume without going through HTTP.",
+      "withProbeHost(options, body)": "Start, run, stop in a finally. The default for anything that does not need manual lifecycle control.",
+      "spawnProbeHost(options)": "A real host in its OWN OS process, for task 17: two hosts in one Bun process share a heap, a GC and an event loop and would measure none of the contention that matters. Returns {url, pid, logPath, stateDir, stop}.",
+      "timed(body)": "performance.now() around a body; returns {value, ms}. Monotonic, unaffected by clock changes.",
+      "repeat(n, body, warmup)": "n timings with leading warmups discarded.",
+      "medianOf(values)": "The reduction a probe should use to turn many raw observations into ONE sample.",
+      "buildSample(input)": "PURE — the sample a probe would append, touching no file. Lets a probe build, log and decide separately whether this run records.",
+      "recordSample(input)": "Appends one observation, or returns null when recording is off. The null return is the point: 'measured 412 ms, not recorded' is a different fact from 'recorded'.",
+      "removeStateDir(dir)": "Retrying teardown, see below.",
+      "probeRunId()": "One run id per process; gha-<run>-<attempt> in CI, local-<t36>-<pid36> otherwise.",
+      "RECORD_ENV / recordingEnabled()": "EAP_BENCHMARK_RECORD."
+    },
+    "howTasks17to19UseIt": [
+      "17 (multi-process concurrency): spawnProbeHost() N times, drive them concurrently, time with timed(), reduce with medianOf(), recordSample() one value per metric. It must NOT assert a throughput.",
+      "18 (cancellation fault injection): withProbeHost(), inject the fault, time the observable effect, recordSample(). If the observation sits inside QA7's open question it sets familyId: 'QA7' — which makes the metric permanently unbandable, by design.",
+      "19 (100k-claim scale and read-model volume): startProbeHost() and read server.state.db directly for row counts and re-derivation time; familyId: 'QA6' for anything inside the paging/batching/bounding question. Fixture-build time and closure re-derivation time are exactly what QA6's measurement note permits."
+    ],
+    "noPipeEverForASpawnedHost": "Task 14 measured that piping a spawned Bun process's stdout makes the Windows EBUSY teardown race fire reliably (2 failures in 2 piped runs, 0 in 4 with a redirected fd). spawnProbeHost gives the child a FILE DESCRIPTOR for stdout and stderr, and the child publishes its URL by writing a ready file (temp file + rename, so the parent never reads a half-written one) which the parent polls. No byte of the child's output crosses a pipe.",
+    "teardownDoesNotThrow": "removeStateDir retries the recursive delete 5 times with backoff and, on final failure, WARNS instead of throwing. A harness whose cleanup throws injects the exact 1-in-3-to-4 flake the probes exist to measure around, and every number taken through it would be a number about the harness.",
+    "recordingIsOptIn": "recordSample writes only when EAP_BENCHMARK_RECORD is set. Otherwise every local bun test would append a line to a committed append-only file and dirty every working tree, and samples taken while a machine is also compiling and serving a browser come from a different population than the band was derived from. WHEN to record is a CI-topology question and task 20 owns CI topology.",
+    "smokeTested": "spawnProbeHost brought a child host up at http://localhost:57436 (pid 16352), tools/list over the real transport returned 24 tools in 16.5 ms, stop() was clean; withProbeHost returned a URL from an in-process host. The harness is exercised, not merely written."
+  },
+
+  "theSeedMeasurement": {
+    "metric": "probe.host.boot.wall",
+    "unit": "ms",
+    "definition": "Wall time to start a real host through startServer() on a fresh temporary state directory and stop it again, reduced to the median of 15 repetitions after 3 discarded warmups.",
+    "why": "It is NOT a probe of the Epistemic Authority Protocol and settles nothing about one. It exists so the ledger, the fingerprint, the band and the k rule are exercised by a REAL measurement from a real host from the day they land — rather than pinned only against fixtures, which is exactly the gap task 08 left when it shipped a ledger reader before any ledger existed.",
+    "whyAMedianAndNotACount": "The task's own warning: the suite's expect() total is not run-stable (4349 vs 4360 at the same commit), so counts of that kind are unsuitable. A median of 15 boots is a quantity whose variance can be characterised; the 8 recorded samples span 30.036 to 30.991 ms, a 3.1 percent range across separate processes.",
+    "values": [30.991, 30.61, 30.729, 30.452, 30.036, 30.301, 30.282, 30.799],
+    "band": { "center": 30.61, "spread": 0.158, "lower": 27.549, "upper": 33.671, "k": 3, "derivedFromSeqs": [1, 2, 3, 4, 5] }
+  },
+
+  "gateFigures": {
+    "bun run verify": "EXIT 0 — typecheck PASS (frozen error set unchanged), 1082 pass / 1 todo / 0 fail / 5707 expect() across 147 files in 81.15 s",
+    "register-scenarios.ts --check": "EXIT 0 — 71 headings, byte-identical",
+    "quarantine.ts --check": "EXIT 0 — 7 families, 7 declared-untestable members",
+    "assertion-fingerprint.ts --check": "EXIT 0 — 7 files match the baseline",
+    "reconcile-traceability.ts --check": "EXIT 0 — byte-identical; 148 links (39 asserts, 109 covers-partially), 13 unlinked, 21 unclaimed  [BASELINE HELD]",
+    "derive-status.ts --check": "EXIT 0 — 34 evidenced, 0 asserts-without-passing-execution, 24 covers-partially only, 13 unlinked, 7 declared-untestable  [BASELINE HELD]",
+    "conformance-report.ts --check": "EXIT 0 — 27 items verbatim; client 3/9, host 5/18  [BASELINE HELD]",
+    "quarantine-gate.ts": "EXIT 0 — 7 families against FOUR sources including benchmark-ledger",
+    "measure-coverage.ts --check": "EXIT 0 — figure loads with scope intact, 5 declared paths, 0 exclusions",
+    "coverage-gate.ts": "EXIT 0 — instrumented run reproduced the committed figure exactly, 2994/3257 lines and 223/245 functions over 5 scope paths and 24 files  [BASELINE HELD: 91.93% / 91.02%]",
+    "benchmark-ledger.ts --check": "EXIT 0 — 10 records, 8 samples, 1 band, 1 runner fingerprint; chain intact, no breach"
+  },
+
+  "weakSpots": [
+    {
+      "id": "W1",
+      "severity": "high until the next commit, then closed",
+      "statement": "Until benchmark-ledger.jsonl exists at HEAD, the prefix reconciliation has no anchor. --check reports 'no previously committed ledger at HEAD — only the hash chain was checked' and a re-chained forgery PASSES. Demonstrated live in mutation C2. From the commit that lands this file onward, git show HEAD:<path> resolves and the hole closes. The message says exactly this rather than reporting a bare OK, so the weaker state is visible, not silent."
+    },
+    {
+      "id": "W2",
+      "severity": "medium",
+      "statement": "The prefix check compares against HEAD, not against a merge-base. On a branch that legitimately rewrote history (rebase, squash) the check would report a violation for an honest reason. Choosing HEAD was deliberate — it is always available and strictly stricter — but a task-20 CI topology that rebases before checking will need --from-ref or a merge-base fallback. Not built, because CI topology is task 20's."
+    },
+    {
+      "id": "W3",
+      "severity": "medium",
+      "statement": "The ledger holds NO sample naming a quarantine family, so quarantine-gate.ts's classifyObservation path is still exercised only by unit tests — including the one this task added, which drives the real detectQuarantineViolations with a real ledger-built QA6 sample and the real quarantine.json. Fabricating a QA6 line to close the gap would have been a self-report, which ADR-0021 forbids. The first real one is probe 19's."
+    },
+    {
+      "id": "W4",
+      "severity": "medium",
+      "statement": "k=3 was justified against p~0.29, the SUITE flake rate, used as a conservative proxy for the per-sample out-of-band rate of a probe metric. Those are not the same quantity and nobody has measured the second one. The proxy errs toward strictness, but the honest statement is that k's justification rests on a substitution, and the first probe metric with real history should have its own out-of-band rate measured and k revisited if it disagrees."
+    },
+    {
+      "id": "W5",
+      "severity": "medium",
+      "statement": "The band's relative floor (10 percent) dominates the MAD term on the only real data that exists (3.06 ms floor versus 0.79 ms from 5*MAD). So today the band is effectively 'median +/- 10 percent' and the MAD machinery is not what is deciding anything. That is the right conservative default for a metric with 5 samples, but it means the MAD half of the formula is currently unexercised by real data and could carry a bug the tests would not catch. The unit tests do exercise the MAD-dominant branch with synthetic values."
+    },
+    {
+      "id": "W6",
+      "severity": "low",
+      "statement": "No CI job records samples, so in practice the ledger grows only when a human runs a probe with EAP_BENCHMARK_RECORD set. Until task 20 wires recording, every band will sit at insufficient-history the moment anyone declares a new one, and the seed band's 3 post-band samples are the only history that exists. The gate is therefore honest but nearly idle."
+    },
+    {
+      "id": "W7",
+      "severity": "low",
+      "statement": "appendToLedger re-seals the entire file in memory on every append (O(n) per sample, O(n^2) over the file's life). At the file's stated growth ceiling (~13k records) that is still milliseconds, so it was not optimised. Recorded so nobody is surprised later. The append itself is a single open-append-close of complete lines, so concurrent probe processes cannot interleave or truncate a record — but two probes appending SIMULTANEOUSLY can each seal against the same chain head and produce a broken chain. There is no lock. In practice probes are run sequentially by a CI step; if task 20 parallelises them, they must not record concurrently."
+    },
+    {
+      "id": "W8",
+      "severity": "low",
+      "statement": "detectRunner() reads Bun.version, os.cpus() and process.env. A CI provider that reports 0 CPUs or an empty cpus() array would produce cpuModel 'unknown' and cpuCount 0 — a valid, stable fingerprint that silently pools genuinely different machines. Not defended against, because refusing to sample there would be worse; recorded as a known blind spot."
+    }
+  ],
+
+  "pendingCiGates": {
+    "wiredIntoCiToday": ["quarantine-gate.ts", "coverage-gate.ts"],
+    "stillUnwired": [
+      "register-scenarios.ts --check",
+      "quarantine.ts --check",
+      "assertion-fingerprint.ts --check",
+      "reconcile-traceability.ts --check",
+      "derive-status.ts --check",
+      "conformance-report.ts --check",
+      "measure-coverage.ts --check",
+      "benchmark-ledger.ts --check (NEW, this task — NOT wired, task 20 owns CI topology)"
+    ],
+    "notesForTask20": [
+      "benchmark-ledger.ts --check has NO suite dependency and NO ordering dependency. It reads one committed file and runs in well under a second. It can go anywhere, including the earliest job.",
+      "It DOES have a checkout dependency: the prefix reconciliation runs `git show HEAD:docs/verification/benchmark-ledger.jsonl`. A checkout that leaves no git history, or a workflow that checks out a detached tree without the file's history, makes the check report 'no previously committed ledger at HEAD' and silently drop to chain-only. That degradation is PRINTED, not hidden, but a CI job that nobody reads the log of would not notice. Consider a --require-prior mode for post-merge runs.",
+      "RECORDING is separate from CHECKING and is not wired at all. A probe records only with EAP_BENCHMARK_RECORD set. Deciding which job records, how often, and whether a recording job commits the appended lines back is task 20's call. Note the consequence: a job that records but does not commit produces samples that vanish, and a job that records on every PR would append samples from that PR's code into a ledger whose band was derived from main.",
+      "Recording jobs MUST NOT run in parallel with each other (see W7 — no lock; two simultaneous appends seal against the same chain head and break the chain).",
+      "A recording job must run on a STABLE runner image. GitHub's ImageOS is in the fingerprint precisely so an image bump partitions the history rather than corrupting it — but the effect is that every band goes to insufficient-history (exit 1) after an image bump until k new samples exist. That is correct and it will look like a failure; task 20 should decide whether the recording job is blocking."
+    ]
+  },
+
+  "foundNotOwned": [
+    "quarantine-gate.ts's readObservations calls JSON.parse on every non-empty ledger line with no try/catch, so a single malformed line makes the gate THROW rather than report. Every other source in that file has a named error path. Out of scope (task 08's file); the ledger's own writer makes malformed lines unreachable in practice, but a hand edit would crash the gate instead of failing it cleanly.",
+    "quarantine-gate.ts types MeasurementObservation.familyId as a required QuarantineFamilyId while readObservations filters on `typeof parsed.familyId === 'string'`. The type says required, the reader says optional. Harmless today because the filter is the real contract, but the type is a lie about the file format and would mislead the next author. Not edited (out of scope).",
+    "coverage-gate.ts reports 'no prior figure could be read' because origin/main and main at the merge-base carry no coverage-baseline.json — the task-14/15 baselines have not reached main. The history ratchet (check B) is therefore inert on this branch and only check A is doing work. It passes for an honest reason, but the gate is currently half a gate. Pre-existing, not this task's.",
+    ".verification/annotations.jsonl was neither rotated nor deleted, per the prohibition. It is now large enough that the quarantine gate reads every historical record on every run; the committed traceability map depends on its content, so any rotation needs a deliberate owner.",
+    "The working tree already carried uncommitted modifications from earlier tasks (DECISIONS.md, assertion-fingerprints.json, scenario-status.md, traceability-map.json, several renamed test files, assertion-fingerprint.ts and its test, and an untracked TDD-OUTPUT-13.json). None were touched by this task."
+  ],
+
+  "filesCreatedOrModified": [
+    "docs/verification/benchmark-ledger.jsonl (NEW — 10 records: policy, 5 samples, band, 3 samples)",
+    "scripts/verification/benchmark-ledger.ts (NEW)",
+    "scripts/verification/benchmark-ledger.test.ts (NEW — 41 tests, 122 expect() calls)",
+    "packages/mcp-server/test/probes/host.ts (NEW)",
+    "docs/product/DECISIONS.md (append-only, 12 entries)",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-16.json (this file)"
+  ],
+  "filesModifiedBeyondEnumeratedScope": "NONE. No file under packages/** other than the new probes/host.ts, no other verification script or artefact, no package.json, bunfig.toml, .gitignore, .github/**, docs/specs/** other than this output, and no existing test weakened, skipped or deleted.",
+
+  "tddEvidence": {
+    "red": "bun test scripts/verification/benchmark-ledger.test.ts before benchmark-ledger.ts existed: 0 pass, 1 fail, 1 error — 'Cannot find module ./benchmark-ledger'.",
+    "amberAfterImplementation": "35 pass / 6 fail — the six failures were exactly the tests that read the committed ledger, which did not exist yet.",
+    "greenAfterRecordingRealSamples": "41 pass / 0 fail / 122 expect() calls.",
+    "oneRealBugCaughtByRunningIt": "recordSample returned appended[0], which is the POLICY record when the ledger is seeded, so the first measurement reported 'recorded at seq 0'. Fixed to return the last appended record; the file itself had always been correct."
+  },
+
+  "prohibitionsObserved": [
+    "No git stash, checkout --, reset, clean or commit. Only read-only git (rev-parse, show) inside the tooling.",
+    "docs/harness-history/** was never read, created or modified.",
+    ".verification/annotations.jsonl was not deleted or rotated.",
+    "No CI job or step was modified.",
+    "No existing test was weakened, skipped or deleted; the suite went 1082 pass / 0 fail before and after.",
+    "quarantine-gate.ts was read but not edited; the ledger format was adapted to it."
+  ]
+}

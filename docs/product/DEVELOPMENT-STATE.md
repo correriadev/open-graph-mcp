@@ -28,7 +28,7 @@
 | F002 | 13 | open-graph-mcp | Retire Retry Archaeology Into Behavioural Names | cognitive_line_test_automation | IMPLEMENTATION | COMPLETED |
 | F002 | 14 | open-graph-mcp | Instrument Coverage and Record the First Figure | cognitive_line_test_automation | IMPLEMENTATION | COMPLETED |
 | F002 | 15 | open-graph-mcp | Add the Coverage Baseline Ratchet Gate | cognitive_line_test_automation | IMPLEMENTATION | COMPLETED |
-| F002 | 16 | open-graph-mcp | Define the Benchmark Ledger and Its Noise Policy | cognitive_line_test_automation | - | NOT_STARTED |
+| F002 | 16 | open-graph-mcp | Define the Benchmark Ledger and Its Noise Policy | cognitive_line_test_automation | IMPLEMENTATION | COMPLETED |
 | F002 | 17 | open-graph-mcp | Implement the Multi-Process Concurrency Probe | cognitive_line_test_automation | - | NOT_STARTED |
 | F002 | 18 | open-graph-mcp | Implement the Cancellation Fault Injection Probe | cognitive_line_test_automation | - | NOT_STARTED |
 | F002 | 19 | open-graph-mcp | Implement the 100k-Claim Scale and Read-Model Volume Probes | cognitive_line_test_automation | - | NOT_STARTED |
