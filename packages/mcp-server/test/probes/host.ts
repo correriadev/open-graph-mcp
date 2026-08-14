@@ -270,6 +270,64 @@ export interface SpawnOptions {
 
 const READY_FILE = "probe-host-ready.json"
 
+export interface SpawnedProbeProcess {
+  pid: number
+  /** Resolves with the child's exit code. */
+  exited: Promise<number>
+  exitCode: () => number | null
+  kill: () => void
+}
+
+/**
+ * Spawns `bun <args>` with stdout AND stderr redirected to a FILE DESCRIPTOR, never a pipe.
+ *
+ * Extracted in task 17 because the multi-process concurrency probe needs the same discipline
+ * `spawnProbeHost` needs and for the same measured reason (task 14: piping a spawned Bun process's
+ * stdout makes the Windows EBUSY teardown race fire reliably — 2 failures in 2 piped runs, 0 in 4
+ * with a redirected fd; pipe backpressure changes the timing of the thing being measured). Writing a
+ * second, private spawn in the probe would have been the obvious way to reintroduce the pipe.
+ * `spawnProbeHost` now goes through this too, so there is exactly one place that decides this.
+ */
+export function spawnProbeProcess(
+  args: readonly string[],
+  options: { logPath: string; cwd?: string },
+): SpawnedProbeProcess {
+  const fd = openSync(options.logPath, "w")
+  let child: ReturnType<typeof Bun.spawn>
+  try {
+    child = Bun.spawn({
+      cmd: ["bun", ...args],
+      cwd: options.cwd ?? repoRoot(),
+      stdout: fd,
+      stderr: fd,
+      stdin: "ignore",
+    })
+  } finally {
+    closeSync(fd)
+  }
+  return {
+    pid: child.pid,
+    exited: child.exited,
+    exitCode: () => child.exitCode,
+    kill: () => child.kill(),
+  }
+}
+
+/**
+ * Polls for a path to appear. A file is how probe processes hand facts to their parent here — see the
+ * header on why nothing crosses a pipe — so waiting for one is a shared need, not a probe's private
+ * business. Returns `false` on timeout rather than throwing: the caller holds the context needed to
+ * write a useful failure (which child, which log file), and this function does not.
+ */
+export async function waitForPath(target: string, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (existsSync(target)) return true
+    await Bun.sleep(10)
+  }
+  return existsSync(target)
+}
+
 /**
  * A real host in its OWN process — what task 17's multi-process concurrency probe needs, since two
  * hosts inside one Bun process share a heap, a GC and an event loop and would measure none of the
@@ -283,28 +341,18 @@ export async function spawnProbeHost(options: SpawnOptions = {}): Promise<Spawne
   mkdirSync(stateDir, { recursive: true })
   const readyPath = join(stateDir, READY_FILE)
   const logPath = options.logPath ?? join(stateDir, "probe-host.log")
-  const fd = openSync(logPath, "w")
 
-  let child: ReturnType<typeof Bun.spawn>
-  try {
-    child = Bun.spawn({
-      cmd: [
-        "bun",
-        import.meta.path,
-        "--serve",
-        readyPath,
-        "--state-dir",
-        stateDir,
-        ...(options.repoPath === undefined ? [] : ["--repo-path", options.repoPath]),
-      ],
-      cwd: repoRoot(),
-      stdout: fd,
-      stderr: fd,
-      stdin: "ignore",
-    })
-  } finally {
-    closeSync(fd)
-  }
+  const child = spawnProbeProcess(
+    [
+      import.meta.path,
+      "--serve",
+      readyPath,
+      "--state-dir",
+      stateDir,
+      ...(options.repoPath === undefined ? [] : ["--repo-path", options.repoPath]),
+    ],
+    { logPath },
+  )
 
   const deadline = Date.now() + (options.readyTimeoutMs ?? 30_000)
   while (Date.now() < deadline) {
@@ -322,9 +370,9 @@ export async function spawnProbeHost(options: SpawnOptions = {}): Promise<Spawne
         },
       }
     }
-    if (child.exitCode !== null) {
+    if (child.exitCode() !== null) {
       throw new Error(
-        `probe host: the spawned host exited ${child.exitCode} before publishing a URL. Its output ` +
+        `probe host: the spawned host exited ${child.exitCode()} before publishing a URL. Its output ` +
           `was redirected to ${logPath} (a file descriptor, never a pipe):\n` +
           (existsSync(logPath) ? readFileSync(logPath, "utf8").slice(-2000) : "(no log written)"),
       )
