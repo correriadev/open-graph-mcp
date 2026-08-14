@@ -101,7 +101,7 @@ describe('Task 08 — Contestation Admission (EAP)', () => {
     'A blocking contestation cannot initiate recall',
     // EAP-RECL-002 spans missing, refused, informative AND blocking contestations, and requires
     // that no Recall Case is created. Only the blocking severity is exercised, and no absence of a
-    // case is checked — f001-retry5-concurrency-authz asserts the scenario in full.
+    // case is checked — epistemic-write-atomicity-and-authz asserts the scenario in full.
     { coversPartially: ['EAP-RECL-002'] },
     () => {
     service.contestKnowledge({

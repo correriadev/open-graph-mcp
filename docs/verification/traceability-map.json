@@ -34,16 +34,16 @@
       "packages/mcp-server/test/eap-conformance.test.ts",
       "packages/mcp-server/test/eap-mcp-contract.test.ts",
       "packages/mcp-server/test/eap-refusals.test.ts",
-      "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
-      "packages/mcp-server/test/f001-retry5-durability.test.ts",
-      "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
-      "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-      "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
+      "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
+      "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "packages/mcp-server/test/f001-transport-delegation.test.ts",
       "packages/mcp-server/test/f001-validation-audit-vulns.test.ts",
       "packages/mcp-server/test/horizon-durability.test.ts",
       "packages/mcp-server/test/persistent-delta.test.ts",
       "packages/mcp-server/test/promotion.test.ts",
+      "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
+      "packages/mcp-server/test/recall-closure-gate.test.ts",
+      "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
       "packages/mcp-server/test/recall.test.ts"
     ],
     "fileCount": 21,
@@ -89,7 +89,7 @@
     },
     {
       "scenario": "EAP-CAPB-002",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "capability execution outcomes are durable and idempotency survives a restart",
       "kind": "covers-partially"
     },
@@ -101,7 +101,7 @@
     },
     {
       "scenario": "EAP-CAPB-003",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "CapabilityGateway times out a hanging provider and cancels it via AbortSignal",
       "kind": "asserts"
     },
@@ -143,7 +143,7 @@
     },
     {
       "scenario": "EAP-ERRP-002",
-      "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
       "testName": "cognitive.recall refuses `checkpoint` as unsupported rather than validating and discarding it",
       "kind": "asserts"
     },
@@ -179,14 +179,8 @@
     },
     {
       "scenario": "EAP-ERRP-004",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "CapabilityGateway validates the stored approval, not the client-supplied copy",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-ERRP-004",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
-      "testName": "an approval bound to a sequence the horizon never reached is refused even when the caller asserts it",
       "kind": "covers-partially"
     },
     {
@@ -196,8 +190,14 @@
       "kind": "covers-partially"
     },
     {
+      "scenario": "EAP-ERRP-004",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
+      "testName": "an approval bound to a sequence the horizon never reached is refused even when the caller asserts it",
+      "kind": "covers-partially"
+    },
+    {
       "scenario": "EAP-EVNT-001",
-      "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
       "testName": "every suspended cell emits TruthOwnershipSuspended, including cells suspended in a non-final batch",
       "kind": "covers-partially"
     },
@@ -215,38 +215,38 @@
     },
     {
       "scenario": "EAP-FUNC-003",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/f001-transport-delegation.test.ts",
+      "testName": "the closure is a real reverse-dependency traversal, and case/checkpoint/scar are all written",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-FUNC-003",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "a recalled candidate cannot be promoted into a parent horizon",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-FUNC-003",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "a recalled claim is no longer admitted knowledge in `candidates`, and cannot climb the lifecycle",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-FUNC-003",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "truth-ownership suspension reaches the `authority` table, and indirect dependents stay deferred",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-FUNC-003",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "two concurrent cognitive.recall calls for one contestation open exactly one case",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-FUNC-003",
-      "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
       "testName": "every suspended cell emits TruthOwnershipSuspended, including cells suspended in a non-final batch",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-FUNC-003",
-      "testFile": "packages/mcp-server/test/f001-transport-delegation.test.ts",
-      "testName": "the closure is a real reverse-dependency traversal, and case/checkpoint/scar are all written",
       "kind": "covers-partially"
     },
     {
@@ -257,7 +257,7 @@
     },
     {
       "scenario": "EAP-FUNC-004",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "an approval bound to the sequence the durable horizon actually holds executes",
       "kind": "covers-partially"
     },
@@ -323,7 +323,7 @@
     },
     {
       "scenario": "EAP-LIFE-002",
-      "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
       "testName": "an unrecognized stored candidate state fails CLOSED instead of restarting the lifecycle",
       "kind": "covers-partially"
     },
@@ -347,20 +347,14 @@
     },
     {
       "scenario": "EAP-PERS-001",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "ContestationService contestations survive a host process restart",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-PERS-001",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "PromotionService proposals and events survive a host process restart",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-PERS-001",
-      "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
-      "testName": "the closure membership index survives a rebuild from the JSONL mirror",
       "kind": "covers-partially"
     },
     {
@@ -370,20 +364,26 @@
       "kind": "covers-partially"
     },
     {
+      "scenario": "EAP-PERS-001",
+      "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+      "testName": "the closure membership index survives a rebuild from the JSONL mirror",
+      "kind": "covers-partially"
+    },
+    {
       "scenario": "EAP-PERS-002",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "a failing commit leaves no orphaned cs_deltas rows and no held cell locks",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-PERS-002",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "eapPromote rolls back the horizon transition when the durable write fails",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-PERS-002",
-      "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
+      "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
       "testName": "no durable suspension without the append-only row that announces it, at any failure point",
       "kind": "asserts"
     },
@@ -401,7 +401,7 @@
     },
     {
       "scenario": "EAP-PERS-008",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "RecallWorker checkpoints survive a restart and resume to the same affected set",
       "kind": "asserts"
     },
@@ -413,7 +413,7 @@
     },
     {
       "scenario": "EAP-PERS-009",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "operator approvals and their consumed flag survive a restart",
       "kind": "covers-partially"
     },
@@ -437,14 +437,8 @@
     },
     {
       "scenario": "EAP-PROM-001",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "eapPromote persists a proposed parent candidate row alongside the proposal",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-PROM-001",
-      "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-      "testName": "a candidate untouched by any recall closure still verifies and promotes",
       "kind": "covers-partially"
     },
     {
@@ -457,6 +451,12 @@
       "scenario": "EAP-PROM-001",
       "testFile": "packages/mcp-server/test/promotion.test.ts",
       "testName": "creates a parent proposal in proposed status when Promotion succeeds",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-PROM-001",
+      "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
+      "testName": "a candidate untouched by any recall closure still verifies and promotes",
       "kind": "covers-partially"
     },
     {
@@ -473,7 +473,7 @@
     },
     {
       "scenario": "EAP-PROM-002",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "eapPromote does not advance the child horizon sequence or write a proposal when refused",
       "kind": "covers-partially"
     },
@@ -527,38 +527,14 @@
     },
     {
       "scenario": "EAP-RECL-002",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "eapRecall refuses a contestation whose status is not 'admitted'",
       "kind": "asserts"
     },
     {
       "scenario": "EAP-RECL-003",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "RecallWorker checkpoints survive a restart and resume to the same affected set",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-RECL-003",
-      "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
-      "testName": "a batched drive and an immediate replay of the same case report the same degradations",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-RECL-003",
-      "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
-      "testName": "a COMPLETED case still replays idempotently: no second drive, no second event",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-RECL-003",
-      "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
-      "testName": "re-driving a batch-cap-exhausted case finishes it and reports it as resumed",
-      "kind": "asserts"
-    },
-    {
-      "scenario": "EAP-RECL-003",
-      "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
-      "testName": "two concurrent drives of the same case cannot both advance it",
       "kind": "covers-partially"
     },
     {
@@ -568,9 +544,27 @@
       "kind": "covers-partially"
     },
     {
-      "scenario": "EAP-RECL-004",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
-      "testName": "a recalled claim is no longer admitted knowledge in `candidates`, and cannot climb the lifecycle",
+      "scenario": "EAP-RECL-003",
+      "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+      "testName": "a batched drive and an immediate replay of the same case report the same degradations",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-RECL-003",
+      "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+      "testName": "a COMPLETED case still replays idempotently: no second drive, no second event",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-RECL-003",
+      "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+      "testName": "re-driving a batch-cap-exhausted case finishes it and reports it as resumed",
+      "kind": "asserts"
+    },
+    {
+      "scenario": "EAP-RECL-003",
+      "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+      "testName": "two concurrent drives of the same case cannot both advance it",
       "kind": "covers-partially"
     },
     {
@@ -583,6 +577,12 @@
       "scenario": "EAP-RECL-004",
       "testFile": "packages/mcp-server/test/f001-validation-audit-vulns.test.ts",
       "testName": "a recall completed without an explicit case stays completed across rebuildFromJsonl",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-RECL-004",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
+      "testName": "a recalled claim is no longer admitted knowledge in `candidates`, and cannot climb the lifecycle",
       "kind": "covers-partially"
     },
     {
@@ -611,25 +611,25 @@
     },
     {
       "scenario": "EAP-SEC-002",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "an oversized basedOnSeq is a malformed contract, not a free pass through the freshness gate",
       "kind": "asserts"
     },
     {
       "scenario": "EAP-SEC-002",
-      "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
       "testName": "basedOnSeq: -0 is not a sequence",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-SEC-003",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "replaying cognitive.promote returns the same proposal instead of minting a second one",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-SEC-005",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "getAuditLog applies an authorization projection filter",
       "kind": "asserts"
     },
@@ -659,13 +659,13 @@
     },
     {
       "scenario": "EAP-SVCS-005",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "a failing commit leaves no orphaned cs_deltas rows and no held cell locks",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-SVCS-005",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "a refused candidate returns typed reasons without throwing",
       "kind": "asserts"
     },
@@ -707,15 +707,15 @@
     },
     {
       "scenario": "EAP-SVCS-007",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
-      "testName": "cognitive.contest refuses evidence with a non-string element rather than silently dropping it",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-SVCS-007",
       "testFile": "packages/mcp-server/test/f001-transport-delegation.test.ts",
       "testName": "evidence elements are inspected: [null] is EVIDENCE_REQUIRED, not an admitted contestation",
       "kind": "asserts"
+    },
+    {
+      "scenario": "EAP-SVCS-007",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
+      "testName": "cognitive.contest refuses evidence with a non-string element rather than silently dropping it",
+      "kind": "covers-partially"
     },
     {
       "scenario": "EAP-SVCS-008",
@@ -785,25 +785,25 @@
     },
     {
       "scenario": "EAP-VOBJ-007",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
-      "testName": "eapContest sequences are unique, monotonic, and never reused after row deletion",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-VOBJ-007",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
-      "testName": "eapRecall allocates its sequence durably and refuses replay of a completed recall",
-      "kind": "covers-partially"
-    },
-    {
-      "scenario": "EAP-VOBJ-007",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "ContestationService allocates monotonic sequences from durable storage, not a reset counter",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-VOBJ-007",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
+      "testName": "eapContest sequences are unique, monotonic, and never reused after row deletion",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-VOBJ-007",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
+      "testName": "eapRecall allocates its sequence durably and refuses replay of a completed recall",
+      "kind": "covers-partially"
+    },
+    {
+      "scenario": "EAP-VOBJ-007",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "a basedOnSeq claiming a FUTURE sequence is refused as not fresh",
       "kind": "covers-partially"
     },
@@ -845,14 +845,8 @@
     },
     {
       "scenario": "EAP-VOBJ-011",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "CapabilityGateway validates the stored approval, not the client-supplied copy",
-      "kind": "asserts"
-    },
-    {
-      "scenario": "EAP-VOBJ-011",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
-      "testName": "an approval bound to a sequence the horizon never reached is refused even when the caller asserts it",
       "kind": "asserts"
     },
     {
@@ -868,6 +862,12 @@
       "kind": "covers-partially"
     },
     {
+      "scenario": "EAP-VOBJ-011",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
+      "testName": "an approval bound to a sequence the horizon never reached is refused even when the caller asserts it",
+      "kind": "asserts"
+    },
+    {
       "scenario": "EAP-VOBJ-012",
       "testFile": "packages/mcp-server/test/capability-governance.test.ts",
       "testName": "6. An unclassified capability defaults to irreversible and therefore requires approval",
@@ -875,7 +875,7 @@
     },
     {
       "scenario": "EAP-VOBJ-012",
-      "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
       "testName": "CapabilityGateway refuses a client-supplied approval that is not registered by an operator",
       "kind": "asserts"
     },
@@ -887,25 +887,25 @@
     },
     {
       "scenario": "EAP-XPRT-001",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "a contestation admitted through the MCP tool is visible to ContestationService",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-XPRT-001",
-      "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
       "testName": "a promotion admitted through the MCP tool is visible to PromotionService — no cross-layer divergence",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-XPRT-001",
-      "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
       "testName": "cognitive.promote advertises candidateIds (required) and basedOnSeq",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-XPRT-001",
-      "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
       "testName": "cognitive.propose advertises evidence (required) and basedOnSeq, and the advertised contract works",
       "kind": "covers-partially"
     },
@@ -917,19 +917,19 @@
     },
     {
       "scenario": "EAP-XPRT-002",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "a corrupt contestations column yields a typed Refusal, not a SyntaxError out of the repository",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-XPRT-002",
-      "testFile": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "testFile": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
       "testName": "a corrupt recall_cases.state column yields a typed Refusal on replay",
       "kind": "covers-partially"
     },
     {
       "scenario": "EAP-XPRT-002",
-      "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
+      "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
       "testName": "a recall case written behind the write path with an unreadable closure still fails CLOSED",
       "kind": "covers-partially"
     },
@@ -1466,64 +1466,28 @@
         "testName": "Should validate closed LegacyClaimStatus union"
       },
       {
-        "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
-        "testName": "candidate evaluation does not rebuild the tenant claim snapshot per candidate"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
-        "testName": "eapContest identifiers are unique even when the id shape collides with a purged row"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+        "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
         "testName": "ApprovalRepository stores approvals in SQLite rather than an unbounded Map"
       },
       {
-        "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+        "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
         "testName": "audit retention policy evicts oldest entries beyond the configured bound"
       },
       {
-        "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+        "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
         "testName": "CapabilityGateway keeps no unbounded in-memory outcome or audit collections"
       },
       {
-        "testFile": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+        "testFile": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
         "testName": "PromotionService keeps no in-memory aggregate store"
       },
       {
-        "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-        "testName": "a completed recall reports complete:true and no batch-limit signal"
+        "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
+        "testName": "candidate evaluation does not rebuild the tenant claim snapshot per candidate"
       },
       {
-        "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-        "testName": "a verified candidate that a later recall pulled into its closure cannot be promoted"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-        "testName": "an indirect dependent may still be CONCRETIZEd but is refused at VERIFY"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-        "testName": "cognitive.contest and cognitive.initiate advertise every field their handlers accept"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-        "testName": "cognitive.recall advertises batchSize and does NOT advertise the unsupported checkpoint"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-        "testName": "exhausting the batch cap is reported distinctly instead of looking like completion"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-        "testName": "TruthOwnershipSuspended ignores session filters, exactly as authority.flipped does"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
-        "testName": "a promotion of N candidates resolves membership ONCE, with an index-backed plan"
-      },
-      {
-        "testFile": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
-        "testName": "resuming to completion does NOT clear the gate: the closure is still closed (003 defers the exit)"
+        "testFile": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
+        "testName": "eapContest identifiers are unique even when the id shape collides with a purged row"
       },
       {
         "testFile": "packages/mcp-server/test/f001-transport-delegation.test.ts",
@@ -1532,6 +1496,42 @@
       {
         "testFile": "packages/mcp-server/test/f001-transport-delegation.test.ts",
         "testName": "there is no second recall schema: the adapter's private `recalls` table is gone"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
+        "testName": "a completed recall reports complete:true and no batch-limit signal"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
+        "testName": "a verified candidate that a later recall pulled into its closure cannot be promoted"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
+        "testName": "an indirect dependent may still be CONCRETIZEd but is refused at VERIFY"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
+        "testName": "cognitive.contest and cognitive.initiate advertise every field their handlers accept"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
+        "testName": "cognitive.recall advertises batchSize and does NOT advertise the unsupported checkpoint"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
+        "testName": "exhausting the batch cap is reported distinctly instead of looking like completion"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-closure-gate.test.ts",
+        "testName": "TruthOwnershipSuspended ignores session filters, exactly as authority.flipped does"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+        "testName": "a promotion of N candidates resolves membership ONCE, with an index-backed plan"
+      },
+      {
+        "testFile": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+        "testName": "resuming to completion does NOT clear the gate: the closure is still closed (003 defers the exit)"
       }
     ]
   },

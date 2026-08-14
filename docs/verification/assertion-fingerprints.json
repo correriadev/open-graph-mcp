@@ -6,8 +6,10 @@
   "files": [
     {
       "id": "f001-retry5-concurrency-authz",
-      "path": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
-      "previousPaths": [],
+      "path": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
+      "previousPaths": [
+        "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts"
+      ],
       "capturedAt": "2026-08-13T02:46:10.060Z",
       "hash": "6755c8d91a7c0b9569f0bf7ebaa1c8cfc231e47c6576eb7f591b90fd80d7fff1",
       "expectCount": 56,
@@ -222,8 +224,10 @@
     },
     {
       "id": "f001-retry5-durability",
-      "path": "packages/mcp-server/test/f001-retry5-durability.test.ts",
-      "previousPaths": [],
+      "path": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
+      "previousPaths": [
+        "packages/mcp-server/test/f001-retry5-durability.test.ts"
+      ],
       "capturedAt": "2026-08-13T02:46:10.106Z",
       "hash": "bd44e386ac1002693a8d3b677a8febb2af60a3d5e739896e90a100d36b2a176a",
       "expectCount": 43,
@@ -433,8 +437,10 @@
     },
     {
       "id": "f001-retry6-readmodel-and-freshness",
-      "path": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
-      "previousPaths": [],
+      "path": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
+      "previousPaths": [
+        "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts"
+      ],
       "capturedAt": "2026-08-13T02:46:10.117Z",
       "hash": "7775a9fde83dc62e011e5926f8f1a065661df0db09cf4471212a6903e462e37b",
       "expectCount": 53,
@@ -639,8 +645,10 @@
     },
     {
       "id": "f001-retry7-closure-gate",
-      "path": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-      "previousPaths": [],
+      "path": "packages/mcp-server/test/recall-closure-gate.test.ts",
+      "previousPaths": [
+        "packages/mcp-server/test/f001-retry7-closure-gate.test.ts"
+      ],
       "capturedAt": "2026-08-13T02:46:10.125Z",
       "hash": "41f0169ca32b8cff7270d2d25591a7b4754d0fd3c8e2a1627d45f907c8f6fcbb",
       "expectCount": 57,
@@ -860,8 +868,10 @@
     },
     {
       "id": "f001-retry8-resume-index",
-      "path": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
-      "previousPaths": [],
+      "path": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+      "previousPaths": [
+        "packages/mcp-server/test/f001-retry8-resume-index.test.ts"
+      ],
       "capturedAt": "2026-08-13T02:46:10.139Z",
       "hash": "0c29ea4e104763b7b693fcc160ad5c964f98a3f3d98d4320e62b97c523163098",
       "expectCount": 50,

@@ -65,15 +65,21 @@ import ts from "typescript"
 export const FINGERPRINTS_PATH = "docs/verification/assertion-fingerprints.json"
 
 /**
- * The seven f001-* files of acceptance criterion 3, captured BEFORE task 13 renames any of them.
- * Five encode retry archaeology and will be renamed; two are already behavioural and stay.
+ * The seven files of acceptance criterion 3, whose fingerprints were captured BEFORE task 13.
+ *
+ * Five encoded retry archaeology and task 13 renamed them; their paths below are the POST-rename
+ * paths, because this list is the bootstrap target set — it is read only when no baseline exists
+ * yet, and a list of paths that no longer resolve would make a clean-checkout capture throw. The
+ * pre-rename paths are not lost: each record in the baseline keeps its stable `id` and carries the
+ * old path in `previousPaths`, which is the whole point of `--rename`. The remaining two `f001-*`
+ * files were already named behaviourally and were not renamed.
  */
 export const TARGET_FILES: readonly string[] = [
-  "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
-  "packages/mcp-server/test/f001-retry5-durability.test.ts",
-  "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
-  "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
-  "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
+  "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
+  "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
+  "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
+  "packages/mcp-server/test/recall-closure-gate.test.ts",
+  "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
   "packages/mcp-server/test/f001-transport-delegation.test.ts",
   "packages/mcp-server/test/f001-validation-audit-vulns.test.ts",
 ]

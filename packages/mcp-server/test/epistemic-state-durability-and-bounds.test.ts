@@ -1,11 +1,16 @@
 /**
- * f001-retry5-durability.test.ts
+ * epistemic-state-durability-and-bounds.test.ts
  *
- * Regression suite for REWORK-LOG defect class 1 (DURABILITY / STATE DIVERGENCE) and
- * defect class 2 (UNBOUNDED MEMORY GROWTH), Feature F001 / domain cognitive_line.
+ * Epistemic state SURVIVES the host process and stays BOUNDED in memory: promotions,
+ * contestations, recall checkpoints, operator approvals and capability outcomes are all read back
+ * after the environment is closed and reopened from disk; sequences continue from durable storage
+ * rather than a counter that resets; the domain service and the MCP adapter read one store, so the
+ * two layers cannot diverge; and the accumulating collections (audit log, executed outcomes,
+ * approvals) live in SQLite under a retention bound instead of an unbounded Map.
  *
  * Every assertion here fails against a service that keeps epistemic state in a volatile
  * in-memory Map: the environment is closed and reopened from disk between write and read.
+ * Feature F001 / domain cognitive_line.
  */
 import { describe, expect, test } from "bun:test"
 import { annotatedTest } from "./verification/annotate"
@@ -19,6 +24,39 @@ import { RecallWorker } from "../src/eap/recall-worker"
 import { CapabilityGateway } from "../src/eap/capability-gateway"
 import { InMemoryDependencyQuery, type RecallNotice } from "@open-graph-mcp/graph-core/eap/recall"
 import type { OperatorApproval, CapabilityExecutionRequest } from "@open-graph-mcp/graph-core/eap/capabilities"
+
+/**
+ * RETRY PROVENANCE — F002 task 13, `RetireRetryArchaeology` (003 §Snippet K).
+ *
+ * This file was `f001-retry5-durability.test.ts`. That name recorded the validation ATTEMPT that
+ * produced the suite, not the behaviour it protects. The lineage is not destroyed by the rename —
+ * it is demoted to the record below, where provenance belongs and where it can be read without
+ * being mistaken for a description of what is under test.
+ *
+ * The move is proved inert rather than eyeballed: the pre-rename `AssertionFingerprint` — the
+ * order-insensitive multiset of `(matcher, normalized-subject)` pairs, 43 `expect` calls over 40
+ * distinct pairs — is reproduced EXACTLY under the new path, and
+ * `docs/verification/assertion-fingerprints.json` carries the same hash under the stable id
+ * `f001-retry5-durability` with the old path retained in `previousPaths`.
+ *
+ * The `describe` titles below still name the retry pass. They are left verbatim on purpose: task 13
+ * is a pure rename, and a `describe` title is prose that no Traceability Link reads (`003` §Section
+ * 2 — "test titles are never parsed"), so rewriting them would be an unproved edit smuggled into a
+ * proved one.
+ */
+export const RetryProvenance = {
+  previousFileName: "f001-retry5-durability.test.ts",
+  retryPass: "F001 retry #5",
+  findingClasses: [
+    "REWORK-LOG defect class 1 — durability / state divergence",
+    "REWORK-LOG defect class 2 — unbounded memory growth",
+  ],
+  findingSource: "docs/specs/cognitive_line/REWORK-LOG.md",
+  fingerprintId: "f001-retry5-durability",
+  fingerprintHash: "bd44e386ac1002693a8d3b677a8febb2af60a3d5e739896e90a100d36b2a176a",
+  expectCallsPreserved: 43,
+  retiredBy: "F002 task 13",
+} as const
 
 describe("F001 retry#5 — defect 1: durable epistemic state (no volatile Maps)", () => {
   annotatedTest(

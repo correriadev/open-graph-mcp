@@ -27,7 +27,9 @@ import {
 const repoRoot = join(import.meta.dir, "..", "..")
 const read = (relative: string): string => readFileSync(join(repoRoot, relative), "utf8")
 
-const DURABILITY = "packages/mcp-server/test/f001-retry5-durability.test.ts"
+// Task 13 renamed this file from `f001-retry5-durability.test.ts`. Only the path moved: the
+// baseline record keeps its `id` and its multiset, so every expectation below is unchanged.
+const DURABILITY = "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts"
 
 /** Reprints a source file through the TypeScript printer: a total, mechanical reformatting. */
 const reformat = (source: string): string => {
@@ -202,7 +204,7 @@ describe("AssertionFingerprint — stability against the real f001 corpus", () =
   })
 
   test("a subject spanning several lines is normalised to one canonical form", () => {
-    const source = read("packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts")
+    const source = read("packages/mcp-server/test/read-model-projection-and-freshness.test.ts")
     for (const entry of fingerprintSource(source).assertions) {
       expect(entry.subject).not.toContain("\n")
       expect(entry.subject).not.toMatch(/\s{2}/)
@@ -312,8 +314,17 @@ describe("Baseline store — captured for all seven f001-* files before any rena
   })
 
   test("the store records the five files task 13 renames and the two that stay", () => {
-    const retry = store.files.filter((f) => f.path.includes("f001-retry"))
+    // Identity, not path: `id` is the stable key the rename was designed to preserve, so this
+    // still selects exactly the five retry-era files after task 13 rekeyed their paths.
+    const retry = store.files.filter((f) => f.id.includes("f001-retry"))
     expect(retry).toHaveLength(5)
     expect(store.files).toHaveLength(7)
+    // The rename landed and is recorded, rather than the archaeology having merely been dropped:
+    // no live path still carries it, and every one of the five names the path it came from.
+    expect(store.files.filter((f) => f.path.includes("f001-retry"))).toHaveLength(0)
+    for (const entry of retry) {
+      expect(entry.previousPaths).toHaveLength(1)
+      expect(entry.previousPaths[0]).toContain(entry.id)
+    }
   })
 })

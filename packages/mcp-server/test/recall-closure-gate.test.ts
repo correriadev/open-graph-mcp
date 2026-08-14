@@ -1,7 +1,9 @@
 /**
- * f001-retry7-closure-gate.test.ts
+ * recall-closure-gate.test.ts
  *
- * Fourth targeted pass on F001. Each test pins one finding from the TL/QA verdicts of this round:
+ * A candidate sitting inside a recall closure cannot complete its lifecycle, every suspension it
+ * causes is announced, and the advertised tool schemas are the interface an agent actually gets.
+ * The four properties pinned here:
  *
  *  1. RECALL-CLOSURE GATE (both reviewers' top finding). `recall.ts` records EVERY claim in the
  *     reverse closure as `normativelyResolvedState = 'recalled'` in `recall_cases.state` and in the
@@ -27,6 +29,36 @@ import { advanceCandidates, callTool, register, rpc } from "./helpers"
 import { write } from "../src/db"
 import { matches } from "../src/state"
 import { RECALL_LIMITS } from "../src/tools/eap"
+
+/**
+ * RETRY PROVENANCE — F002 task 13, `RetireRetryArchaeology` (003 §Snippet K).
+ *
+ * This file was `f001-retry7-closure-gate.test.ts`. Only the `f001-retry7` fragment was
+ * archaeology — the validation ATTEMPT that produced the suite, the fourth targeted pass on F001 —
+ * and it is demoted to the record below rather than destroyed. `closure-gate` already named the
+ * behaviour and is kept.
+ *
+ * The move is proved inert rather than eyeballed: the pre-rename `AssertionFingerprint` — the
+ * order-insensitive multiset of `(matcher, normalized-subject)` pairs, 57 `expect` calls over 42
+ * distinct pairs — is reproduced EXACTLY under the new path, and
+ * `docs/verification/assertion-fingerprints.json` carries the same hash under the stable id
+ * `f001-retry7-closure-gate` with the old path retained in `previousPaths`.
+ */
+export const RetryProvenance = {
+  previousFileName: "f001-retry7-closure-gate.test.ts",
+  retryPass: "F001 retry #7 (fourth targeted pass)",
+  findingClasses: [
+    "TL/QA top finding — the recall-closure gate did not exist: 003 defers the STATUS of an indirect dependent, not the gate",
+    "TL/QA — truth-ownership suspension was written but announced nowhere outside the final batch",
+    "TL/QA — the advertised tools/list schemas omitted fields the handlers require",
+    "TL/QA smaller items — checkpoint validated-and-discarded, batch-cap exhaustion indistinguishable from completion, unrecognized candidate state reset the lifecycle, basedOnSeq: -0 accepted",
+  ],
+  findingSource: "F001 retry #7 TL/QA verdicts (see docs/specs/cognitive_line/REWORK-LOG.md)",
+  fingerprintId: "f001-retry7-closure-gate",
+  fingerprintHash: "41f0169ca32b8cff7270d2d25591a7b4754d0fd3c8e2a1627d45f907c8f6fcbb",
+  expectCallsPreserved: 57,
+  retiredBy: "F002 task 13",
+} as const
 
 function seedClaim(
   s: { state: { db: any; stateDir: string } },

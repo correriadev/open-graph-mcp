@@ -25,7 +25,7 @@
 | F002 | 10 | open-graph-mcp | Transcribe Apendice D Into a Conformance Manifest | cognitive_line_test_automation | IMPLEMENTATION | COMPLETED |
 | F002 | 11 | open-graph-mcp | Execute Conformance Assessment Against the Manifest | cognitive_line_test_automation | IMPLEMENTATION | COMPLETED |
 | F002 | 12 | open-graph-mcp | Implement the Assertion Fingerprint Tool | cognitive_line_test_automation | - | COMPLETED |
-| F002 | 13 | open-graph-mcp | Retire Retry Archaeology Into Behavioural Names | cognitive_line_test_automation | - | NOT_STARTED |
+| F002 | 13 | open-graph-mcp | Retire Retry Archaeology Into Behavioural Names | cognitive_line_test_automation | IMPLEMENTATION | COMPLETED |
 | F002 | 14 | open-graph-mcp | Instrument Coverage and Record the First Figure | cognitive_line_test_automation | - | NOT_STARTED |
 | F002 | 15 | open-graph-mcp | Add the Coverage Baseline Ratchet Gate | cognitive_line_test_automation | - | NOT_STARTED |
 | F002 | 16 | open-graph-mcp | Define the Benchmark Ledger and Its Noise Policy | cognitive_line_test_automation | - | NOT_STARTED |

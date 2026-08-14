@@ -14,11 +14,11 @@ never as an edit to that spec.
 
 | field | value |
 |---|---|
-| run id | `local-fc3794278249` |
-| commit | `8c8ef2fa225bb5afd256a01406a94b9b772a8e77` |
+| run id | `local-59b53f16354c` |
+| commit | `b27f5b69c74299692e0c3f91d458f8a42e64209d` |
 | run identity source | local |
-| executed-test inventory | `.verification/junit.xml` — 932 case(s): 929 passed, 2 failed, 1 skipped |
-| traceability map | `docs/verification/traceability-map.json` sha256 `7eeadfba667890b6e862ee48e3374c3796463c0260e510e2b67885b953863b5b` |
+| executed-test inventory | `.verification/junit.xml` — 995 case(s): 992 passed, 2 failed, 1 skipped |
+| traceability map | `docs/verification/traceability-map.json` sha256 `00ac10acead257c2c9eb0241ed675c4744a14239db1d3c876c7be7a3f3152084` |
 | scenario register | `docs/verification/scenario-register.json` sha256 `d0fe9f1afe2bf9393db20fd8a1cdef14a072b25125076d57f7d0e860fd7cbee0` |
 | frozen source (read-only) | `docs/specs/cognitive_line/004-open-graph-mcp-test-scenarios.md` sha256 `66d68d64e94a0172b1170bb71b52f722302b089b1c0194df47b397fd333341e3` — unmodified |
 
@@ -43,38 +43,38 @@ or no commit is inadmissible and is never published.
 | EAP-ADMS-001 | proposed | unlinked | 0 | 0 | — | — | — |
 | EAP-ADMS-002 | proposed | covers-partially-only | 0 | 2 | — | — | — |
 | EAP-ADMS-003 | proposed | unlinked | 0 | 0 | — | — | — |
-| EAP-CAPB-001 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-transport-delegation.test.ts :: capability execution and persistent-delta admission are wired, not orphaned |
-| EAP-CAPB-002 | evidenced | evidenced | 2 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/capability-governance.test.ts :: 5. A reversible capability executes without an operator approval and is idempotency-keyed<br>packages/mcp-server/test/f001-validation-audit-vulns.test.ts :: three concurrent executions with the same key invoke the provider exactly once |
-| EAP-CAPB-003 | evidenced | evidenced | 1 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: CapabilityGateway times out a hanging provider and cancels it via AbortSignal |
+| EAP-CAPB-001 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/f001-transport-delegation.test.ts :: capability execution and persistent-delta admission are wired, not orphaned |
+| EAP-CAPB-002 | evidenced | evidenced | 2 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/capability-governance.test.ts :: 5. A reversible capability executes without an operator approval and is idempotency-keyed<br>packages/mcp-server/test/f001-validation-audit-vulns.test.ts :: three concurrent executions with the same key invoke the provider exactly once |
+| EAP-CAPB-003 | evidenced | evidenced | 1 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts :: CapabilityGateway times out a hanging provider and cancels it via AbortSignal |
 | EAP-ERRP-001 | proposed | covers-partially-only | 0 | 3 | — | — | — |
-| EAP-ERRP-002 | evidenced | evidenced | 1 | 2 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry7-closure-gate.test.ts :: cognitive.recall refuses `checkpoint` as unsupported rather than validating and discarding it |
+| EAP-ERRP-002 | evidenced | evidenced | 1 | 2 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/recall-closure-gate.test.ts :: cognitive.recall refuses `checkpoint` as unsupported rather than validating and discarding it |
 | EAP-ERRP-003 | proposed | covers-partially-only | 0 | 3 | — | — | — |
 | EAP-ERRP-004 | proposed | covers-partially-only | 0 | 5 | — | — | — |
 | EAP-EVNT-001 | proposed | covers-partially-only | 0 | 1 | — | — | — |
 | EAP-EVNT-002 | proposed | unlinked | 0 | 0 | — | — | — |
-| EAP-FUNC-001 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/eap-conformance.test.ts :: Host conformance profile: lifecycle, promotion, contestation, recall and authority boundaries |
+| EAP-FUNC-001 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/eap-conformance.test.ts :: Host conformance profile: lifecycle, promotion, contestation, recall and authority boundaries |
 | EAP-FUNC-002 | proposed | covers-partially-only | 0 | 1 | — | — | — |
 | EAP-FUNC-003 | proposed | covers-partially-only | 0 | 6 | — | — | — |
 | EAP-FUNC-004 | proposed | covers-partially-only | 0 | 2 | — | — | — |
 | EAP-HRZN-001 | proposed | covers-partially-only | 0 | 1 | — | — | — |
-| EAP-HRZN-002 | evidenced | evidenced | 1 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/horizon.test.ts :: 1. Non-root horizon requires declared parent |
+| EAP-HRZN-002 | evidenced | evidenced | 1 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/horizon.test.ts :: 1. Non-root horizon requires declared parent |
 | EAP-HRZN-003 | proposed | covers-partially-only | 0 | 1 | — | — | — |
-| EAP-HRZN-004 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/horizon.test.ts :: 3. Relative Authority cannot be assigned to another horizon |
-| EAP-LIFE-001 | evidenced | evidenced | 1 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/eap-lifecycle.test.ts :: 1. Should complete Relative Authority when full normative sequence succeeds in order |
-| EAP-LIFE-002 | evidenced | evidenced | 1 | 3 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/eap-lifecycle.test.ts :: 2. Should return a typed Refusal when a lifecycle transition is out of order |
-| EAP-LIFE-003 | evidenced | evidenced | 1 | 2 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/eap-lifecycle.test.ts :: 3. Should reject boundary commands (PROMOTE, CONTEST, INITIATE) when presented as lifecycle states |
+| EAP-HRZN-004 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/horizon.test.ts :: 3. Relative Authority cannot be assigned to another horizon |
+| EAP-LIFE-001 | evidenced | evidenced | 1 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/eap-lifecycle.test.ts :: 1. Should complete Relative Authority when full normative sequence succeeds in order |
+| EAP-LIFE-002 | evidenced | evidenced | 1 | 3 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/eap-lifecycle.test.ts :: 2. Should return a typed Refusal when a lifecycle transition is out of order |
+| EAP-LIFE-003 | evidenced | evidenced | 1 | 2 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/eap-lifecycle.test.ts :: 3. Should reject boundary commands (PROMOTE, CONTEST, INITIATE) when presented as lifecycle states |
 | EAP-PERS-001 | proposed | covers-partially-only | 0 | 4 | — | — | — |
-| EAP-PERS-002 | evidenced | evidenced | 1 | 2 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry8-resume-index.test.ts :: no durable suspension without the append-only row that announces it, at any failure point |
+| EAP-PERS-002 | evidenced | evidenced | 1 | 2 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/recall-resume-and-closure-index.test.ts :: no durable suspension without the append-only row that announces it, at any failure point |
 | EAP-PERS-003 | proposed | unlinked | 0 | 0 | — | — | — |
-| EAP-PERS-004 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/horizon-durability.test.ts :: HorizonStore: optimistic concurrency in saveTransition |
+| EAP-PERS-004 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/horizon-durability.test.ts :: HorizonStore: optimistic concurrency in saveTransition |
 | EAP-PERS-005 | proposed | unlinked | 0 | 0 | — | — | — |
 | EAP-PERS-006 | proposed | unlinked | 0 | 0 | — | — | — |
 | EAP-PERS-007 | proposed | covers-partially-only | 0 | 1 | — | — | — |
-| EAP-PERS-008 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry5-durability.test.ts :: RecallWorker checkpoints survive a restart and resume to the same affected set |
-| EAP-PERS-009 | evidenced | evidenced | 3 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/capability-governance.test.ts :: 4. A consumed irreversible authorization cannot be reused<br>packages/mcp-server/test/f001-validation-audit-vulns.test.ts :: consumption is terminal: a second consumeAuthorization always refuses<br>packages/mcp-server/test/f001-validation-audit-vulns.test.ts :: re-registering an existing approval id does not reset the consumed flag |
-| EAP-PROM-001 | evidenced | evidenced | 1 | 4 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-transport-delegation.test.ts :: a candidate that has not reached VERIFIED in the child is refused as an illegal transition |
-| EAP-PROM-002 | evidenced | evidenced | 1 | 3 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/promotion.test.ts :: returns HORIZON_SKIP when Promotion targets a non-parent Horizon |
-| EAP-PROM-003 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/promotion.test.ts :: returns STALE_BASE when basedOnSeq precedes current applicable Sequence |
+| EAP-PERS-008 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts :: RecallWorker checkpoints survive a restart and resume to the same affected set |
+| EAP-PERS-009 | evidenced | evidenced | 3 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/capability-governance.test.ts :: 4. A consumed irreversible authorization cannot be reused<br>packages/mcp-server/test/f001-validation-audit-vulns.test.ts :: consumption is terminal: a second consumeAuthorization always refuses<br>packages/mcp-server/test/f001-validation-audit-vulns.test.ts :: re-registering an existing approval id does not reset the consumed flag |
+| EAP-PROM-001 | evidenced | evidenced | 1 | 4 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/f001-transport-delegation.test.ts :: a candidate that has not reached VERIFIED in the child is refused as an illegal transition |
+| EAP-PROM-002 | evidenced | evidenced | 1 | 3 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/promotion.test.ts :: returns HORIZON_SKIP when Promotion targets a non-parent Horizon |
+| EAP-PROM-003 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/promotion.test.ts :: returns STALE_BASE when basedOnSeq precedes current applicable Sequence |
 | EAP-QUAR-001 | declared-untestable | declared-untestable | 0 | 0 | — | — | — |
 | EAP-QUAR-002 | declared-untestable | declared-untestable | 0 | 0 | — | — | — |
 | EAP-QUAR-003 | declared-untestable | declared-untestable | 0 | 0 | — | — | — |
@@ -82,42 +82,42 @@ or no commit is inadmissible and is never published.
 | EAP-QUAR-005 | declared-untestable | declared-untestable | 0 | 0 | — | — | — |
 | EAP-QUAR-006 | declared-untestable | declared-untestable | 0 | 0 | — | — | — |
 | EAP-QUAR-007 | declared-untestable | declared-untestable | 0 | 0 | — | — | — |
-| EAP-RECL-001 | evidenced | evidenced | 2 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-transport-delegation.test.ts :: the closure is a real reverse-dependency traversal, and case/checkpoint/scar are all written<br>packages/mcp-server/test/recall.test.ts :: Should create a Recall Case when an invalidating Contestation has been admitted |
-| EAP-RECL-002 | evidenced | evidenced | 1 | 3 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: eapRecall refuses a contestation whose status is not 'admitted' |
-| EAP-RECL-003 | evidenced | evidenced | 1 | 5 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry8-resume-index.test.ts :: re-driving a batch-cap-exhausted case finishes it and reports it as resumed |
-| EAP-RECL-004 | evidenced | evidenced | 1 | 3 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/recall.test.ts :: Should preserve the historical scar when Recall completes |
+| EAP-RECL-001 | evidenced | evidenced | 2 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/f001-transport-delegation.test.ts :: the closure is a real reverse-dependency traversal, and case/checkpoint/scar are all written<br>packages/mcp-server/test/recall.test.ts :: Should create a Recall Case when an invalidating Contestation has been admitted |
+| EAP-RECL-002 | evidenced | evidenced | 1 | 3 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts :: eapRecall refuses a contestation whose status is not 'admitted' |
+| EAP-RECL-003 | evidenced | evidenced | 1 | 5 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/recall-resume-and-closure-index.test.ts :: re-driving a batch-cap-exhausted case finishes it and reports it as resumed |
+| EAP-RECL-004 | evidenced | evidenced | 1 | 3 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/recall.test.ts :: Should preserve the historical scar when Recall completes |
 | EAP-SEC-001 | proposed | covers-partially-only | 0 | 3 | — | — | — |
-| EAP-SEC-002 | evidenced | evidenced | 1 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts :: an oversized basedOnSeq is a malformed contract, not a free pass through the freshness gate |
+| EAP-SEC-002 | evidenced | evidenced | 1 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/read-model-projection-and-freshness.test.ts :: an oversized basedOnSeq is a malformed contract, not a free pass through the freshness gate |
 | EAP-SEC-003 | proposed | covers-partially-only | 0 | 1 | — | — | — |
 | EAP-SEC-004 | proposed | unlinked | 0 | 0 | — | — | — |
-| EAP-SEC-005 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: getAuditLog applies an authorization projection filter |
+| EAP-SEC-005 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts :: getAuditLog applies an authorization projection filter |
 | EAP-SVCS-001 | proposed | unlinked | 0 | 0 | — | — | — |
 | EAP-SVCS-002 | proposed | unlinked | 0 | 0 | — | — | — |
 | EAP-SVCS-003 | proposed | covers-partially-only | 0 | 2 | — | — | — |
 | EAP-SVCS-004 | proposed | covers-partially-only | 0 | 2 | — | — | — |
-| EAP-SVCS-005 | evidenced | evidenced | 1 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: a refused candidate returns typed reasons without throwing |
+| EAP-SVCS-005 | evidenced | evidenced | 1 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts :: a refused candidate returns typed reasons without throwing |
 | EAP-SVCS-006 | proposed | covers-partially-only | 0 | 4 | — | — | — |
-| EAP-SVCS-007 | evidenced | evidenced | 1 | 3 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-transport-delegation.test.ts :: evidence elements are inspected: [null] is EVIDENCE_REQUIRED, not an admitted contestation |
+| EAP-SVCS-007 | evidenced | evidenced | 1 | 3 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/f001-transport-delegation.test.ts :: evidence elements are inspected: [null] is EVIDENCE_REQUIRED, not an admitted contestation |
 | EAP-SVCS-008 | proposed | covers-partially-only | 0 | 1 | — | — | — |
 | EAP-SVCS-009 | proposed | covers-partially-only | 0 | 2 | — | — | — |
-| EAP-SVCS-010 | proposed | covers-partially-only | 0 | 1 | — | — | — |
-| EAP-VOBJ-001 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/eap-types.test.ts :: Should canonicalize CellKey when a supported legacy spelling is supplied |
-| EAP-VOBJ-002 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/eap-types.test.ts :: Should reject CellKey when the domain is empty or the level is unsupported |
-| EAP-VOBJ-003 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/eap-types.test.ts :: Should consider CellKey values equal when their canonical spellings match |
-| EAP-VOBJ-004 | evidenced | evidenced | 1 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/graph-core/test/eap-types.test.ts :: Should keep TruthOwnership independent when claim status changes |
+| EAP-SVCS-010 | proposed | covers-partially-only | 0 | 3 | — | — | — |
+| EAP-VOBJ-001 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/eap-types.test.ts :: Should canonicalize CellKey when a supported legacy spelling is supplied |
+| EAP-VOBJ-002 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/eap-types.test.ts :: Should reject CellKey when the domain is empty or the level is unsupported |
+| EAP-VOBJ-003 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/eap-types.test.ts :: Should consider CellKey values equal when their canonical spellings match |
+| EAP-VOBJ-004 | evidenced | evidenced | 1 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/graph-core/test/eap-types.test.ts :: Should keep TruthOwnership independent when claim status changes |
 | EAP-VOBJ-005 | proposed | unlinked | 0 | 0 | — | — | — |
 | EAP-VOBJ-006 | proposed | unlinked | 0 | 0 | — | — | — |
 | EAP-VOBJ-007 | proposed | covers-partially-only | 0 | 4 | — | — | — |
 | EAP-VOBJ-008 | proposed | unlinked | 0 | 0 | — | — | — |
 | EAP-VOBJ-009 | proposed | covers-partially-only | 0 | 3 | — | — | — |
-| EAP-VOBJ-010 | evidenced | evidenced | 1 | 0 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/persistent-delta.test.ts :: disassemblePersistentDelta exposes candidate deltas as envelope without direct admission |
-| EAP-VOBJ-011 | evidenced | evidenced | 2 | 4 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: CapabilityGateway validates the stored approval, not the client-supplied copy<br>packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts :: an approval bound to a sequence the horizon never reached is refused even when the caller asserts it |
-| EAP-VOBJ-012 | evidenced | evidenced | 1 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts :: CapabilityGateway refuses a client-supplied approval that is not registered by an operator |
-| EAP-XPRT-001 | evidenced | evidenced | 1 | 4 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/mcp-server/test/eap-mcp-contract.test.ts :: cognitive.initiate creates horizon and returns admitted outcome or typed refusal for invalid parent |
+| EAP-VOBJ-010 | evidenced | evidenced | 1 | 0 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/persistent-delta.test.ts :: disassemblePersistentDelta exposes candidate deltas as envelope without direct admission |
+| EAP-VOBJ-011 | evidenced | evidenced | 2 | 4 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts :: CapabilityGateway validates the stored approval, not the client-supplied copy<br>packages/mcp-server/test/read-model-projection-and-freshness.test.ts :: an approval bound to a sequence the horizon never reached is refused even when the caller asserts it |
+| EAP-VOBJ-012 | evidenced | evidenced | 1 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts :: CapabilityGateway refuses a client-supplied approval that is not registered by an operator |
+| EAP-XPRT-001 | evidenced | evidenced | 1 | 4 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/mcp-server/test/eap-mcp-contract.test.ts :: cognitive.initiate creates horizon and returns admitted outcome or typed refusal for invalid parent |
 | EAP-XPRT-002 | proposed | covers-partially-only | 0 | 4 | — | — | — |
 | EAP-XPRT-003 | proposed | covers-partially-only | 0 | 1 | — | — | — |
 | EAP-XPRT-004 | proposed | unlinked | 0 | 0 | — | — | — |
-| EAP-XPRT-005 | evidenced | evidenced | 1 | 1 | local-fc3794278249 | 8c8ef2fa225bb5afd256a01406a94b9b772a8e77 | packages/client/test/eap-client.test.ts :: maps a host typed refusal to its declared client obligation without auto-retrying |
+| EAP-XPRT-005 | evidenced | evidenced | 1 | 1 | local-59b53f16354c | b27f5b69c74299692e0c3f91d458f8a42e64209d | packages/client/test/eap-client.test.ts :: maps a host typed refusal to its declared client obligation without auto-retrying |
 
 ## Withheld Evidence
 

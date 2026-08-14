@@ -1,7 +1,8 @@
 /**
- * f001-retry6-readmodel-and-freshness.test.ts
+ * read-model-projection-and-freshness.test.ts
  *
- * Third targeted pass on F001. Each test pins one finding from the TL/QA verdicts of this round:
+ * A completed recall and a queryable graph cannot disagree, and a caller cannot assert its own
+ * freshness. The five properties pinned here:
  *
  *  1. Recall degradation and truth-ownership suspension are projected onto the READ MODEL
  *     (`candidates`, `authority`) inside the same unit of work that checkpoints the case, so a
@@ -20,6 +21,37 @@ import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register } from "./helpers"
 import { write } from "../src/db"
 import { eapRecall } from "../src/tools/eap"
+
+/**
+ * RETRY PROVENANCE — F002 task 13, `RetireRetryArchaeology` (003 §Snippet K).
+ *
+ * This file was `f001-retry6-readmodel-and-freshness.test.ts`. The `retry6` fragment recorded the
+ * validation ATTEMPT that produced the suite — the third targeted pass on F001 — not the behaviour
+ * it protects. The lineage is not destroyed by the rename: it is demoted to the record below, where
+ * provenance belongs and where it can be read without being mistaken for the subject under test.
+ *
+ * The move is proved inert rather than eyeballed: the pre-rename `AssertionFingerprint` — the
+ * order-insensitive multiset of `(matcher, normalized-subject)` pairs, 53 `expect` calls over 39
+ * distinct pairs — is reproduced EXACTLY under the new path, and
+ * `docs/verification/assertion-fingerprints.json` carries the same hash under the stable id
+ * `f001-retry6-readmodel-and-freshness` with the old path retained in `previousPaths`.
+ */
+export const RetryProvenance = {
+  previousFileName: "f001-retry6-readmodel-and-freshness.test.ts",
+  retryPass: "F001 retry #6 (third targeted pass)",
+  findingClasses: [
+    "TL/QA — recall degradation and truth-ownership suspension are not projected onto the read model",
+    "TL/QA — the capability gateway trusted the caller's asserted sequence instead of durable state",
+    "TL/QA — basedOnSeq was unbounded and not compared for equality with the observed sequence",
+    "TL/QA — boundary commands were not idempotent under concurrency and replay",
+    "TL/QA — a partially-invalid contract was accepted, and a corrupt stored JSON column crashed",
+  ],
+  findingSource: "F001 retry #6 TL/QA verdicts (see docs/specs/cognitive_line/REWORK-LOG.md)",
+  fingerprintId: "f001-retry6-readmodel-and-freshness",
+  fingerprintHash: "7775a9fde83dc62e011e5926f8f1a065661df0db09cf4471212a6903e462e37b",
+  expectCallsPreserved: 53,
+  retiredBy: "F002 task 13",
+} as const
 
 function seedClaim(
   s: { state: { db: any; stateDir: string } },

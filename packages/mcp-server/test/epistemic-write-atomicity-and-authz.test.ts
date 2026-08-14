@@ -1,9 +1,12 @@
 /**
- * f001-retry5-concurrency-authz.test.ts
+ * epistemic-write-atomicity-and-authz.test.ts
  *
- * Regression suite for REWORK-LOG defect class 3 (CONCURRENCY AND SEQUENCE RACES) and
- * defect class 4 (AUTHORIZATION AND VALIDATION GAPS), plus the transactional-recovery and
- * execution-timeout points. Feature F001 / domain cognitive_line.
+ * A write into governed epistemic state is ATOMIC and AUTHORIZED: sequences are allocated durably
+ * rather than derived from `MAX(seq)+1`, a horizon transition that fails to persist rolls back
+ * whole, `admitPersistentDelta` leaves neither orphaned `cs_deltas` rows nor held cell locks, and
+ * the capability gateway decides on the STORED approval — never on the client's copy of it — while
+ * `getAuditLog` projects by principal and a hanging provider is cancelled rather than awaited.
+ * Feature F001 / domain cognitive_line.
  */
 import { describe, expect, test } from "bun:test"
 import { annotatedTest } from "./verification/annotate"
@@ -15,6 +18,42 @@ import { eapContest, eapPromote, eapRecall } from "../src/tools/eap"
 import { admitPersistentDelta, type PersistentDelta } from "../src/eap/persistent-delta"
 import { injectMirrorAppendFailure, write } from "../src/db"
 import type { CapabilityExecutionRequest, OperatorApproval } from "@open-graph-mcp/graph-core/eap/capabilities"
+
+/**
+ * RETRY PROVENANCE — F002 task 13, `RetireRetryArchaeology` (003 §Snippet K).
+ *
+ * This file was `f001-retry5-concurrency-authz.test.ts`. That name recorded the validation ATTEMPT
+ * that produced the suite, not the behaviour it protects, so a reader had to reconstruct the
+ * subject from the archaeology. The lineage is not destroyed by the rename — it is demoted to the
+ * record below, where provenance belongs and where it can be read without being mistaken for a
+ * description of what is under test.
+ *
+ * The move is proved inert rather than eyeballed: the pre-rename `AssertionFingerprint` — the
+ * order-insensitive multiset of `(matcher, normalized-subject)` pairs, 56 `expect` calls over 41
+ * distinct pairs — is reproduced EXACTLY under the new path, and
+ * `docs/verification/assertion-fingerprints.json` carries the same hash under the stable id
+ * `f001-retry5-concurrency-authz` with the old path retained in `previousPaths`.
+ *
+ * The `describe` titles below still name the retry pass. They are left verbatim on purpose: task 13
+ * is a pure rename, and a `describe` title is prose that no Traceability Link reads (`003` §Section
+ * 2 — "test titles are never parsed"), so rewriting them would be an unproved edit smuggled into a
+ * proved one.
+ */
+export const RetryProvenance = {
+  previousFileName: "f001-retry5-concurrency-authz.test.ts",
+  retryPass: "F001 retry #5",
+  findingClasses: [
+    "REWORK-LOG defect class 3 — concurrency and sequence races",
+    "REWORK-LOG defect class 4 — authorization and validation gaps",
+    "REWORK-LOG — transactional recovery of admitPersistentDelta",
+    "REWORK-LOG — execution timeout and per-candidate snapshot re-parse",
+  ],
+  findingSource: "docs/specs/cognitive_line/REWORK-LOG.md",
+  fingerprintId: "f001-retry5-concurrency-authz",
+  fingerprintHash: "6755c8d91a7c0b9569f0bf7ebaa1c8cfc231e47c6576eb7f591b90fd80d7fff1",
+  expectCallsPreserved: 56,
+  retiredBy: "F002 task 13",
+} as const
 
 const claimDelta = (id: string, domain = "ui", level = 5) => ({
   kind: "claim.add" as const,
@@ -216,7 +255,7 @@ describe("F001 retry#5 — defect 3: atomic sequence allocation and transition w
     "eapPromote rolls back the horizon transition when the durable write fails",
     // EAP-PERS-002: a durable transaction fails midway and neither the sequence advance nor the
     // proposal survives. Only the SQLite side is read back, not the JSONL history, so partial —
-    // f001-retry8's injection sweep asserts the scenario across both.
+    // recall-resume-and-closure-index's injection sweep asserts the scenario across both.
     { coversPartially: ["EAP-PERS-002"] },
     async () => {
     const s = startServer()

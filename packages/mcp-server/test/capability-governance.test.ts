@@ -192,7 +192,7 @@ describe('Capability Classification & Governance Boundary (Task 10)', () => {
   annotatedTest(
     '6. An unclassified capability defaults to irreversible and therefore requires approval',
     // EAP-VOBJ-012 requires the refusal to land BEFORE the external effect occurs. No provider
-    // action is supplied here, so that clause is not observed; f001-retry5-concurrency-authz's
+    // action is supplied here, so that clause is not observed; epistemic-write-atomicity-and-authz's
     // forged-approval case asserts it.
     { coversPartially: ['EAP-VOBJ-012'] },
     async () => {

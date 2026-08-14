@@ -1,8 +1,10 @@
 /**
- * f001-retry8-resume-index.test.ts
+ * recall-resume-and-closure-index.test.ts
  *
- * Fifth targeted pass on F001. Each test pins one finding the previous commit (7b497fa) INTRODUCED
- * and this one corrects:
+ * An unfinished recall case is RESUMED rather than replayed, so the documented remedy for a
+ * batch-cap exhaustion is actually reachable; closure membership is an indexed lookup resolved once
+ * per command; the degradation report describes the whole case; and the suspension event commits
+ * with the write it announces. The four properties pinned here:
  *
  *  1. THE GATE HAS A MODELLED EXIT for the one dead end that is not the deferred-ADR one. A recall
  *     that exhausted its batch cap returns an obligation telling the operator to re-drive it with a
@@ -28,6 +30,37 @@ import { startServer } from "../src/index"
 import { advanceCandidates, callTool, register } from "./helpers"
 import { injectMirrorAppendFailure, rebuildFromJsonl, write } from "../src/db"
 import { RECALL_LIMITS } from "../src/tools/eap"
+
+/**
+ * RETRY PROVENANCE — F002 task 13, `RetireRetryArchaeology` (003 §Snippet K).
+ *
+ * This file was `f001-retry8-resume-index.test.ts`. The `f001-retry8` fragment recorded the
+ * validation ATTEMPT that produced the suite — the fifth targeted pass on F001, which corrected
+ * findings the previous commit (7b497fa) had itself INTRODUCED — not the behaviour it protects.
+ * The lineage is demoted to the record below rather than destroyed; `resume` and `index` already
+ * named behaviour and survive, spelled out.
+ *
+ * The move is proved inert rather than eyeballed: the pre-rename `AssertionFingerprint` — the
+ * order-insensitive multiset of `(matcher, normalized-subject)` pairs, 50 `expect` calls over 38
+ * distinct pairs — is reproduced EXACTLY under the new path, and
+ * `docs/verification/assertion-fingerprints.json` carries the same hash under the stable id
+ * `f001-retry8-resume-index` with the old path retained in `previousPaths`.
+ */
+export const RetryProvenance = {
+  previousFileName: "f001-retry8-resume-index.test.ts",
+  retryPass: "F001 retry #8 (fifth targeted pass; regression on commit 7b497fa)",
+  findingClasses: [
+    "Regression on 7b497fa — the documented remedy for batch-cap exhaustion was unreachable: cognitive.recall replayed the partial case instead of resuming it",
+    "Regression on 7b497fa — findRecallClosureMembership scanned and JSON.parsed every recall_cases row, once per VERIFY and once per candidate",
+    "Regression on 7b497fa — the degradation report carried the last batch only, so a batched drive and its replay disagreed",
+    "Regression on 7b497fa — the suspension event committed in its own implicit transaction, separately from the authority write it describes",
+  ],
+  findingSource: "F001 retry #8 TL/QA verdicts (see docs/specs/cognitive_line/REWORK-LOG.md)",
+  fingerprintId: "f001-retry8-resume-index",
+  fingerprintHash: "0c29ea4e104763b7b693fcc160ad5c964f98a3f3d98d4320e62b97c523163098",
+  expectCallsPreserved: 50,
+  retiredBy: "F002 task 13",
+} as const
 
 function seedClaim(
   s: { state: { db: any; stateDir: string } },

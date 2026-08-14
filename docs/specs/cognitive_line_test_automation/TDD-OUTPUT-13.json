@@ -1,0 +1,217 @@
+{
+  "task": 13,
+  "name": "Retire Retry Archaeology Into Behavioural Names",
+  "feature": "F002 cognitive_line_test_automation",
+  "branch": "f002-test-automation",
+  "status": "GREEN with one BLOCKED item (see `blocked`)",
+  "summary": "All five f001-retry* test files renamed to behavioural names. The rename is proved inert by the task 12 assertion-fingerprint tool rather than eyeballed: every one of the five (matcher, normalized-subject) multisets is reproduced EXACTLY under the new path, entry by entry, and the gate was bite-tested after the rekey to confirm a dropped assertion still fails it by name. No scenario lost a link and every derived figure is unchanged.",
+
+  "renames": [
+    {
+      "old": "packages/mcp-server/test/f001-retry5-concurrency-authz.test.ts",
+      "new": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
+      "fingerprintId": "f001-retry5-concurrency-authz",
+      "justification": "Read before named. The three describe blocks assert (a) sequence allocation is durable and atomic and a failed transition write rolls back whole, (b) the capability gateway decides on the STORED approval rather than the client's copy, getAuditLog projects by principal, and a hanging provider is cancelled via AbortSignal, (c) admitPersistentDelta leaves no orphaned cs_deltas rows and no held cell locks. The unifying behaviour is that a write into governed epistemic state is ATOMIC and AUTHORIZED. `-authz` follows the existing `changeset-authz.test.ts` and `subscribe-authz.test.ts`; `atomicity` follows `commit-atomic.test.ts`; the `X-and-Y` compound follows `changeset-scope-and-contention.test.ts`. Paired deliberately with its retry5 sibling so the two are distinct and parallel."
+    },
+    {
+      "old": "packages/mcp-server/test/f001-retry5-durability.test.ts",
+      "new": "packages/mcp-server/test/epistemic-state-durability-and-bounds.test.ts",
+      "fingerprintId": "f001-retry5-durability",
+      "justification": "Two axes are asserted: state SURVIVES a host restart (promotions, contestations, recall checkpoints, operator approvals, capability outcomes, monotonic sequences from durable storage, and one shared store across the domain service and the MCP adapter) and accumulating collections stay BOUNDED (audit retention eviction, approvals in SQLite rather than an unbounded Map). `-durability` follows the existing `horizon-durability.test.ts` and `token-durability.test.ts`; `-and-bounds` carries the second describe block, which a bare `durability` name would silently drop. Distinct from its retry5 sibling: that file is about the atomicity and authorization of a write, this one about the survival and boundedness of what was written."
+    },
+    {
+      "old": "packages/mcp-server/test/f001-retry6-readmodel-and-freshness.test.ts",
+      "new": "packages/mcp-server/test/read-model-projection-and-freshness.test.ts",
+      "fingerprintId": "f001-retry6-readmodel-and-freshness",
+      "justification": "Only the `f001-retry6` fragment was archaeology; `readmodel-and-freshness` already named behaviour and is kept, spelled out as `read-model-projection` to say WHAT about the read model is protected — that recall degradation and truth-ownership suspension are projected onto it in the same unit of work, so a completed recall and a queryable graph cannot disagree. `freshness` covers the gateway resolving the sequence from durable governed state and the basedOnSeq equality bound. Hyphenated multiword form follows `cell-key-canonicalization.test.ts`."
+    },
+    {
+      "old": "packages/mcp-server/test/f001-retry7-closure-gate.test.ts",
+      "new": "packages/mcp-server/test/recall-closure-gate.test.ts",
+      "fingerprintId": "f001-retry7-closure-gate",
+      "justification": "`closure-gate` was already behavioural; only `f001-retry7` was archaeology. Qualified with `recall-` because the gate is specifically the RECALL closure gate — a candidate inside a recall closure is refused at VERIFY and at promote while 003 leaves its final status undecided — and an unqualified `closure-gate` would collide conceptually with the changeset and incremental gates already in this directory. Follows `incremental-gate-early.test.ts`."
+    },
+    {
+      "old": "packages/mcp-server/test/f001-retry8-resume-index.test.ts",
+      "new": "packages/mcp-server/test/recall-resume-and-closure-index.test.ts",
+      "fingerprintId": "f001-retry8-resume-index",
+      "justification": "`resume-index` was compressed to the point of opacity. Spelled out to the two behaviours actually asserted: an unfinished recall case is RESUMED rather than replayed (so the documented remedy for batch-cap exhaustion is reachable, and two concurrent resumes cannot both advance one case), and closure membership is an INDEXED lookup resolved once per command that survives a rebuild from the JSONL mirror. Note: `scripts/verification/reconcile-traceability.test.ts:529` already used `recall-resume.test.ts` as its illustrative post-rename name for this file, so the chosen name is consistent with the direction task 07 anticipated."
+    }
+  ],
+
+  "namingPolicy": {
+    "convention": "Kebab-case behavioural noun phrase, subject first, `X-and-Y` for a genuinely two-axis file — the dominant convention among the non-retry files in packages/mcp-server/test/.",
+    "f001PrefixDropped": true,
+    "whyPrefixDropped": "`f001-` is a feature identifier, not a behaviour, and this task's mandate is names that state the behaviour protected. The two files that keep it (f001-transport-delegation, f001-validation-audit-vulns) were explicitly out of scope and were not touched. Dropping it is inert for tooling: corpus membership is declared by importing the annotation surface, not by filename, and `undeclaredCandidates` only ever REPORTS an eap-/f001- named file that declares no annotation surface — all five import it and are in the corpus either way. Verified: corpus fileCount is 21 before and after."
+  },
+
+  "fingerprintComparison": {
+    "method": "Three independent proofs, not one. (1) `assertion-fingerprint.ts --rename <old> <new>` per file, which recomputes the multiset from the file at its NEW path and refuses to move the stored path unless comparison is subset-free equal. (2) An entry-by-entry diff of the post-rename store against a pre-rename snapshot taken before any file moved, comparing hash, expectCount, distinctAssertions and the full sorted (count, matcher, subject) triple list per id. (3) `--check` over all seven files after the fact. Proof (2) matters because (1) and (3) would both pass if the tool itself had been quietly rebaselined.",
+    "preRenameSnapshot": "scratchpad/fingerprints-pre-rename.json (taken before the first git mv)",
+    "perFile": [
+      { "id": "f001-retry5-concurrency-authz", "expectCount": { "pre": 56, "post": 56 }, "distinctAssertions": { "pre": 41, "post": 41 }, "hashPre": "6755c8d91a7c0b9569f0bf7ebaa1c8cfc231e47c6576eb7f591b90fd80d7fff1", "hashPost": "6755c8d91a7c0b9569f0bf7ebaa1c8cfc231e47c6576eb7f591b90fd80d7fff1", "multisetIdentical": true, "missing": [], "added": [] },
+      { "id": "f001-retry5-durability", "expectCount": { "pre": 43, "post": 43 }, "distinctAssertions": { "pre": 40, "post": 40 }, "hashPre": "bd44e386ac1002693a8d3b677a8febb2af60a3d5e739896e90a100d36b2a176a", "hashPost": "bd44e386ac1002693a8d3b677a8febb2af60a3d5e739896e90a100d36b2a176a", "multisetIdentical": true, "missing": [], "added": [] },
+      { "id": "f001-retry6-readmodel-and-freshness", "expectCount": { "pre": 53, "post": 53 }, "distinctAssertions": { "pre": 39, "post": 39 }, "hashPre": "7775a9fde83dc62e011e5926f8f1a065661df0db09cf4471212a6903e462e37b", "hashPost": "7775a9fde83dc62e011e5926f8f1a065661df0db09cf4471212a6903e462e37b", "multisetIdentical": true, "missing": [], "added": [] },
+      { "id": "f001-retry7-closure-gate", "expectCount": { "pre": 57, "post": 57 }, "distinctAssertions": { "pre": 42, "post": 42 }, "hashPre": "41f0169ca32b8cff7270d2d25591a7b4754d0fd3c8e2a1627d45f907c8f6fcbb", "hashPost": "41f0169ca32b8cff7270d2d25591a7b4754d0fd3c8e2a1627d45f907c8f6fcbb", "multisetIdentical": true, "missing": [], "added": [] },
+      { "id": "f001-retry8-resume-index", "expectCount": { "pre": 50, "post": 50 }, "distinctAssertions": { "pre": 38, "post": 38 }, "hashPre": "0c29ea4e104763b7b693fcc160ad5c964f98a3f3d98d4320e62b97c523163098", "hashPost": "0c29ea4e104763b7b693fcc160ad5c964f98a3f3d98d4320e62b97c523163098", "multisetIdentical": true, "missing": [], "added": [] },
+      { "id": "f001-transport-delegation", "expectCount": { "pre": 46, "post": 46 }, "note": "not renamed, included to prove the rekey did not disturb the untouched records" },
+      { "id": "f001-validation-audit-vulns", "expectCount": { "pre": 28, "post": 28 }, "note": "not renamed" }
+    ],
+    "rekeyVsRevalue": "The baseline is keyed BY FILE PATH, so a rename necessarily rekeys it. What moved: `path` (five records) and `previousPaths` (five records, each gaining exactly its one old path). What did NOT move: `id`, `hash`, `expectCount`, `distinctAssertions`, `capturedAt` and every element of `assertions`, on all seven records. Rekeying is legitimate; changing a multiset value is not, and the two were separated by diffing values under a join on the stable `id` rather than on the path."
+  },
+
+  "subsetBiteTest": {
+    "why": "Acceptance 1 requires that the gate still BITE after the rekey. A rename that silently rebaselined every file would leave --check green and defeat the whole task, so the gate was falsified deliberately rather than trusted.",
+    "method": "End-to-end through the real CLI on a real renamed file, not through an in-memory fixture: byte-backup taken with md5, exactly one assertion line deleted from the RENAMED packages/mcp-server/test/recall-closure-gate.test.ts, `bun scripts/verification/assertion-fingerprint.ts --check` run against the rekeyed baseline.",
+    "assertionRemoved": "expect(verify.refusal.code).toBe(\"REHAB_WITHOUT_PROOF\")  (line 161)",
+    "result": "FAIL, exit 1",
+    "gateOutput": [
+      "assertion fingerprint: FAIL — packages/mcp-server/test/recall-closure-gate.test.ts",
+      "  [missing x1] packages/mcp-server/test/recall-closure-gate.test.ts: expect(verify.refusal.code).toBe(...)",
+      "assertion fingerprint: 1 file(s) drifted from the committed baseline."
+    ],
+    "missingAssertionNamed": true,
+    "restoration": "Restored from the byte backup and verified with `md5sum -c` (OK), then `--check` re-run: PASS, 7 files match. The proof left no residue.",
+    "proves": "The rekeyed baseline still holds the real multiset VALUES for the new paths. A proper subset is rejected and the dropped pair is named, exactly as before the rename."
+  },
+
+  "provenanceBlocks": {
+    "shape": "An exported `RetryProvenance` const plus a docblock, placed after the imports of each of the five files.",
+    "whyData": "Provenance is demoted from the filename to metadata, not destroyed. It is a const rather than only a comment so it is addressable and survives a comment-stripping reformat; exported so nothing flags it as dead.",
+    "fields": ["previousFileName", "retryPass", "findingClasses", "findingSource", "fingerprintId", "fingerprintHash", "expectCallsPreserved", "retiredBy"],
+    "findingClassesRecorded": {
+      "epistemic-write-atomicity-and-authz": "F001 retry #5 — REWORK-LOG defect classes 3 (concurrency and sequence races) and 4 (authorization and validation gaps), plus transactional recovery of admitPersistentDelta and the execution-timeout / per-candidate-snapshot points",
+      "epistemic-state-durability-and-bounds": "F001 retry #5 — REWORK-LOG defect classes 1 (durability / state divergence) and 2 (unbounded memory growth)",
+      "read-model-projection-and-freshness": "F001 retry #6 (third targeted pass) — five TL/QA findings: read-model projection, gateway freshness from durable state, basedOnSeq bounding, boundary-command idempotency, whole-contract refusal and corrupt-column typed refusal",
+      "recall-closure-gate": "F001 retry #7 (fourth targeted pass) — four TL/QA findings, top one being that the recall-closure gate did not exist",
+      "recall-resume-and-closure-index": "F001 retry #8 (fifth targeted pass) — four regressions INTRODUCED by commit 7b497fa and corrected in that pass"
+    },
+    "describeTitlesLeftVerbatim": "The describe titles still read `F001 retry#5 — defect 3: ...` etc. Deliberately unchanged: the mandate is a pure rename touching only the filename, import sites and the provenance block. Rewriting them is SAFE with respect to traceability (a link carries the inner test name, and `003` §Section 2 states test titles are never parsed) but it would be an unproved edit smuggled inside a proved one. Flagged for whoever owns the follow-up."
+  },
+
+  "importSitesRewired": [
+    {
+      "file": "scripts/verification/assertion-fingerprint.ts",
+      "what": "`TARGET_FILES` — the five old paths replaced by the five new ones, plus its docstring.",
+      "whyNecessary": "This is the bootstrap capture list, read whenever no baseline exists. Left stale, a clean-checkout capture would throw on five paths that no longer resolve. Path-only change; no logic touched.",
+      "scopeNote": "Outside the task's enumerated modifiable set. Treated as an import site: it is a file that REFERENCES the five by path and breaks without a path fix. Declared rather than done quietly."
+    },
+    {
+      "file": "scripts/verification/assertion-fingerprint.test.ts",
+      "what": "Three changes: the `DURABILITY` constant, one inline `read(...)` of the retry6 path, and the `f.path.includes(\"f001-retry\")` filter in `the store records the five files task 13 renames and the two that stay`.",
+      "whyNecessary": "The first two read the files FROM DISK and threw ENOENT after the rename. The third asserted a pre-rename fact that the rename makes false.",
+      "howNotWeakened": "The filter was moved to `f.id`, which the store documents as the key that survives the rename, so it still selects exactly the same five records. Three assertions were ADDED, not removed: no live path still carries the archaeology, and each of the five records exactly one previousPath containing its id. The test is strictly stronger than before."
+    },
+    {
+      "file": "packages/mcp-server/test/capability-governance.test.ts",
+      "what": "Comment cross-reference `f001-retry5-concurrency-authz's` -> `epistemic-write-atomicity-and-authz's`. Comment text only.",
+      "whyNecessary": "It pointed at a file that no longer exists."
+    },
+    {
+      "file": "packages/mcp-server/test/contestation.test.ts",
+      "what": "Comment cross-reference to the same file. Comment text only.",
+      "whyNecessary": "Same."
+    },
+    {
+      "file": "packages/mcp-server/test/epistemic-write-atomicity-and-authz.test.ts",
+      "what": "Internal comment `f001-retry8's injection sweep` -> `recall-resume-and-closure-index's injection sweep`.",
+      "whyNecessary": "Same. Comments are stripped by the fingerprint normalizer, so this is provably inert — the hash is unchanged."
+    }
+  ],
+  "noRuntimeImportsExisted": "Grep over *.ts/*.tsx/*.js confirmed no module IMPORTS any of the five — they are leaf test files. Every rewire above is a path STRING or a comment. Two further path strings were found and deliberately LEFT ALONE because they are synthetic fixtures never resolved against disk and still pass: quarantine-gate.test.ts:166 and reconcile-traceability.test.ts:528.",
+
+  "gateFigures": {
+    "note": "Acceptance 3 requires these identical before and after. They are.",
+    "assertionFingerprint": { "before": "PASS — 7 files match", "after": "PASS — 7 files match", "moved": false },
+    "traceabilityMap": {
+      "before": { "links": 148, "asserts": 39, "coversPartially": 109, "unlinkedScenarios": 13, "unclaimedTests": 21 },
+      "after": { "links": 148, "asserts": 39, "coversPartially": 109, "unlinkedScenarios": 13, "unclaimedTests": 21 },
+      "moved": false,
+      "scenariosThatLostLinks": [],
+      "linkIdentityCheck": "Under a rename-normalising key (scenario|newPath|testName|kind) the pre and post link sets are EQUAL — zero lost, zero gained. Per-scenario link counts moved for 0 of the linked scenarios."
+    },
+    "derivedStatus": {
+      "before": { "evidenced": 34, "coversPartiallyOnly": 24, "unlinked": 13, "declaredUntestable": 7 },
+      "after": { "evidenced": 34, "coversPartiallyOnly": 24, "unlinked": 13, "declaredUntestable": 7 },
+      "moved": false
+    },
+    "conformance": { "before": { "client": "3/9", "host": "5/18" }, "after": { "client": "3/9", "host": "5/18" }, "moved": false },
+    "quarantineGate": { "before": "PASS — 7 families", "after": "PASS — 7 families, no test case discharges a quarantined Scenario", "moved": false },
+    "registerAndQuarantine": { "before": "PASS", "after": "register PASS 71 headings byte-identical; quarantine PASS 7 families / 7 declared-untestable members", "moved": false }
+  },
+
+  "commandsRun": [
+    { "command": "bun scripts/verification/assertion-fingerprint.ts --check", "exit": 0, "result": "PASS — 7 file(s) match the baseline" },
+    { "command": "bun scripts/verification/reconcile-traceability.ts --check", "exit": 0, "result": "PASS — byte-identical; 148 link(s) (39 asserts, 109 covers-partially), 13 unlinked, 21 unclaimed" },
+    { "command": "bun test --reporter=junit --reporter-outfile=.verification/junit.xml", "exit": "non-zero on flakes only", "result": "990-992 pass, 2 pre-existing failures on the first pass that were the un-regenerated derived artefacts, plus known Windows flakes" },
+    { "command": "bun scripts/verification/derive-status.ts --check", "exit": 0, "result": "PASS — 34 evidenced, 0 asserts-without-passing-execution, 24 covers-partially only, 13 unlinked, 7 declared-untestable" },
+    { "command": "bun scripts/verification/conformance-report.ts --check", "exit": 0, "result": "PASS — 27 items transcribed verbatim; client 3/9 and host 5/18" },
+    { "command": "bun scripts/verification/quarantine-gate.ts", "exit": 0, "result": "PASS — 7 families checked against annotation-sink, traceability-map, corpus-source" },
+    { "command": "bun scripts/verification/register-scenarios.ts --check", "exit": 0, "result": "PASS — 71 heading(s), byte-identical" },
+    { "command": "bun scripts/verification/quarantine.ts --check", "exit": 0, "result": "PASS — 7 families, 7 declared-untestable member(s)" },
+    { "command": "bun run typecheck", "exit": 0, "result": "PASS — frozen error set unchanged (graph-core 2, mcp-server 24, client 18); the provenance blocks introduced no new error" }
+  ],
+
+  "knownFlakes": {
+    "observed": ["ECONNRESET in packages/client/test/target-repo.test.ts reconnection cases"],
+    "handling": "Re-ran the suite; the flakes cleared and the only remaining failures were the two derived artefacts awaiting regeneration, which then went green. Not fixed, not masked."
+  },
+
+  "blocked": {
+    "item": "Rotating the git-ignored annotation sink after the rename.",
+    "severity": "must be cleared before CI runs `reconcile-traceability --check`",
+    "what": ".verification/annotations.jsonl is append-only and accumulated 46 records under the five PRE-rename paths (12 + 8 + 12 + 7 + 7). Those paths are no longer in the discovered corpus, so they land in the committed map's `recordsOutsideDeclaredCorpus`, which went 0 -> 46.",
+    "whyItMatters": ".verification/ is git-ignored, so a clean CI checkout produces a sink with no such records and regenerates that field EMPTY. `reconcile-traceability.ts --check` compares BYTES FIRST and returns 1 whenever they differ, even though `diffMaps` would report `drifted: false`. The committed map therefore reproduces on this machine and not in CI.",
+    "provedNotAsserted": "A probe replayed the real `reconcile()` over the real sink minus the pre-rename records. Result: `recordsOutsideDeclaredCorpus` empty, `distinctRecords` 116, and every other byte identical to the committed map — same 148 links, same 13 unlinked, same 21 unclaimed, same corpus of 21 files and 137 cases. So the residue is the ONLY difference, and the rename itself loses nothing under either sink.",
+    "remedy": "rm .verification/annotations.jsonl && bun test --reporter=junit --reporter-outfile=.verification/junit.xml && bun scripts/verification/reconcile-traceability.ts",
+    "whyNotDone": "Two independent permission denials on removing/moving the file. The task also warns explicitly against deleting the sink to make something pass, so the denial was NOT routed around. The sink was copied to scratchpad first and has not been destroyed.",
+    "preserved": ["scratchpad/annotations-pre-rename.jsonl", "scratchpad/annotations-post-rename-with-residue.jsonl"]
+  },
+
+  "foundNotOwned": [
+    {
+      "finding": "task 12's parser-completeness test uses a raw regex oracle over the whole file, comments included",
+      "detail": "`the parser sees every expect() call in the corpus` compares the AST count against `[...source.matchAll(/\\bexpect\\s*\\(/g)].length`. Any prose containing the literal `expect(` inflates the expected count. It fired on the provenance blocks added here (44 raw vs 43 parsed) and was worked around by writing \"`expect` calls\" in prose rather than by touching the test. The AST tool is correct; the naive oracle is the weak half and will misfire on any future comment quoting an assertion.",
+      "owner": "unassigned"
+    },
+    {
+      "finding": "derive-status --check never validates the evidence column, so it can name deleted files indefinitely",
+      "detail": "The check compares the promotion SET and deliberately not the bytes, because the report names the commit it was derived at. `docs/verification/scenario-status.md` therefore held 11 references to the pre-rename paths while the gate stayed GREEN. Regenerated here (which also restamped run id `local-fc3794278249` -> `local-59b53f16354c` and commit 8c8ef2f -> b27f5b6, figures unchanged at 34/24/13/7), but the hole is structural.",
+      "owner": "task 09 / unassigned"
+    },
+    {
+      "finding": "a bare re-capture of the fingerprint baseline would silently discard `previousPaths`",
+      "detail": "`buildStore` looks the prior record up by `id`, and `idFor()` derives the id from the CURRENT filename. After this rename the stored ids (`f001-retry5-durability`, ...) no longer equal `idFor(newPath)` (`epistemic-state-durability-and-bounds`, ...), so running the tool with no flags would mint fresh records, reset `previousPaths` to [] and restamp `capturedAt`. `--check` and `--rename` are unaffected, and the ids were kept stable on purpose because the tests assert they survive the rename. Not fixed: changing `idFor` or `buildStore` is a task 12 change, not a rename.",
+      "owner": "task 12 / unassigned"
+    },
+    {
+      "finding": "docs/feature/cognitive_line.md still lists two pre-rename paths",
+      "detail": "Lines 62-63 name f001-retry5-durability and f001-retry5-concurrency-authz in its `test_files` block. Left untouched: that file is outside this task's modifiable set, and 003 §867 assigns the Test Index rebuild (populating `tested_by` and listing every EAP test file under its post-rename name) to a later task, which will have to use the new names.",
+      "owner": "the Test Index task"
+    },
+    {
+      "finding": "spec and log documents still describe the files by their old names",
+      "detail": "docs/specs/cognitive_line/REWORK-LOG.md (7 references) and the 001-004 spec documents describe the corpus pre-rename. docs/specs/** is explicitly prohibited to this task and the references are historical narrative, so they are correct as history. Flagged only so nobody mistakes them for live paths.",
+      "owner": "none — historical record"
+    },
+    {
+      "finding": "two synthetic path fixtures in verification tests still spell the old names",
+      "detail": "quarantine-gate.test.ts:166 and reconcile-traceability.test.ts:528 build in-memory fixtures from `packages/mcp-server/test/f001-retry7-closure-gate.test.ts` and `...f001-retry8-resume-index.test.ts`. Neither resolves against disk, both still pass, and editing them would be scope creep. Cosmetically stale only. Incidentally, reconcile-traceability.test.ts:529 already used `recall-resume.test.ts` as its illustrative post-rename name, which the chosen name matches in spirit.",
+      "owner": "unassigned, cosmetic"
+    }
+  ],
+
+  "filesModifiedBeyondEnumeratedScope": [
+    { "file": "scripts/verification/assertion-fingerprint.ts", "change": "TARGET_FILES paths + docstring", "reason": "bootstrap capture list pointing at five paths that no longer resolve" },
+    { "file": "scripts/verification/assertion-fingerprint.test.ts", "change": "two path constants + one filter moved from path to id, with three assertions added", "reason": "hardcoded paths read from disk; one assertion was true only pre-rename" },
+    { "file": "packages/mcp-server/test/capability-governance.test.ts", "change": "one comment", "reason": "dangling cross-reference" },
+    { "file": "packages/mcp-server/test/contestation.test.ts", "change": "one comment", "reason": "dangling cross-reference" },
+    { "file": "docs/verification/scenario-status.md", "change": "regenerated", "reason": "derived artefact holding 11 references to deleted files; figures unchanged" }
+  ],
+
+  "acceptance": {
+    "1_fingerprintsEqualAndSubsetFails": "MET — five hashes byte-identical, multisets diffed entry by entry against a pre-rename snapshot, and a deliberately dropped assertion made the gate exit 1 naming the missing pair.",
+    "2_retryProvenanceInMetadata": "MET — each renamed file carries an exported RetryProvenance const naming the retry pass, the finding classes it closed, the source document, and the fingerprint id and hash that prove the move inert.",
+    "3_mapRegeneratedNoLinkLost": "MET — regenerated, 148 links, zero scenarios lost a link, and every derived figure identical. Subject to the BLOCKED sink rotation above, which changes no link but does affect byte-reproducibility in CI."
+  }
+}
