@@ -1,0 +1,230 @@
+{
+  "task": 14,
+  "name": "Instrument Coverage and Record the First Figure",
+  "feature": "cognitive_line_test_automation",
+  "branch": "f002-test-automation",
+  "status": "COMPLETE",
+  "summary": "Coverage instrumentation scoped to the EAP surface, opt-in (never on the default `bun test` path), plus the first coverage figure this repository has ever produced. The unit recorded is a figure PLUS its scope: the loader refuses a baseline that carries no scope path list, a per-file figure with no scope attribution, an unjustified exclusion, a scope list that disagrees with its own digest, or figures that disagree with the integrity digest of the run that produced them.",
+
+  "figures": {
+    "producedBy": "bun test --coverage --coverage-reporter=lcov --coverage-dir=.verification/coverage",
+    "commit": "d8ab37ce294f25f026767e9bd1a221dac6f62837",
+    "suite": { "total": 1017, "passed": 1016, "failed": 0, "skipped": 1 },
+    "aggregate": {
+      "files": 24,
+      "lines": { "covered": 2994, "total": 3257, "pct": 91.93 },
+      "functions": { "covered": 223, "total": 245, "pct": 91.02 }
+    },
+    "byScopePath": [
+      { "path": "packages/client/src/eap.ts", "files": 1, "lines": { "covered": 147, "total": 147, "pct": 100.0 }, "functions": { "covered": 6, "total": 6, "pct": 100.0 } },
+      { "path": "packages/graph-core/src/eap", "files": 9, "lines": { "covered": 679, "total": 805, "pct": 84.35 }, "functions": { "covered": 43, "total": 56, "pct": 76.79 } },
+      { "path": "packages/mcp-server/src/eap", "files": 12, "lines": { "covered": 1394, "total": 1476, "pct": 94.44 }, "functions": { "covered": 123, "total": 131, "pct": 93.89 } },
+      { "path": "packages/mcp-server/src/gates.ts", "files": 1, "lines": { "covered": 112, "total": 116, "pct": 96.55 }, "functions": { "covered": 23, "total": 23, "pct": 100.0 } },
+      { "path": "packages/mcp-server/src/tools/eap.ts", "files": 1, "lines": { "covered": 662, "total": 713, "pct": 92.85 }, "functions": { "covered": 28, "total": 29, "pct": 96.55 } }
+    ],
+    "worstRows": [
+      { "path": "packages/graph-core/src/eap/types.ts", "lines": "117/161 (72.67%)", "functions": "11/20 (55.00%)", "note": "the single largest drag in the surface, and it is in the protocol core." },
+      { "path": "packages/graph-core/src/eap/recall.ts", "lines": "153/194 (78.87%)", "functions": "7/9" },
+      { "path": "packages/graph-core/src/eap/refusals.ts", "lines": "90/113 (79.65%)", "functions": "4/4" },
+      { "path": "packages/graph-core/src/eap/capabilities.ts", "lines": "88/104 (84.62%)", "functions": "4/4" },
+      { "path": "packages/mcp-server/src/eap/recall-worker.ts", "lines": "99/131 (75.57%)", "functions": "8/10" },
+      { "path": "packages/mcp-server/src/eap/horizon-store.ts", "lines": "138/175 (78.86%)", "functions": "9/11" }
+    ],
+    "honestReading": "91.93% lines / 91.02% functions over the declared EAP surface is a good figure and it was NOT obtained by drawing the scope around the well-tested parts: the scope is exactly the five paths the task named, fixed before the number was known, with zero exclusions and zero files omitted. The weak spot is graph-core/src/eap at 76.79% functions — the protocol core is the least covered part of the surface, and types.ts (55% functions) is where that sits."
+  },
+
+  "scope": {
+    "declaredIn": "scripts/verification/measure-coverage.ts :: COVERAGE_SCOPE",
+    "copiedInto": "docs/verification/coverage-baseline.json :: scope.paths (with scope.sha256 over paths+exclusions)",
+    "paths": [
+      { "path": "packages/client/src/eap.ts", "kind": "file" },
+      { "path": "packages/graph-core/src/eap", "kind": "directory" },
+      { "path": "packages/mcp-server/src/eap", "kind": "directory" },
+      { "path": "packages/mcp-server/src/gates.ts", "kind": "file" },
+      { "path": "packages/mcp-server/src/tools/eap.ts", "kind": "file" }
+    ],
+    "filesInScope": 24,
+    "filesInstrumented": 24,
+    "neverLoaded": [],
+    "exclusions": [],
+    "exclusionPolicy": "None. `scope.exclusions` is empty and the loader requires a non-empty `reason` on every entry it could ever hold, so an exclusion is enumerated and justified inside the artefact that publishes the figure it flatters. Files no test loads would appear in `neverLoaded` at zero rather than being dropped — Bun emits no LF/LH denominator for a module nothing imported, so it would otherwise vanish from the ratio instead of dragging it down. There are none today; the mechanism is unit-tested against a fixture.",
+    "scopeSha256": "95395c9ddca7b66b5b85f3e2d60f7fe70a1282b6a9f7651cba0f5d635616a28a",
+    "integritySha256": "17ed20d43e7ca4adb7f0438f04c63899b6355fefd467970a1b41f3455b0bdee3"
+  },
+
+  "timing": {
+    "uninstrumentedMs": 81070,
+    "instrumentedMs": 82571,
+    "deltaMs": 1501,
+    "deltaPct": 1.85,
+    "measured": true,
+    "howMeasured": "Both runs timed by measure-coverage.ts itself in one invocation (`--with-uninstrumented`) on the same machine, back to back. Not hand-entered: `timing` is inside the integrity digest, so a cheapened cost does not load.",
+    "corroboration": "Independent manual runs before the script existed: plain 80993 ms, instrumented 82523 ms — delta 1530 ms, same magnitude.",
+    "conclusion": "Instrumentation costs ~1.5s on an ~81s suite. Cheap enough for task 15 to put on the blocking path."
+  },
+
+  "acceptance": [
+    {
+      "criterion": 1,
+      "statement": "Line AND function figures for an explicitly enumerated path list covering all five named surfaces.",
+      "met": true,
+      "evidence": "docs/verification/coverage-baseline.json carries per-file, per-scope-path and aggregate line and function counts for all 24 files across all five declared paths. `bun scripts/verification/measure-coverage.ts --check` prints them with the scope beside them and exits 0."
+    },
+    {
+      "criterion": 2,
+      "statement": "A baseline entry lacking the path list is REJECTED by the loader — the figure is unusable without its scope, structurally.",
+      "met": true,
+      "how": "`loadCoverageBaseline` is the only door into a recorded figure. It throws on: absent `scope`; absent or empty `scope.paths`; a scope path entry with no kind or no reason; absent `scope.exclusions`; an exclusion with no `reason`; a per-file figure with no `scopePath`; a `scopePath` the recorded scope does not declare; `scope.sha256` disagreeing with the scope declaration; `integrity.sha256` disagreeing with the figures. There is no code path that reads the percentage without loading the document, and the document does not load without its scope.",
+      "mutationTest": {
+        "against": "the COMMITTED docs/verification/coverage-baseline.json, driven through the real loader",
+        "unmutated": "loads — 91.93% lines",
+        "results": [
+          { "mutation": "delete `scope` entirely", "verdict": "REJECTED" },
+          { "mutation": "set `scope.paths` to []", "verdict": "REJECTED" },
+          { "mutation": "drop packages/mcp-server/src/tools/eap.ts from the scope list", "verdict": "REJECTED" },
+          { "mutation": "strip `scopePath` from a per-file figure", "verdict": "REJECTED" },
+          { "mutation": "hand-edit the aggregate line pct to 99.9", "verdict": "REJECTED (integrity)" },
+          { "mutation": "raise a per-file covered count on a file that was NOT fully covered", "verdict": "REJECTED (integrity)" },
+          { "mutation": "replace a per-file source sha256", "verdict": "REJECTED (integrity)" },
+          { "mutation": "cheapen the recorded instrumentation cost (deltaMs -> 1)", "verdict": "REJECTED (integrity)" },
+          { "mutation": "edit the never-loaded inventory", "verdict": "REJECTED (integrity)" },
+          { "mutation": "add an exclusion with no justification", "verdict": "REJECTED" }
+        ],
+        "falseAlarmsCorrected": "Two mutations initially reported ACCEPTED and were both defects in the MUTATION, not the loader: setting `covered = total` on a file already at 100%, and emptying an already-empty `neverLoaded`. Re-run with effective mutations (a partially covered file; an added entry) — both REJECTED. Reported here because a mutation test that scores its own no-ops as passes is worse than none.",
+        "unitCoverage": "The same rejections are pinned as unit tests in scripts/verification/measure-coverage.test.ts (25 tests). The three integrity-scope tests were verified RED by temporarily narrowing INTEGRITY_COVERS to omit `timing`, `files` and `neverLoaded`: 3 fail / 22 pass; restored: 25 pass."
+      }
+    },
+    {
+      "criterion": 3,
+      "statement": "Instrumented run time is measured and reported.",
+      "met": true,
+      "evidence": "timing block above; recorded in the baseline, inside the integrity digest, printed by every report."
+    }
+  ],
+
+  "judgementCalls": [
+    {
+      "call": "Where the enumerated path list lives",
+      "decision": "In the SCRIPT (`COVERAGE_SCOPE`), copied into the baseline with a digest over it.",
+      "why": "bunfig.toml was rejected: a TOML key is not loadable by the checker and can reject nothing, so acceptance 2 could not be structurally enforced there. The baseline alone was rejected: a datum must not be able to redefine what it is a datum about. The copy-plus-digest gives the baseline a self-contained, readable scope (so the figure is never quoted bare) while making a quiet edit of that copy a load failure."
+    },
+    {
+      "call": "Files inside the scope that no test touches",
+      "decision": "Named in `neverLoaded`, never excluded, and inside the integrity digest.",
+      "why": "Bun's lcov emits no record at all for a module nothing imported, so such a file does not drag the ratio down — it disappears from it. Naming it is the only honest treatment. There are zero today; the path is unit-tested with a fixture so the first one that appears is visible rather than silently absent."
+    },
+    {
+      "call": "Per-path figures or one aggregate",
+      "decision": "Per FILE, rolled up per scope path, plus the aggregate.",
+      "why": "Task 15 must report a delta a human can act on. `recall.ts fell 12 lines` is actionable; `coverage dropped 0.3%` is not. Per-file source sha256 also lets a ratchet distinguish 'coverage fell' from 'the file changed'."
+    },
+    {
+      "call": "Whether to enable coverage in bunfig",
+      "decision": "NO. Only reporter/dir/skip-test-files keys, all inert until --coverage is passed.",
+      "why": "Enabling it globally would tax every developer's `bun test` for a figure only the verification scripts consume. Cost measured anyway (+1.85%) so task 15 can decide with numbers."
+    },
+    {
+      "call": "What --check does about staleness",
+      "decision": "FAILS on scope-inventory drift (a scoped file appeared or vanished); WARNS on staleness (a scoped file's sha256 moved).",
+      "why": "A gate that failed on every source edit until someone re-ran an 82s instrumented suite would be switched off within a week, and a switched-off gate measures nothing. Task 15 owns the blocking policy; the seam is left open."
+    },
+    {
+      "call": "Coverage output directory",
+      "decision": ".verification/coverage (via bunfig `coverageDir`).",
+      "why": ".gitignore already covers `.verification/`, and .gitignore is outside this task's scope. Bun's default `coverage/` would have left an untracked directory dirtying every working tree."
+    },
+    {
+      "call": "Piping the spawned suite's output",
+      "decision": "Redirect to a file descriptor, not a pipe.",
+      "why": "See findings: piping made the pre-existing Windows EBUSY teardown flake fire on 2 of 2 runs. A measurement harness must not change the timing of what it measures."
+    }
+  ],
+
+  "gateFigures": {
+    "verify": "exit 0 — typecheck gate PASS (frozen error set unchanged: graph-core 2, mcp-server 24, client 18); 1019 pass / 1 todo / 0 fail / 1020 tests / 145 files",
+    "registerScenarios": "PASS — 71 headings, byte-identical",
+    "quarantine": "PASS — 7 families, 7 declared-untestable members",
+    "assertionFingerprint": "PASS — 7 files match the baseline",
+    "reconcileTraceability": "PASS — byte-identical; 148 links (39 asserts, 109 covers-partially), 13 unlinked, 21 unclaimed",
+    "deriveStatus": "PASS — 34 evidenced, 0 no-passing-asserts, 24 covers-partially only, 13 unlinked, 7 declared-untestable",
+    "conformanceReport": "PASS — 27 items; client 3/9, host 5/18",
+    "quarantineGate": "PASS — 7 families across annotation-sink, traceability-map, corpus-source; no violations",
+    "measureCoverage": "PASS — figure loads with its scope intact (5 declared paths, 0 exclusions)",
+    "committedBaselinesUnmoved": true
+  },
+
+  "commandsRun": [
+    "bun test ./scripts/verification/measure-coverage.test.ts (RED: module not found -> GREEN: 25 pass / 0 fail)",
+    "bun scripts/verification/measure-coverage.ts --with-uninstrumented",
+    "bun scripts/verification/measure-coverage.ts --check",
+    "bun run typecheck",
+    "bun test --reporter=junit --reporter-outfile=.verification/junit.xml",
+    "bun run verify",
+    "the seven gates, each with --check where applicable"
+  ],
+
+  "pendingCiGates": [
+    {
+      "gate": "measure-coverage --check",
+      "command": "bun scripts/verification/measure-coverage.ts --check",
+      "wiredIntoVerify": false,
+      "wiredIntoCi": false,
+      "orderingDependency": "NONE — it reads only the committed baseline and the scoped source files, never the suite. It must NOT be placed after a coverage run; it is a document check.",
+      "whatItCatches": "a baseline stripped of its scope, a per-file figure with no scope attribution, an unjustified exclusion, a scope list edited after the fact, a hand-edited percentage, and a scope inventory that no longer matches the files on disk.",
+      "cost": "milliseconds",
+      "runningList": "register-scenarios --check, quarantine --check, assertion-fingerprint --check, reconcile-traceability --check, derive-status --check, conformance-report --check, quarantine-gate, measure-coverage --check"
+    },
+    {
+      "gate": "the instrumented coverage run itself",
+      "command": "bun scripts/verification/measure-coverage.ts  (add --with-uninstrumented only where the cost figure is being refreshed; it doubles the wall clock)",
+      "wiredIntoVerify": false,
+      "wiredIntoCi": false,
+      "orderingDependency": "It RUNS the suite itself, so it must not be stacked on top of another full `bun test` in the same job unless ~82s is acceptable twice.",
+      "note": "Task 15 owns the ratchet and ci.yml. Two facts it needs: (a) instrumentation costs +1.85% wall clock, so the blocking path can afford it; (b) measure-coverage.ts refuses to write a figure from a red suite, so the known Windows EBUSY flake BLOCKS measurement rather than corrupting it — a CI job that treats 'no figure' as 'figure unchanged' would silently stop measuring."
+    }
+  ],
+
+  "knownFlakes": {
+    "observed": "packages/mcp-server/test/reconnect-after-restart.test.ts EBUSY teardown — 2 failures in 2 spawned runs when the runner's stdout was piped to the parent process; 0 in 4 runs when redirected to a file descriptor.",
+    "notFixed": true,
+    "handling": "Never masked: measure-coverage.ts exits non-zero and writes nothing when the suite is red. The fd redirection is in the harness, not in the test.",
+    "notObservedThisSession": ["client ECONNRESET reconnection flake", "stdio-proxy live.test.ts 5s timeout"]
+  },
+
+  "foundNotOwned": [
+    {
+      "finding": "Piping the test runner's stdout appears to trigger the Windows EBUSY SQLite handle-release race in reconnect-after-restart.test.ts (2/2 vs 0/4). The teardown's `rmSync(..., maxRetries: 10, retryDelay: 50)` is losing to the OS under backpressure.",
+      "owner": "whoever owns that test; task 15 must not run the suite through a pipe.",
+      "severity": "blocks measurement, does not corrupt it"
+    },
+    {
+      "finding": "packages/graph-core/src/eap/types.ts is 55% function-covered (11/20) and 72.67% line-covered — the least-tested file in the protocol core, and the biggest single lever on the aggregate.",
+      "owner": "not this task; recorded so the first ratchet target is chosen from evidence rather than taste."
+    },
+    {
+      "finding": "The suite instruments and reports on scripts/verification/*.ts and test helpers too (252 instrumented files repo-wide vs 24 in scope). Nothing was done with that: a second scope would need its own declaration and its own justification.",
+      "owner": "future task, if ever."
+    },
+    {
+      "finding": "`bun run verify` still does not pass --reporter=junit, so derive-status --check continues to depend on a separately produced .verification/junit.xml. Unchanged by this task; already on the task 20 list.",
+      "owner": "task 20"
+    }
+  ],
+
+  "filesCreatedOrModified": [
+    "bunfig.toml (coverage reporter/dir/skip-test-files keys; coverage NOT enabled by default)",
+    "docs/verification/coverage-baseline.json (new — machine-written, never hand-authored)",
+    "scripts/verification/measure-coverage.ts (new)",
+    "scripts/verification/measure-coverage.test.ts (new — 25 tests)",
+    "docs/product/DECISIONS.md (append-only: 7 entries — the figure, D-COV-1..D-COV-5, and the piping finding)",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-14.json (this file)"
+  ],
+  "filesModifiedBeyondEnumeratedScope": [],
+  "prohibitionsObserved": [
+    "No git stash/checkout--/reset/clean/commit was run at any point.",
+    "docs/harness-history/** was neither read nor written.",
+    ".verification/annotations.jsonl was not rotated or deleted (it is appended to by every suite run, as designed).",
+    "No existing test was weakened, skipped or deleted.",
+    "packages/**, package.json, .github/**, .gitignore and every other docs/verification and scripts/verification file are untouched."
+  ]
+}

@@ -5,3 +5,22 @@
 # `bun test` (what CI and every package actually run), unlike a per-package `--timeout` flag in one
 # package.json's "test" script, which nothing invokes.
 timeout = 15000
+
+# F002 task 14 — coverage instrumentation.
+#
+# `coverage` is deliberately NOT set here. Turning it on in bunfig would tax every `bun test` a
+# developer runs for a figure only the verification scripts consume; instrumentation is therefore
+# opt-in per invocation (`bun test --coverage`, or `bun scripts/verification/measure-coverage.ts`,
+# which passes the flags itself). Measured cost of the instrumented run on the reference machine:
+# 82.5s against 81.0s uninstrumented — ~1.9% — recorded in docs/verification/coverage-baseline.json
+# so task 15 can put it on the blocking path knowing what it costs.
+#
+# The keys below only take effect once --coverage is passed, so the default path is unchanged:
+#   coverageReporter      lcov as well as the console table — lcov is what measure-coverage.ts parses.
+#   coverageDir           inside .verification/, which .gitignore already covers, so an instrumented
+#                         run never leaves an untracked `coverage/` behind in the working tree.
+#   coverageSkipTestFiles the test files are not the surface under measurement; counting them
+#                         inflates the console figure with code that is 100% covered by definition.
+coverageReporter = ["text", "lcov"]
+coverageDir = ".verification/coverage"
+coverageSkipTestFiles = true
