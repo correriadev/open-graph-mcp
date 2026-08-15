@@ -158,4 +158,21 @@ export class ContestationService {
   public getContestation(id: string): Contestation | undefined {
     return this.repo.get(id)
   }
+
+  public contestHorizonKnowledge(envelope: ContestEnvelope): ContestationAdmissionResult {
+    const validated = validateContestEnvelope(envelope)
+    return this.contestKnowledge({
+      sourceHorizonId: validated.sourceScope.horizonId,
+      targetClaimIds: validated.claimRefs?.length ? validated.claimRefs : [`claim-target-${validated.targetScope.horizonId}`],
+      evidenceRefs: validated.evidenceIds,
+      severity: validated.severity ?? 'informative',
+      reason: validated.reason,
+    })
+  }
 }
+
+import {
+  type ContestEnvelope,
+  validateContestEnvelope,
+} from '@open-graph-mcp/graph-core/eap/contestation'
+

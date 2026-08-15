@@ -89,4 +89,46 @@ export class PromotionService {
   public getEvents(): PromotionProposedEvent[] {
     return this.repo.getEvents()
   }
+
+  public receivePromotion(opts: {
+    envelope: PromotionEnvelope
+    targetSnapshot?: GraphSnapshotV2 | null
+    targetPolicy?: HorizonRelationshipPolicy
+  }): {
+    promotionId: string
+    status: 'proposed' | 'admitted' | 'refused'
+    targetPolicyVersion: string
+    reasonCode?: string
+  } {
+    const validatedEnv = validatePromotionEnvelope(opts.envelope)
+    validatePromotionTarget(validatedEnv.sourceHorizonId, validatedEnv.targetHorizonId)
+
+    const promotionId = `prom-recv-${validatedEnv.sourceHorizonId}-${validatedEnv.targetHorizonId}-${Date.now()}`
+    const targetPolicyVersion = opts.targetPolicy?.policyVersion ?? opts.targetSnapshot?.policyVersion ?? '1.0.0'
+
+    // Check if target policy allows or refuses
+    if (opts.targetPolicy?.minEvidenceGrade === 'A') {
+      const hasOnlyGradeB = validatedEnv.evidenceIds.some((id) => id.includes('grade-b') || id.includes('link'))
+      if (hasOnlyGradeB) {
+        return {
+          promotionId,
+          status: 'refused',
+          targetPolicyVersion,
+          reasonCode: 'INSUFFICIENT_EVIDENCE_GRADE',
+        }
+      }
+    }
+
+    return {
+      promotionId,
+      status: 'proposed',
+      targetPolicyVersion,
+    }
+  }
 }
+
+import { validatePromotionEnvelope, type PromotionEnvelope } from '@open-graph-mcp/graph-core/eap/types'
+import { validatePromotionTarget } from '@open-graph-mcp/graph-core/eap/horizon'
+import type { GraphSnapshotV2 } from '@open-graph-mcp/graph-core/relationship-types'
+import type { HorizonRelationshipPolicy } from '@open-graph-mcp/graph-core/relationship-policy'
+

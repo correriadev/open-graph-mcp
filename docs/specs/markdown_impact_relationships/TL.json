@@ -1,0 +1,11 @@
+{
+  "featureId": "F001",
+  "score": 0.95,
+  "openPoints": [
+    "How will full in-memory snapshot hydration in findHorizonGraphById scale when a single tenant horizon DAG exceeds 100k nodes and relationships under concurrent MCP queries?",
+    "How does the proposals table maintain query performance in markDerivedPromotionsStale during high-frequency base recalls without a composite index on (tenant_id, status, based_on_seq)?",
+    "How does buildHorizonArtifactInventory protect worker process memory limits when repository scans encounter large codebases with thousands of multi-megabyte Markdown artifacts read synchronously via readFileSync?",
+    "How should impact traversal in analyzeHorizonImpact enforce depth and cycle budget timeouts when traversing dense, cyclic graph topologies in large-scale enterprise repositories?"
+  ],
+  "architectureTip": "Employ CQRS with streaming graph projection and indexed keyset read models to decouple heavy snapshot assembly from low-latency impact query traversal."
+}

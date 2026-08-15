@@ -6,7 +6,7 @@
  * auth/login.ts. Com depth 2 a partir de login há 2 dependentes; `limit: 1` força paginação real sem
  * precisar de repo grande.
  */
-import { expect, test } from "bun:test"
+import { expect, test, describe } from "bun:test"
 import { startServer } from "../src/index"
 import { callTool, tempRepo, bootstrapAs } from "./helpers"
 
@@ -131,3 +131,108 @@ test("cursor forjado não escapa do teto de limit", async () => {
     cleanup()
   }
 })
+
+import { encodeImpactCursorV2, decodeImpactCursorV2, impactV2 } from "../src/tools/graph-impact"
+import { publishHorizonGraphSnapshot } from "../src/store"
+import { openDb } from "../src/db"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import type { ServerState } from "../src/state"
+
+describe("Graph v2 Impact MCP Contract (Task 13)", () => {
+  let stateDir: string
+  let state: ServerState
+
+  const sampleSnap = {
+    scope: { tenantId: "Alpha", horizonId: "transformation", graphId: "G1" },
+    policyVersion: "1.0.0",
+    nodes: [{ id: "skills/SKILL.md", file: "skills/SKILL.md", kind: "file" }],
+    relationships: [],
+    evidence: [],
+    coverage: {
+      scope: { tenantId: "Alpha", horizonId: "transformation", graphId: "G1" },
+      byFormat: { md: 1 },
+      byFamily: { markdown: 1 },
+      failures: [],
+    },
+  }
+
+  test("returns full scoped response including tenantId, horizonId, graphId, knowledge, coverage", () => {
+    stateDir = mkdtempSync(path.join(tmpdir(), "og-impact-v2-"))
+    const db = openDb(path.join(stateDir, "state.sqlite"))
+    state = { db, stateDir } as unknown as ServerState
+    publishHorizonGraphSnapshot(state, sampleSnap)
+
+    const res = impactV2(state, {
+      tenantId: "Alpha",
+      horizonId: "transformation",
+      nodeId: "skills/SKILL.md",
+    })
+
+    expect(res.tenantId).toBe("Alpha")
+    expect(res.horizonId).toBe("transformation")
+    expect(res.graphId).toBe("G1")
+    expect(res.knowledge.type).toBe("known-zero")
+    expect(res.coverage.byFormat["md"]).toBe(1)
+    expect(Array.isArray(res.warnings)).toBe(true)
+
+    db.close()
+    rmSync(stateDir, { recursive: true, force: true })
+  })
+
+  test("rejects cursor with CURSOR_GRAPH_STALE when graphId changed", () => {
+    stateDir = mkdtempSync(path.join(tmpdir(), "og-impact-v2-"))
+    const db = openDb(path.join(stateDir, "state.sqlite"))
+    state = { db, stateDir } as unknown as ServerState
+    publishHorizonGraphSnapshot(state, sampleSnap)
+
+    const staleCursor = encodeImpactCursorV2({
+      tenantId: "Alpha",
+      horizonId: "transformation",
+      graphId: "G-old",
+      queryHash: "hash-1",
+      lastKeys: {},
+    })
+
+    expect(() =>
+      impactV2(state, {
+        tenantId: "Alpha",
+        horizonId: "transformation",
+        nodeId: "skills/SKILL.md",
+        cursor: staleCursor,
+      })
+    ).toThrow(/CURSOR_GRAPH_STALE/)
+
+    db.close()
+    rmSync(stateDir, { recursive: true, force: true })
+  })
+
+  test("rejects cursor with CURSOR_HORIZON_MISMATCH when horizonId differs", () => {
+    stateDir = mkdtempSync(path.join(tmpdir(), "og-impact-v2-"))
+    const db = openDb(path.join(stateDir, "state.sqlite"))
+    state = { db, stateDir } as unknown as ServerState
+    publishHorizonGraphSnapshot(state, sampleSnap)
+
+    const wrongHorizonCursor = encodeImpactCursorV2({
+      tenantId: "Alpha",
+      horizonId: "negotiation",
+      graphId: "G1",
+      queryHash: "hash-1",
+      lastKeys: {},
+    })
+
+    expect(() =>
+      impactV2(state, {
+        tenantId: "Alpha",
+        horizonId: "transformation",
+        nodeId: "skills/SKILL.md",
+        cursor: wrongHorizonCursor,
+      })
+    ).toThrow(/CURSOR_HORIZON_MISMATCH/)
+
+    db.close()
+    rmSync(stateDir, { recursive: true, force: true })
+  })
+})
+

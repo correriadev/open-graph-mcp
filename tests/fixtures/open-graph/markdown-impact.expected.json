@@ -1,0 +1,96 @@
+{
+  "contractVersion": 1,
+  "graphCases": [
+    {
+      "id": "graph-case-01",
+      "source": "skills/autonomous-orchestrator/SKILL.md",
+      "target": "docs/workflows/autonomous-orchestration.md",
+      "kind": "references",
+      "direction": "outbound",
+      "minimumGrade": "B",
+      "marker": "See workflow guide at docs/workflows/autonomous-orchestration.md"
+    },
+    {
+      "id": "graph-case-02",
+      "source": "skills/autonomous-orchestrator/SKILL.md",
+      "target": "agents/orchestrator-agent.md",
+      "kind": "delegates-to",
+      "direction": "outbound",
+      "minimumGrade": "A",
+      "marker": "Delegates execution to agents/orchestrator-agent.md"
+    },
+    {
+      "id": "graph-case-03",
+      "source": "docs/workflows/autonomous-orchestration.md",
+      "target": "skills/autonomous-orchestrator/SKILL.md",
+      "kind": "references",
+      "direction": "inbound",
+      "minimumGrade": "B",
+      "marker": "Orchestrator workflow governed by skills/autonomous-orchestrator/SKILL.md"
+    }
+  ],
+  "horizonCases": [
+    {
+      "id": "horizon-case-01",
+      "sourceHorizon": "negotiation",
+      "targetHorizon": "transformation",
+      "payloadKind": "ChangeContract",
+      "marker": "INITIATE: negotiation-to-transformation proposal seed"
+    },
+    {
+      "id": "horizon-case-02",
+      "sourceHorizon": "microtask",
+      "targetHorizon": "transformation",
+      "payloadKind": "PromotionProposal",
+      "marker": "INITIATE: microtask-to-transformation work order result"
+    },
+    {
+      "id": "horizon-case-03",
+      "sourceHorizon": "transformation",
+      "targetHorizon": "persistent",
+      "payloadKind": "PersistentDelta",
+      "marker": "PROMOTE: transformation-to-persistent delta"
+    },
+    {
+      "id": "horizon-case-04",
+      "sourceHorizon": "microtask",
+      "targetHorizon": "persistent",
+      "payloadKind": "PromotionProposal",
+      "marker": "PROMOTE: microtask-to-persistent direct request"
+    },
+    {
+      "id": "horizon-case-05",
+      "sourceHorizon": "microtask",
+      "targetHorizon": "persistent",
+      "payloadKind": "ContestEnvelope",
+      "marker": "CONTEST: persistent state mismatch for orchestrator topology"
+    },
+    {
+      "id": "horizon-case-06",
+      "sourceHorizon": "transformation",
+      "targetHorizon": "persistent",
+      "payloadKind": "RecallProof",
+      "marker": "RECALL: base sequence update required"
+    }
+  ],
+  "exclusions": [
+    {
+      "id": "exclusion-case-01",
+      "source": "skills/autonomous-orchestrator/SKILL.md",
+      "marker": "import { orchestrate } from './orchestrator-sample';",
+      "rejectionReason": "FENCED_IMPORT"
+    },
+    {
+      "id": "exclusion-case-02",
+      "source": "skills/autonomous-orchestrator/SKILL.md",
+      "marker": "Generic mention of autonomous orchestrator pattern without concrete link",
+      "rejectionReason": "GENERIC_MENTION"
+    },
+    {
+      "id": "exclusion-case-03",
+      "source": "skills/autonomous-orchestrator/SKILL.md",
+      "marker": "Non-allowlisted JSON payload: {\"unindexed\": true}",
+      "rejectionReason": "NON_ALLOWLISTED_JSON"
+    }
+  ]
+}

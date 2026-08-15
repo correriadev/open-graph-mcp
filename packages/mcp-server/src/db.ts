@@ -36,6 +36,11 @@ export const DURABLE_TABLES = [
   "recall_checkpoints",
   "recall_scars",
   "operator_approvals",
+  "graph_snapshots_v2",
+  "nodes_v2",
+  "relationships_v2",
+  "evidence_v2",
+  "coverage_manifests_v2",
 ] as const
 /**
  * Todas as tabelas com tenant_id (durables + índice live).
@@ -313,6 +318,68 @@ CREATE TABLE IF NOT EXISTS recall_closure_index (
   indexed_cases INTEGER NOT NULL,
   PRIMARY KEY (tenant_id)
 );
+
+CREATE TABLE IF NOT EXISTS graph_snapshots_v2 (
+  tenant_id TEXT NOT NULL,
+  horizon_id TEXT NOT NULL,
+  graph_id TEXT NOT NULL,
+  policy_version TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, horizon_id, graph_id)
+);
+
+CREATE TABLE IF NOT EXISTS nodes_v2 (
+  tenant_id TEXT NOT NULL,
+  horizon_id TEXT NOT NULL,
+  graph_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  file TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  domain TEXT,
+  label TEXT,
+  PRIMARY KEY (tenant_id, horizon_id, graph_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS relationships_v2 (
+  tenant_id TEXT NOT NULL,
+  horizon_id TEXT NOT NULL,
+  graph_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  grade TEXT NOT NULL,
+  evidence_ids TEXT NOT NULL,
+  traversable INTEGER NOT NULL,
+  PRIMARY KEY (tenant_id, horizon_id, graph_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS evidence_v2 (
+  tenant_id TEXT NOT NULL,
+  horizon_id TEXT NOT NULL,
+  graph_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target_text TEXT NOT NULL,
+  location_json TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, horizon_id, graph_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS coverage_manifests_v2 (
+  tenant_id TEXT NOT NULL,
+  horizon_id TEXT NOT NULL,
+  graph_id TEXT NOT NULL,
+  by_format_json TEXT NOT NULL,
+  by_family_json TEXT NOT NULL,
+  failures_json TEXT NOT NULL,
+  eligible_count INTEGER,
+  analyzed_count INTEGER,
+  excluded_count INTEGER,
+  PRIMARY KEY (tenant_id, horizon_id, graph_id)
+);
+
 
 CREATE TABLE IF NOT EXISTS recall_checkpoints (
   tenant_id TEXT NOT NULL,

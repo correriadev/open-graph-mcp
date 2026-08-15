@@ -115,3 +115,41 @@ export function projectRecallToReadModel(
 
   return { suspendedCells: newlySuspended }
 }
+
+export function markDerivedPromotionsStale(
+  db: Database,
+  stateDir: string,
+  tenantId: string,
+  newBaseSeq: number,
+  affectedHorizonId?: string
+): number {
+  const query = affectedHorizonId
+    ? `SELECT id, parent_id, child_id, candidates, based_on_seq, created_at FROM proposals WHERE tenant_id = ? AND child_id = ? AND based_on_seq < ? AND status = 'proposed'`
+    : `SELECT id, parent_id, child_id, candidates, based_on_seq, created_at FROM proposals WHERE tenant_id = ? AND based_on_seq < ? AND status = 'proposed'`
+
+  const params = affectedHorizonId ? [tenantId, affectedHorizonId, newBaseSeq] : [tenantId, newBaseSeq]
+  const rows = db.query(query).all(...params) as {
+    id: string
+    parent_id: string
+    child_id: string
+    candidates: string
+    based_on_seq: number
+    created_at: string
+  }[]
+
+  for (const row of rows) {
+    write(db, stateDir, tenantId, "proposals", {
+      tenant_id: tenantId,
+      id: row.id,
+      parent_id: row.parent_id,
+      child_id: row.child_id,
+      candidates: row.candidates,
+      status: "stale-base",
+      based_on_seq: row.based_on_seq,
+      created_at: row.created_at,
+    })
+  }
+
+  return rows.length
+}
+

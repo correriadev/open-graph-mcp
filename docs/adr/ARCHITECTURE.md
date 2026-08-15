@@ -79,6 +79,7 @@ PROHIBITED: **Use o espelho JSONL como snapshot completo**; tabelas de sequênci
 
 ## REFERENCES
 
-- [**README.md**](../README.md): Índice principal da documentação.
 - [**ADR.md**](./ADR.md): Decisões normativas do OpenGraph e do EAP.
 - [**TESTS.md**](./TESTS.md): Estratégias, evidências e comandos de teste.
+- [**markdown_impact_relationships.md**](../feature/markdown_impact_relationships.md): Graph v2 e governança dos quatro horizontes.
+

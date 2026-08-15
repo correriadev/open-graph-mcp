@@ -99,3 +99,37 @@ export class Horizon {
     })
   }
 }
+
+import type { HorizonKind } from "../relationship-types"
+
+export const PROMOTION_PARENT_TOPOLOGY: Record<string, HorizonKind | null> = {
+  negotiation: "transformation",
+  microtask: "transformation",
+  transformation: "persistent",
+  persistent: null,
+};
+
+export function getPromotionParent(sourceHorizon: string): HorizonKind | null {
+  if (sourceHorizon === "session") {
+    throw new Error("Session is excluded from promotion horizons");
+  }
+  if (!(sourceHorizon in PROMOTION_PARENT_TOPOLOGY)) {
+    throw new Error(`Unknown horizon: '${sourceHorizon}'`);
+  }
+  return PROMOTION_PARENT_TOPOLOGY[sourceHorizon];
+}
+
+export function validatePromotionTarget(sourceHorizon: string, targetHorizon: string): void {
+  if (sourceHorizon === "session" || targetHorizon === "session") {
+    throw new Error("Session is excluded from promotion topology");
+  }
+  const expectedParent = getPromotionParent(sourceHorizon);
+  if (!expectedParent || expectedParent !== targetHorizon) {
+    const err: any = new Error(
+      `HORIZON_SKIP: Promotion target '${targetHorizon}' is not the declared immediate parent of horizon '${sourceHorizon}'.`
+    );
+    err.code = "HORIZON_SKIP";
+    throw err;
+  }
+}
+

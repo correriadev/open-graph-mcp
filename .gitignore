@@ -14,3 +14,8 @@ playwright-report/
 # CI artifacts, never committed. The committed counterpart is `docs/verification/`, which this
 # pattern must NOT match: the leading dot makes it a different directory name.
 .verification/
+
+# Python
+__pycache__/
+*.py[cod]
+

@@ -1,0 +1,29 @@
+{
+  "featureId": "F001",
+  "score": 0.75,
+  "passedAdversarial": true,
+  "hasHighCriticalVuln": false,
+  "isCrashing": false,
+  "vulnerabilities": [
+    {
+      "type": "PATH_TRAVERSAL",
+      "severity": "MEDIUM",
+      "description": "buildHorizonArtifactInventory in packages/graph-core/src/inventory.ts uses path.resolve instead of realpathSync on symlinks, failing to detect symlinks resolving outside the repository root."
+    },
+    {
+      "type": "BOUNDARY_VALIDATION",
+      "severity": "MEDIUM",
+      "description": "assembleGraphSnapshotV2 in packages/graph-core/src/build.ts overrides coverage.scope instead of rejecting CoverageManifests belonging to mismatched horizons, violating scenario 1.1."
+    },
+    {
+      "type": "RESOURCE_EXHAUSTION",
+      "severity": "LOW",
+      "description": "analyzeHorizonImpact in packages/graph-core/src/impact.ts accumulates path explanations without a truncation bound on high-fanout cyclic graphs."
+    }
+  ],
+  "edgeCasesMissed": [
+    "assembleGraphSnapshotV2 does not reject mismatched coverage manifest scope from another horizon before publishing.",
+    "buildHorizonArtifactInventory does not use realpathSync to detect symlinks pointing outside the repository root.",
+    "analyzeHorizonImpact lacks bounded size cap on explanations collection during high-fanout traversal."
+  ]
+}

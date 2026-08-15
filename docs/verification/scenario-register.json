@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "policy": "Scenario Register (F002 task 03). One EAP-<AREA>-<NNN> identifier per `#####` heading of docs/specs/markdown_impact_relationships/004-open-graph-mcp-test-scenarios.md, which is a read-only input. Identity lives in this file, not in the source: regeneration reconciles by exact heading text, then by position inside the gaps between stable neighbours, so a reworded heading keeps its identifier and an inserted scenario only takes the next unused number. Retired entries stay here with `retired: true` and their numbers are never reissued. `proposed` is the seed status; `declared-untestable` is set by task 04; `evidenced` is written only by the derivation service and is rejected when hand-authored.",
+  "source": {
+    "path": "docs/specs/markdown_impact_relationships/004-open-graph-mcp-test-scenarios.md",
+    "sha256": "3fc2dc2dfef6037e4d49f805f2e7ea4afdbd71b418de07534839e83b9761d486",
+    "headingCount": 0
+  },
+  "scenarios": []
+}

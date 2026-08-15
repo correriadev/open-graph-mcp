@@ -160,3 +160,183 @@ export function holderNameOf(state: ServerState, tenant: string, userId: string)
   const row = state.db.query("SELECT name FROM users WHERE tenant_id = ? AND id = ?").get(tenant, userId) as { name: string } | null
   return row?.name ?? userId
 }
+
+import type {
+  GraphSnapshotV2,
+  HorizonGraphScope,
+  CoverageManifest,
+  EvidenceRecord,
+  PublishedRelationship,
+  GraphNodeV2,
+} from "@open-graph-mcp/graph-core/relationship-types"
+import { durableTransaction } from "./db"
+
+export function publishHorizonGraphSnapshot(state: ServerState, snapshot: GraphSnapshotV2): void {
+  const { tenantId, horizonId, graphId } = snapshot.scope
+  const now = new Date().toISOString()
+
+  durableTransaction(state.db, () => {
+    // Delete existing snapshot rows for this exact scope to be strictly idempotent
+    state.db.query("DELETE FROM graph_snapshots_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ?").run(tenantId, horizonId, graphId)
+    state.db.query("DELETE FROM nodes_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ?").run(tenantId, horizonId, graphId)
+    state.db.query("DELETE FROM relationships_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ?").run(tenantId, horizonId, graphId)
+    state.db.query("DELETE FROM evidence_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ?").run(tenantId, horizonId, graphId)
+    state.db.query("DELETE FROM coverage_manifests_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ?").run(tenantId, horizonId, graphId)
+
+    // Mark previous snapshots of this tenant/horizon as superseded
+    state.db.query("UPDATE graph_snapshots_v2 SET status = 'superseded' WHERE tenant_id = ? AND horizon_id = ? AND status = 'active'").run(tenantId, horizonId)
+
+    write(state.db, state.stateDir, tenantId, "graph_snapshots_v2", {
+      tenant_id: tenantId,
+      horizon_id: horizonId,
+      graph_id: graphId,
+      policy_version: snapshot.policyVersion,
+      status: "active",
+      created_at: now,
+    })
+
+    for (const node of snapshot.nodes) {
+      write(state.db, state.stateDir, tenantId, "nodes_v2", {
+        tenant_id: tenantId,
+        horizon_id: horizonId,
+        graph_id: graphId,
+        id: node.id,
+        file: node.file,
+        kind: node.kind,
+        domain: node.domain ?? null,
+        label: node.label ?? null,
+      })
+    }
+
+    for (const rel of snapshot.relationships) {
+      write(state.db, state.stateDir, tenantId, "relationships_v2", {
+        tenant_id: tenantId,
+        horizon_id: horizonId,
+        graph_id: graphId,
+        id: rel.id,
+        source_id: rel.source,
+        target_id: rel.target,
+        type: rel.type,
+        grade: rel.grade,
+        evidence_ids: JSON.stringify(rel.evidenceIds),
+        traversable: rel.traversable ? 1 : 0,
+      })
+    }
+
+    for (const ev of snapshot.evidence) {
+      write(state.db, state.stateDir, tenantId, "evidence_v2", {
+        tenant_id: tenantId,
+        horizon_id: horizonId,
+        graph_id: graphId,
+        id: ev.id,
+        source_id: ev.sourceId,
+        kind: ev.kind,
+        target_text: ev.targetText,
+        location_json: JSON.stringify(ev.location),
+      })
+    }
+
+    write(state.db, state.stateDir, tenantId, "coverage_manifests_v2", {
+      tenant_id: tenantId,
+      horizon_id: horizonId,
+      graph_id: graphId,
+      by_format_json: JSON.stringify(snapshot.coverage.byFormat),
+      by_family_json: JSON.stringify(snapshot.coverage.byFamily),
+      failures_json: JSON.stringify(snapshot.coverage.failures),
+      eligible_count: snapshot.coverage.eligibleCount ?? null,
+      analyzed_count: snapshot.coverage.analyzedCount ?? null,
+      excluded_count: snapshot.coverage.excludedCount ?? null,
+    })
+  })
+}
+
+export function findHorizonGraphById(
+  state: ServerState,
+  tenantId: string,
+  horizonId: string,
+  graphId: string
+): GraphSnapshotV2 | null {
+  const snapRow = state.db
+    .query("SELECT policy_version FROM graph_snapshots_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ?")
+    .get(tenantId, horizonId, graphId) as { policy_version: string } | null
+
+  if (!snapRow) return null
+
+  const nodeRows = state.db
+    .query("SELECT id, file, kind, domain, label FROM nodes_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ? ORDER BY id")
+    .all(tenantId, horizonId, graphId) as { id: string; file: string; kind: string; domain: string | null; label: string | null }[]
+
+  const relRows = state.db
+    .query("SELECT id, source_id, target_id, type, grade, evidence_ids, traversable FROM relationships_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ? ORDER BY id")
+    .all(tenantId, horizonId, graphId) as { id: string; source_id: string; target_id: string; type: string; grade: string; evidence_ids: string; traversable: number }[]
+
+  const evRows = state.db
+    .query("SELECT id, source_id, kind, target_text, location_json FROM evidence_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ? ORDER BY id")
+    .all(tenantId, horizonId, graphId) as { id: string; source_id: string; kind: string; target_text: string; location_json: string }[]
+
+  const covRow = state.db
+    .query("SELECT by_format_json, by_family_json, failures_json, eligible_count, analyzed_count, excluded_count FROM coverage_manifests_v2 WHERE tenant_id = ? AND horizon_id = ? AND graph_id = ?")
+    .get(tenantId, horizonId, graphId) as { by_format_json: string; by_family_json: string; failures_json: string; eligible_count: number | null; analyzed_count: number | null; excluded_count: number | null } | null
+
+  const scope: HorizonGraphScope = { tenantId, horizonId, graphId }
+
+  const coverage: CoverageManifest = covRow
+    ? {
+        scope,
+        byFormat: JSON.parse(covRow.by_format_json),
+        byFamily: JSON.parse(covRow.by_family_json),
+        failures: JSON.parse(covRow.failures_json),
+        eligibleCount: covRow.eligible_count ?? undefined,
+        analyzedCount: covRow.analyzed_count ?? undefined,
+        excludedCount: covRow.excluded_count ?? undefined,
+      }
+    : {
+        scope,
+        byFormat: {},
+        byFamily: {},
+        failures: [],
+      }
+
+  return {
+    scope,
+    policyVersion: snapRow.policy_version,
+    nodes: nodeRows.map((n) => ({
+      id: n.id,
+      file: n.file,
+      kind: n.kind,
+      domain: n.domain,
+      label: n.label ?? undefined,
+    })),
+    relationships: relRows.map((r) => ({
+      id: r.id,
+      source: r.source_id,
+      target: r.target_id,
+      type: r.type as any,
+      grade: r.grade as any,
+      evidenceIds: JSON.parse(r.evidence_ids),
+      traversable: Boolean(r.traversable),
+    })),
+    evidence: evRows.map((e) => ({
+      id: e.id,
+      sourceId: e.source_id,
+      kind: e.kind,
+      targetText: e.target_text,
+      location: JSON.parse(e.location_json),
+    })),
+    coverage,
+  }
+}
+
+export function loadActiveHorizonGraph(
+  state: ServerState,
+  tenantId: string,
+  horizonId: string
+): GraphSnapshotV2 | null {
+  const activeRow = state.db
+    .query("SELECT graph_id FROM graph_snapshots_v2 WHERE tenant_id = ? AND horizon_id = ? AND status = 'active' ORDER BY rowid DESC LIMIT 1")
+    .get(tenantId, horizonId) as { graph_id: string } | null
+
+  if (!activeRow) return null
+  return findHorizonGraphById(state, tenantId, horizonId, activeRow.graph_id)
+}
+

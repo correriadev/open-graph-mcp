@@ -62,6 +62,7 @@ PROHIBITED: **Faça mock do domínio interno** quando uma fixture isolada pode e
 
 ## REFERENCES
 
-- [**README.md**](../README.md): Índice principal da documentação.
 - [**ARCHITECTURE.md**](./ARCHITECTURE.md): Camadas, módulos e padrões do sistema.
 - [**ADR.md**](./ADR.md): Decisões de conformidade e verificação por evidência.
+- [**markdown_impact_relationships.md**](../feature/markdown_impact_relationships.md): Suítes e fixtures do Graph v2.
+

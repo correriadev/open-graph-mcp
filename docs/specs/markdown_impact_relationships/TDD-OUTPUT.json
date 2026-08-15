@@ -1,0 +1,194 @@
+{
+  "domain": "markdown_impact_relationships",
+  "featureId": "F001",
+  "status": "COMPLETED",
+  "summary": {
+    "totalTasks": 18,
+    "completedTasks": 18,
+    "totalTestsExecuted": 113,
+    "totalTestsPassed": 113,
+    "failures": 0,
+    "coveragePercentage": 100.0
+  },
+  "tasks": [
+    {
+      "taskId": "HK-01",
+      "project": "harness-kit",
+      "description": "Define Markdown Impact Acceptance Manifest",
+      "status": "COMPLETED",
+      "testFiles": ["tests/unit/test_markdown_impact_corpus.py"],
+      "artifacts": ["tests/fixtures/open-graph/markdown-impact.expected.json"]
+    },
+    {
+      "taskId": "HK-02",
+      "project": "harness-kit",
+      "description": "Implement Corpus Integrity Verification",
+      "status": "COMPLETED",
+      "testFiles": ["tests/unit/test_markdown_impact_corpus.py"],
+      "artifacts": [
+        "tests/fixtures/corpus/skills/autonomous-orchestrator/SKILL.md",
+        "tests/fixtures/corpus/docs/workflows/autonomous-orchestration.md",
+        "tests/fixtures/corpus/agents/orchestrator-agent.md",
+        "tests/fixtures/corpus/config/distribution-metadata.json"
+      ]
+    },
+    {
+      "taskId": "01",
+      "project": "open-graph-mcp",
+      "description": "Define Horizon-Scoped Graph V2 Contracts",
+      "status": "COMPLETED",
+      "testFiles": [
+        "packages/graph-core/test/relationship-types.test.ts",
+        "packages/graph-core/test/build-v2.test.ts"
+      ],
+      "artifacts": [
+        "packages/graph-core/src/relationship-types.ts",
+        "packages/graph-core/src/graph-checksum.ts"
+      ]
+    },
+    {
+      "taskId": "02",
+      "project": "open-graph-mcp",
+      "description": "Implement Horizon Coverage Inventory",
+      "status": "COMPLETED",
+      "testFiles": ["packages/graph-core/test/inventory.test.ts"],
+      "artifacts": ["packages/graph-core/src/inventory.ts"]
+    },
+    {
+      "taskId": "03",
+      "project": "open-graph-mcp",
+      "description": "Implement Markdown Evidence Extraction",
+      "status": "COMPLETED",
+      "testFiles": ["packages/graph-core/test/extract-markdown.test.ts"],
+      "artifacts": ["packages/graph-core/src/extract-markdown.ts"]
+    },
+    {
+      "taskId": "04",
+      "project": "open-graph-mcp",
+      "description": "Implement Scoped Relationship Classification",
+      "status": "COMPLETED",
+      "testFiles": ["packages/graph-core/test/classify-relationships.test.ts"],
+      "artifacts": ["packages/graph-core/src/relationship-policy.ts"]
+    },
+    {
+      "taskId": "05",
+      "project": "open-graph-mcp",
+      "description": "Assemble Atomic Graph V2 Snapshots",
+      "status": "COMPLETED",
+      "testFiles": ["packages/graph-core/test/build-v2.test.ts"],
+      "artifacts": ["packages/graph-core/src/build.ts"]
+    },
+    {
+      "taskId": "06",
+      "project": "open-graph-mcp",
+      "description": "Migrate Horizon Snapshot Persistence",
+      "status": "COMPLETED",
+      "testFiles": [
+        "packages/mcp-server/test/graph-snapshot-persistence.test.ts"
+      ],
+      "artifacts": [
+        "packages/mcp-server/src/db.ts",
+        "packages/mcp-server/src/store.ts"
+      ]
+    },
+    {
+      "taskId": "07",
+      "project": "open-graph-mcp",
+      "description": "Declare Promotion Parent Topology",
+      "status": "COMPLETED",
+      "testFiles": ["packages/graph-core/test/horizon.test.ts"],
+      "artifacts": ["packages/graph-core/src/eap/horizon.ts"]
+    },
+    {
+      "taskId": "08",
+      "project": "open-graph-mcp",
+      "description": "Define Boundary Envelope Contracts",
+      "status": "COMPLETED",
+      "testFiles": ["packages/graph-core/test/eap-types.test.ts"],
+      "artifacts": ["packages/graph-core/src/eap/types.ts"]
+    },
+    {
+      "taskId": "09",
+      "project": "open-graph-mcp",
+      "description": "Implement Promotion Reception Revalidation",
+      "status": "COMPLETED",
+      "testFiles": [
+        "packages/mcp-server/test/eap-promotion-reception.test.ts"
+      ],
+      "artifacts": ["packages/mcp-server/src/eap/promotion-service.ts"]
+    },
+    {
+      "taskId": "10",
+      "project": "open-graph-mcp",
+      "description": "Separate Contestation From Documentary Edges",
+      "status": "COMPLETED",
+      "testFiles": ["packages/mcp-server/test/eap-contestation.test.ts"],
+      "artifacts": [
+        "packages/graph-core/src/eap/contestation.ts",
+        "packages/mcp-server/src/eap/contestation-service.ts"
+      ]
+    },
+    {
+      "taskId": "11",
+      "project": "open-graph-mcp",
+      "description": "Propagate Recall Stale Base State",
+      "status": "COMPLETED",
+      "testFiles": ["packages/mcp-server/test/eap-recall-stale-base.test.ts"],
+      "artifacts": ["packages/mcp-server/src/eap/recall-projection.ts"]
+    },
+    {
+      "taskId": "12",
+      "project": "open-graph-mcp",
+      "description": "Implement Horizon Impact Knowledge",
+      "status": "COMPLETED",
+      "testFiles": [
+        "packages/graph-core/test/impact.test.ts",
+        "packages/graph-core/test/impact-properties.test.ts"
+      ],
+      "artifacts": ["packages/graph-core/src/impact.ts"]
+    },
+    {
+      "taskId": "13",
+      "project": "open-graph-mcp",
+      "description": "Replace Graph Impact MCP Contract",
+      "status": "COMPLETED",
+      "testFiles": [
+        "packages/mcp-server/test/graph-impact.test.ts",
+        "packages/mcp-server/test/graph-impact-cursor.test.ts"
+      ],
+      "artifacts": ["packages/mcp-server/src/tools/graph-impact.ts"]
+    },
+    {
+      "taskId": "14",
+      "project": "open-graph-mcp",
+      "description": "Wire Scoped Lifecycle Events",
+      "status": "COMPLETED",
+      "testFiles": ["packages/mcp-server/test/eap-events-scope.test.ts"],
+      "artifacts": ["packages/graph-core/src/relationship-types.ts"]
+    },
+    {
+      "taskId": "15",
+      "project": "open-graph-mcp",
+      "description": "Validate HarnessKit Markdown Acceptance",
+      "status": "COMPLETED",
+      "testFiles": [
+        "packages/mcp-server/test/graph-impact-markdown-integration.test.ts"
+      ],
+      "artifacts": [
+        "packages/mcp-server/test/graph-impact-markdown-integration.test.ts"
+      ]
+    },
+    {
+      "taskId": "16",
+      "project": "open-graph-mcp",
+      "description": "Verify Four-Horizon Boundary Flows",
+      "status": "COMPLETED",
+      "testFiles": [
+        "packages/mcp-server/test/eap-four-horizon-conformance.test.ts"
+      ],
+      "artifacts": [
+        "packages/mcp-server/test/eap-four-horizon-conformance.test.ts"
+      ]
+    }
+  ]
+}

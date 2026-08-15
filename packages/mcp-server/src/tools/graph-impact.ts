@@ -348,3 +348,114 @@ export function impact(state: ServerState, args: any, tenant: string): ImpactRes
     gaps: [],
   }
 }
+
+import type {
+  ImpactKnowledge,
+  ImpactCursorV2,
+  CoverageManifest,
+  GraphSnapshotV2,
+} from "@open-graph-mcp/graph-core/relationship-types"
+import { analyzeHorizonImpact, type ImpactPathExplanation } from "@open-graph-mcp/graph-core/impact"
+import { loadActiveHorizonGraph } from "../store"
+
+export type ImpactResponseV2 = {
+  tenantId: string
+  horizonId: string
+  graphId: string
+  nodeId: string
+  knowledge: ImpactKnowledge
+  directDependents: string[]
+  transitiveDependents: string[]
+  directDependencies: string[]
+  transitiveDependencies: string[]
+  totalDependents: number
+  totalDependencies: number
+  hypotheses: Array<{ source: string; target: string }>
+  coverage: CoverageManifest
+  explanations: ImpactPathExplanation[]
+  warnings: string[]
+  nextCursor: string | null
+}
+
+export function encodeImpactCursorV2(cursor: ImpactCursorV2): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url")
+}
+
+export function decodeImpactCursorV2(raw: string, expectedScope?: { tenantId?: string; horizonId?: string }): ImpactCursorV2 {
+  let parsed: any
+  try {
+    parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"))
+  } catch {
+    const err: any = new Error("CURSOR_INVALID: Failed to decode cursor")
+    err.code = "CURSOR_INVALID"
+    throw err
+  }
+  if (!parsed || typeof parsed !== "object" || !parsed.tenantId || !parsed.horizonId || !parsed.graphId) {
+    const err: any = new Error("CURSOR_INVALID: Malformed cursor payload")
+    err.code = "CURSOR_INVALID"
+    throw err
+  }
+  if (expectedScope?.tenantId && parsed.tenantId !== expectedScope.tenantId) {
+    const err: any = new Error(`CURSOR_HORIZON_MISMATCH: Cursor tenant '${parsed.tenantId}' does not match '${expectedScope.tenantId}'`)
+    err.code = "CURSOR_HORIZON_MISMATCH"
+    throw err
+  }
+  if (expectedScope?.horizonId && parsed.horizonId !== expectedScope.horizonId) {
+    const err: any = new Error(`CURSOR_HORIZON_MISMATCH: Cursor horizon '${parsed.horizonId}' does not match '${expectedScope.horizonId}'`)
+    err.code = "CURSOR_HORIZON_MISMATCH"
+    throw err
+  }
+  return parsed as ImpactCursorV2
+}
+
+export function impactV2(state: ServerState, args: {
+  tenantId: string
+  horizonId: string
+  nodeId: string
+  directions?: ("inbound" | "outbound")[]
+  pageSize?: number
+  cursor?: string
+}): ImpactResponseV2 {
+  const { tenantId, horizonId, nodeId } = args
+  const activeSnapshot = loadActiveHorizonGraph(state, tenantId, horizonId)
+  if (!activeSnapshot) {
+    throw new Error(`No active GraphSnapshotV2 found for tenant '${tenantId}' and horizon '${horizonId}'`)
+  }
+
+  if (args.cursor) {
+    const decodedCursor = decodeImpactCursorV2(args.cursor, { tenantId, horizonId })
+    if (decodedCursor.graphId !== activeSnapshot.scope.graphId) {
+      const err: any = new Error(`CURSOR_GRAPH_STALE: Cursor graphId '${decodedCursor.graphId}' does not match active '${activeSnapshot.scope.graphId}'`)
+      err.code = "CURSOR_GRAPH_STALE"
+      throw err
+    }
+  }
+
+  const directions = args.directions ?? ["inbound", "outbound"]
+  const explained = analyzeHorizonImpact(activeSnapshot, {
+    scope: activeSnapshot.scope,
+    nodeId,
+    directions,
+    pageSize: args.pageSize,
+  })
+
+  return {
+    tenantId: activeSnapshot.scope.tenantId,
+    horizonId: activeSnapshot.scope.horizonId,
+    graphId: activeSnapshot.scope.graphId,
+    nodeId,
+    knowledge: explained.knowledge,
+    directDependents: explained.directDependents,
+    transitiveDependents: explained.transitiveDependents,
+    directDependencies: explained.directDependencies,
+    transitiveDependencies: explained.transitiveDependencies,
+    totalDependents: explained.directDependents.length + explained.transitiveDependents.length,
+    totalDependencies: explained.directDependencies.length + explained.transitiveDependencies.length,
+    hypotheses: explained.hypotheses,
+    coverage: explained.coverage,
+    explanations: explained.explanations,
+    warnings: explained.warnings,
+    nextCursor: null,
+  }
+}
+

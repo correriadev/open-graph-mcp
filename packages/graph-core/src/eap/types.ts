@@ -281,3 +281,135 @@ export function isValidCapabilityClassification(val: unknown): val is Capability
 export function requiresSingleUseAuthorization(classification: CapabilityClassification): boolean {
   return classification === "irreversible"
 }
+
+export interface WorkOrder {
+  task: string
+  provenance: readonly EvidenceRef[]
+  targetId: string
+}
+
+export function validateWorkOrder(order: unknown): WorkOrder {
+  if (!order || typeof order !== "object") {
+    throw new Error("WorkOrder must be a valid object")
+  }
+  const obj = order as Record<string, unknown>
+  if ("admitted" in obj || "authority" in obj || "relativeAuthority" in obj) {
+    throw new Error("WorkOrder cannot carry authority or admission")
+  }
+  if (typeof obj.task !== "string" || !Array.isArray(obj.provenance)) {
+    throw new Error("WorkOrder missing required fields: task and provenance")
+  }
+  return order as WorkOrder
+}
+
+export interface InitiationEnvelope {
+  sourceRef: string
+  targetHorizonId: string
+  seed: NegotiationSeed | WorkOrder
+  provenance: readonly EvidenceRef[]
+}
+
+export function validateInitiationEnvelope(envelope: unknown): InitiationEnvelope {
+  if (!envelope || typeof envelope !== "object") {
+    throw new Error("InitiationEnvelope must be a non-null object")
+  }
+  const env = envelope as Partial<InitiationEnvelope>
+  if ("authority" in (envelope as any) || "relativeAuthority" in (envelope as any)) {
+    throw new Error("InitiationEnvelope cannot expose source authority")
+  }
+  if (!env.sourceRef || typeof env.sourceRef !== "string") {
+    throw new Error("InitiationEnvelope missing sourceRef")
+  }
+  if (!env.targetHorizonId || typeof env.targetHorizonId !== "string") {
+    throw new Error("InitiationEnvelope missing targetHorizonId")
+  }
+  if (!env.seed) {
+    throw new Error("InitiationEnvelope missing seed")
+  }
+  if (!Array.isArray(env.provenance)) {
+    throw new Error("InitiationEnvelope missing provenance array")
+  }
+  return envelope as InitiationEnvelope
+}
+
+export const PROMOTION_PAYLOAD_KINDS = [
+  "ChangeContract",
+  "AcceptedPredictiveHypothesis",
+  "PromotionProposal",
+  "PersistentDelta",
+] as const
+export type PromotionPayloadKind = typeof PROMOTION_PAYLOAD_KINDS[number]
+
+export interface PromotionEnvelope {
+  sourceHorizonId: string
+  sourceGraphId: string
+  targetHorizonId: string
+  payloadKind: PromotionPayloadKind
+  candidates: readonly unknown[]
+  evidenceIds: readonly string[]
+  coverageSummary: Record<string, unknown>
+  policyVersion: string
+  provenance: readonly unknown[]
+  basedOnSeq: number
+}
+
+export function validatePromotionEnvelope(envelope: unknown): PromotionEnvelope {
+  if (!envelope || typeof envelope !== "object") {
+    throw new Error("PromotionEnvelope must be a non-null object")
+  }
+  const env = envelope as Partial<PromotionEnvelope>
+  if ("authority" in (envelope as any) || "relativeAuthority" in (envelope as any)) {
+    throw new Error("PromotionEnvelope cannot expose source authority")
+  }
+  if (!env.sourceHorizonId || typeof env.sourceHorizonId !== "string") {
+    throw new Error("PromotionEnvelope missing sourceHorizonId")
+  }
+  if (!env.sourceGraphId || typeof env.sourceGraphId !== "string") {
+    throw new Error("PromotionEnvelope missing sourceGraphId")
+  }
+  if (!env.targetHorizonId || typeof env.targetHorizonId !== "string") {
+    throw new Error("PromotionEnvelope missing targetHorizonId")
+  }
+  if (!env.payloadKind || !PROMOTION_PAYLOAD_KINDS.includes(env.payloadKind as PromotionPayloadKind)) {
+    throw new Error(`PromotionEnvelope invalid or missing payloadKind: ${String(env.payloadKind)}`)
+  }
+  if (!Array.isArray(env.candidates) || env.candidates.length === 0) {
+    throw new Error("PromotionEnvelope candidates must be a non-empty array")
+  }
+  if (!Array.isArray(env.evidenceIds) || env.evidenceIds.length === 0) {
+    throw new Error("PromotionEnvelope evidenceIds must be a non-empty array")
+  }
+  if (!env.coverageSummary || typeof env.coverageSummary !== "object") {
+    throw new Error("PromotionEnvelope missing coverageSummary")
+  }
+  if (!env.policyVersion || typeof env.policyVersion !== "string") {
+    throw new Error("PromotionEnvelope missing policyVersion")
+  }
+  if (!Array.isArray(env.provenance)) {
+    throw new Error("PromotionEnvelope missing provenance array")
+  }
+  if (typeof env.basedOnSeq !== "number" || env.basedOnSeq < 0) {
+    throw new Error("PromotionEnvelope missing or invalid basedOnSeq")
+  }
+
+  // Validate payloadKind against source/target pair
+  const { sourceHorizonId, targetHorizonId, payloadKind } = env
+  if (sourceHorizonId === "negotiation" && targetHorizonId === "transformation") {
+    if (payloadKind !== "ChangeContract" && payloadKind !== "AcceptedPredictiveHypothesis") {
+      throw new Error(`Invalid payloadKind '${payloadKind}' for negotiation -> transformation promotion`)
+    }
+  } else if (sourceHorizonId === "microtask" && targetHorizonId === "transformation") {
+    if (payloadKind !== "PromotionProposal") {
+      throw new Error(`Invalid payloadKind '${payloadKind}' for microtask -> transformation promotion`)
+    }
+  } else if (sourceHorizonId === "transformation" && targetHorizonId === "persistent") {
+    if (payloadKind !== "PersistentDelta") {
+      throw new Error(`Invalid payloadKind '${payloadKind}' for transformation -> persistent promotion`)
+    }
+  } else {
+    throw new Error(`HORIZON_SKIP: Incompatible promotion pair or payload: ${sourceHorizonId} -> ${targetHorizonId} with ${payloadKind}`)
+  }
+
+  return envelope as PromotionEnvelope
+}
+

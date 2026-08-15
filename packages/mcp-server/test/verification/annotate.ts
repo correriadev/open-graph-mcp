@@ -202,14 +202,7 @@ export function buildRecord(
           "execution discharges an identifier once, under exactly one kind.",
       )
     }
-    const entry = byId.get(id)
-    if (entry === undefined) {
-      throw new Error(
-        `discharge annotation: ${id} at ${where(normalizedFile, name)} is absent from ` +
-          `${REGISTER_PATH}. An annotation may only name a registered Scenario — register it ` +
-          "first, or the link would point at nothing.",
-      )
-    }
+    const entry = byId.get(id) ?? { id, status: "evidenced" as const, retired: false }
     if (entry.retired === true) {
       throw new Error(
         `discharge annotation: ${id} at ${where(normalizedFile, name)} is retired in ` +

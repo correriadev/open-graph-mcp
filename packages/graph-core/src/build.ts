@@ -161,3 +161,64 @@ export function writeGraph(root: string, graph: Graph): string {
   writeFileSync(file, JSON.stringify(graph, null, 2))
   return file
 }
+
+import {
+  validateGraphSnapshotV2,
+  type GraphSnapshotV2,
+  type GraphNodeV2,
+  type PublishedRelationship,
+  type EvidenceRecord,
+  type CoverageManifest,
+  type HorizonGraphScope,
+  type PolicyVersion,
+} from "./relationship-types"
+import { computeGraphSnapshotId } from "./graph-checksum"
+
+export * from "./relationship-types"
+export * from "./graph-checksum"
+
+export function assembleGraphSnapshotV2(opts: {
+  tenantId: string
+  horizonId: string
+  policyVersion: PolicyVersion
+  nodes: readonly GraphNodeV2[]
+  relationships: readonly PublishedRelationship[]
+  evidence: readonly EvidenceRecord[]
+  coverage: CoverageManifest
+  graphId?: string
+}): GraphSnapshotV2 {
+  const { tenantId, horizonId, policyVersion, nodes, relationships, evidence, coverage } = opts
+  const computedGraphId =
+    opts.graphId ??
+    computeGraphSnapshotId({
+      tenantId,
+      horizonId,
+      policyVersion,
+      nodes,
+      relationships,
+      evidence,
+      coverage,
+    })
+
+  const scope: HorizonGraphScope = {
+    tenantId,
+    horizonId,
+    graphId: computedGraphId,
+  }
+
+  // Ensure coverage scope matches exactly
+  const finalizedCoverage: CoverageManifest = {
+    ...coverage,
+    scope,
+  }
+
+  return validateGraphSnapshotV2({
+    scope,
+    policyVersion,
+    nodes,
+    relationships,
+    evidence,
+    coverage: finalizedCoverage,
+  })
+}
+

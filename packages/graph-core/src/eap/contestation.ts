@@ -71,3 +71,40 @@ export function canInitiateRecall(contestation: Contestation | undefined | null)
   if (!contestation) return false
   return contestation.admitted === true && contestation.severity === 'invalidating'
 }
+
+import {
+  type HorizonGraphScope,
+  validateHorizonGraphScope,
+} from '../relationship-types'
+
+export interface ContestEnvelope {
+  sourceScope: HorizonGraphScope
+  targetScope: HorizonGraphScope
+  evidenceIds: string[]
+  claimRefs?: string[]
+  reason?: string
+  severity?: ContestationSeverity
+}
+
+export function validateContestEnvelope(env: unknown): ContestEnvelope {
+  if (!env || typeof env !== 'object') throw new Error('ContestEnvelope must be an object')
+  const c = env as Partial<ContestEnvelope>
+  if (!c.sourceScope || !c.targetScope) throw new Error('ContestEnvelope requires sourceScope and targetScope')
+  const src = validateHorizonGraphScope(c.sourceScope)
+  const tgt = validateHorizonGraphScope(c.targetScope)
+  if (src.tenantId !== tgt.tenantId) {
+    throw new Error('Cross-tenant contestation is strictly forbidden')
+  }
+  if (!Array.isArray(c.evidenceIds) || c.evidenceIds.length === 0) {
+    throw new Error('EVIDENCE_REQUIRED: Contestation must carry non-empty evidence references')
+  }
+  return {
+    sourceScope: src,
+    targetScope: tgt,
+    evidenceIds: c.evidenceIds,
+    claimRefs: c.claimRefs ?? [],
+    reason: c.reason,
+    severity: c.severity ?? 'informative',
+  }
+}
+
