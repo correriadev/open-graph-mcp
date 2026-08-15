@@ -5,156 +5,188 @@
 **Framework:** Python unittest  
 **Date:** 2026-08-15
 
+Todos os cenários derivam de `003-harness-kit-tactical-design.md`. Eles verificam somente o corpus e seu contrato; nenhum cenário avalia lógica OpenGraph dentro do HarnessKit.
+
 ## 1. Unit Tests
 
 ### 1.1 Markdown Impact Acceptance Manifest
 
 #### Should create Markdown Impact Acceptance Manifest when every case is valid
 
-- **Given:** a positive CorpusContractVersion, deterministic case ids, repository-relative source and target paths, Evidence Kinds, directions, minimum grades and unique markers
-- **When:** the Markdown Impact Acceptance Manifest is loaded
-- **Then:** it exposes the complete ordered positive and exclusion case sets without embedding OpenGraph output
+- **Given:** a positive CorpusContractVersion and ordered graph, horizon and exclusion cases with repository-relative paths and unique markers
+- **When:** MarkdownImpactAcceptanceManifest validates the fixture
+- **Then:** it returns the complete immutable contract without GraphSnapshotV2 or OpenGraph output
 
 #### Should reject Markdown Impact Acceptance Manifest when CorpusContractVersion is not positive
 
 - **Given:** a manifest with zero or negative CorpusContractVersion
-- **When:** the fixture contract is validated
-- **Then:** validation fails before corpus facts are inspected
+- **When:** the manifest validates its schema
+- **Then:** validation fails before repository facts are read
 
-#### Should reject CorpusArtifactId when it is absolute or escapes the repository
+#### Should reject CorpusArtifactId when path is absolute or traversing
 
-- **Given:** a source or target path that is absolute or contains parent traversal outside HarnessKit
+- **Given:** a Windows absolute path, POSIX absolute path or parent traversal
 - **When:** CorpusArtifactId is validated
-- **Then:** the acceptance case is rejected without reading outside the repository
+- **Then:** the case is rejected without reading outside HarnessKit
 
-#### Should distinguish ExpectedEvidenceCase from ExpectedNonRelationshipCase
+#### Should distinguish evidence, horizon and exclusion cases
 
-- **Given:** one case declaring a resolvable Declarative Delegation and another declaring a fenced import example
-- **When:** the fixture contract is loaded
-- **Then:** the first requires source, target, kind, direction and minimum grade while the second requires marker and rejection reason and neither is converted into OpenGraph logic
+- **Given:** a declarative delegation case, a microtask-to-persistent horizon input and a fenced import exclusion
+- **When:** the manifest is loaded
+- **Then:** each retains its own schema and none is converted into an OpenGraph decision
 
-#### Should reject ExpectedEvidenceCase when its stable marker is absent
+#### Should reject ExpectedEvidenceCase when marker is missing or ambiguous
 
-- **Given:** a positive acceptance case whose declared source exists but whose unique marker is absent
-- **When:** `VerifyMarkdownImpactCorpus` validates the case
-- **Then:** it returns `CorpusContractDrifted` with the deterministic case id and marker reason
+- **Given:** a marker occurring zero times or more than once in its declared source
+- **When:** VerifyMarkdownImpactCorpus locates it
+- **Then:** it returns CorpusContractDrifted with deterministic case id and reason
 
-#### Should reject ExpectedEvidenceCase when its marker is ambiguous
+#### Should reject ExpectedHorizonCase when payload label is absent
 
-- **Given:** a positive acceptance case whose marker occurs more than once in the declared source
-- **When:** `VerifyMarkdownImpactCorpus` locates the marker
-- **Then:** it returns a named ambiguous-marker drift result rather than choosing a location
+- **Given:** a horizon case with source and target labels but no payload kind
+- **When:** the fixture schema is validated
+- **Then:** validation fails without inferring ChangeContract, PromotionProposal or PersistentDelta
+
+#### Should reject ExpectedNonRelationshipCase when rejection reason is absent
+
+- **Given:** a fenced import marker with no declared exclusion reason
+- **When:** the fixture schema is validated
+- **Then:** validation fails rather than blessing the marker as evidence
 
 ### 1.2 Corpus integrity service
 
-#### Should verify representative documentary evidence without invoking OpenGraph
+#### Should verify documentary evidence without invoking OpenGraph
 
-- **Given:** manifest cases for an explicit path, workflow reference and Declarative Delegation targeting existing HarnessKit artifacts
-- **When:** `VerifyMarkdownImpactCorpus` runs against the repository root
-- **Then:** it verifies paths and unique markers and returns `CorpusContractVerified` without importing an OpenGraph parser or graph client
+- **Given:** manifest cases for path reference and Declarative Delegation targeting existing HarnessKit artifacts
+- **When:** VerifyMarkdownImpactCorpus runs
+- **Then:** it verifies paths and markers and imports no OpenGraph parser, client, graph, persistence or EAP module
 
-#### Should verify a fenced import false-edge control as source text only
+#### Should verify four-horizon input labels without deciding outcomes
 
-- **Given:** an ExpectedNonRelationshipCase whose unique marker is an import inside a Markdown code fence
-- **When:** `VerifyMarkdownImpactCorpus` checks the corpus
-- **Then:** it confirms only that the marker exists and leaves rejection as a code dependency to the OpenGraph acceptance test
+- **Given:** cases labeled negotiation-to-transformation, microtask-to-transformation, transformation-to-persistent and microtask-to-persistent
+- **When:** VerifyMarkdownImpactCorpus runs
+- **Then:** it confirms only declared markers and payload labels and does not decide admission or `HORIZON_SKIP`
+
+#### Should verify contestation and recall markers as corpus facts
+
+- **Given:** horizon cases labeled CONTEST and RECALL with unique source markers
+- **When:** VerifyMarkdownImpactCorpus runs
+- **Then:** it confirms marker integrity without creating an edge, contest store or stale-base state
+
+#### Should verify fenced import control as source text only
+
+- **Given:** an exclusion marker containing an import inside a Markdown code fence
+- **When:** VerifyMarkdownImpactCorpus checks it
+- **Then:** it confirms the unique text and leaves relationship rejection to OpenGraph acceptance tests
 
 #### Should carry no state between corpus verifications
 
-- **Given:** two separate HarnessKit checkouts with different manifest facts
-- **When:** `VerifyMarkdownImpactCorpus` runs sequentially for both roots
-- **Then:** each result reflects only its supplied manifest and repository without cached paths or markers
+- **Given:** two HarnessKit roots with different contract versions and marker facts
+- **When:** VerifyMarkdownImpactCorpus runs sequentially
+- **Then:** each result reflects only its supplied manifest and repository
 
 ### 1.3 Corpus events
 
-#### Should emit CorpusContractVerified with immutable aggregate counts
+#### Should emit CorpusContractVerified with reconciled counts
 
-- **Given:** every declared path and unique marker is valid
-- **When:** corpus verification succeeds
-- **Then:** `CorpusContractVerified` contains CorpusContractVersion and exact case count and cannot be mutated after creation
+- **Given:** every graph, horizon and exclusion case is valid
+- **When:** verification completes
+- **Then:** CorpusContractVerified contains contract version and exact counts and is immutable
 
-#### Should emit CorpusContractDrifted with no absolute path
+#### Should emit CorpusContractDrifted without absolute paths
 
-- **Given:** one declared artifact or marker is missing or ambiguous
-- **When:** corpus verification fails
-- **Then:** `CorpusContractDrifted` contains case id and reason code without tenant credentials, absolute paths or graph state
+- **Given:** a declared path or marker is missing, ambiguous or unsafe
+- **When:** verification fails
+- **Then:** CorpusContractDrifted contains case id, reason and relative artifact id without credentials or absolute paths
 
 ## 2. Integration Tests
 
 ### 2.1 Manifest repository and repository reader
 
-#### Should load the version-controlled manifest with deterministic case identities
+#### Should load only the configured acceptance manifest JSON
 
-- **Given:** `tests/fixtures/open-graph/markdown-impact.expected.json` in a HarnessKit checkout
-- **When:** `MarkdownImpactCorpusManifest` loads it
-- **Then:** all positive and exclusion cases retain deterministic ids, semantic labels and repository-relative paths
+- **Given:** unrelated JSON files exist beside the configured fixture path
+- **When:** MarkdownImpactCorpusManifest loads its input
+- **Then:** only `tests/fixtures/open-graph/markdown-impact.expected.json` is accepted
 
-#### Should return a unique SourceLocation for every pinned marker
+#### Should return one repository-confined SourceLocation per marker
 
-- **Given:** a valid manifest and unchanged HarnessKit Source Corpus
-- **When:** `HarnessKitRepositoryReader` reads each declared artifact and locates its marker
-- **Then:** every marker resolves to exactly one repository-confined SourceLocation
+- **Given:** a valid manifest and unchanged HarnessKit source corpus
+- **When:** HarnessKitRepositoryReader locates every marker
+- **Then:** each resolves exactly once within the declared CorpusArtifactId
 
-#### Should report absence when a declared target no longer exists
+#### Should reject a symlink target outside HarnessKit
 
-- **Given:** a manifest case pointing to a missing CorpusArtifactId
-- **When:** the repository reader verifies target existence
-- **Then:** it returns a named missing-artifact result without retrying, inferring an alternative or scanning outside the root
+- **Given:** a declared artifact resolves through a symlink outside the repository root
+- **When:** HarnessKitRepositoryReader validates confinement
+- **Then:** it returns a named unsafe-artifact drift result before external content is read
 
-#### Should reject non-allowlisted JSON as acceptance input
+#### Should fail verification atomically when one case drifts
 
-- **Given:** HarnessKit contains unrelated distribution JSON beside the configured Markdown Impact Acceptance Manifest
-- **When:** the corpus fixture loader discovers its input
-- **Then:** only the versioned manifest is loaded and unrelated JSON is not treated as evidence or a relationship fixture
+- **Given:** all cases except one have valid paths and markers
+- **When:** VerifyMarkdownImpactCorpus checks the complete contract
+- **Then:** it returns CorpusContractDrifted and does not publish a partially verified case set
 
-### 2.2 VerifyMarkdownImpactCorpus use case
+### 2.2 Acceptance corpus use case
 
-#### Should validate the autonomous orchestrator acceptance facts
+#### Should validate autonomous orchestrator coupling facts
 
-- **Given:** the manifest pins resolvable workflow references and Declarative Delegations involving `skills/autonomous-orchestrator/SKILL.md`
-- **When:** `VerifyMarkdownImpactCorpus` runs against the current HarnessKit checkout
-- **Then:** it confirms the pinned source, target and unique markers needed for OpenGraph to test that the orchestrator no longer yields an unqualified 0/0 result
+- **Given:** manifest references involving `skills/autonomous-orchestrator/SKILL.md` and workflow documentation
+- **When:** VerifyMarkdownImpactCorpus runs against the current checkout
+- **Then:** it confirms the exact source, target and markers required to reproduce the original Markdown 0/0 defect externally
 
-#### Should fail atomically when any manifest fact drifts
+#### Should validate false-positive controls independently from positive cases
 
-- **Given:** all but one manifest case are valid and one marker has drifted
-- **When:** the complete corpus contract is verified
-- **Then:** the verification fails as a whole with `CorpusContractDrifted` and does not publish a partially verified case set
+- **Given:** valid positive references plus fenced import, generic mention and non-allowlisted JSON exclusions
+- **When:** VerifyMarkdownImpactCorpus runs
+- **Then:** each category is preserved with its own deterministic identity and no category changes another
+
+#### Should validate horizon acceptance inputs without product logic
+
+- **Given:** immediate promotion, skipped promotion, revalidation, authority non-transfer, contestation and recall/stale-base labels in the manifest
+- **When:** VerifyMarkdownImpactCorpus runs
+- **Then:** all required input facts are available for OpenGraph tests and HarnessKit produces no protocol verdict
 
 ## 3. Functional Tests
 
 ### 3.1 Happy path flows
 
-#### Should provide a stable external acceptance corpus when a maintainer runs the fixture test
+#### Should provide a stable external acceptance corpus
 
-- **Given:** natural HarnessKit skills, agents, workflow documents and distribution metadata plus a valid versioned manifest
-- **When:** the maintainer runs the HarnessKit Markdown impact corpus test
-- **Then:** the report confirms every positive and non-relationship fixture fact without modifying the source corpus or invoking OpenGraph
+- **Given:** natural HarnessKit skills, agents and workflow documents plus a valid versioned manifest
+- **When:** a maintainer runs the Markdown impact corpus test
+- **Then:** every graph, horizon and exclusion fixture fact is confirmed without modifying source documents or invoking OpenGraph
 
 ### 3.2 Alternative and error flows
 
-#### Should explain corpus drift when a referenced workflow changes
+#### Should explain corpus drift when a workflow marker changes
 
-- **Given:** a workflow document no longer contains the unique marker declared by its ExpectedEvidenceCase
-- **When:** the maintainer runs the corpus integrity test
-- **Then:** the test fails with the case id, repository-relative artifact and drift reason needed to update the manifest intentionally
+- **Given:** a workflow document no longer contains its declared unique marker
+- **When:** the maintainer runs corpus verification
+- **Then:** the test fails with case id, relative artifact and drift reason needed for intentional manifest update
 
-#### Should preserve natural source documents when the fixture contract changes
+#### Should preserve natural documents when contract version changes
 
 - **Given:** an intentional semantic change requires a new CorpusContractVersion and marker
 - **When:** the maintainer updates and verifies the manifest
-- **Then:** only the version-controlled fixture contract changes and HarnessKit source documents are not rewritten to satisfy an indexer
+- **Then:** only fixture contract and its test change while production-like Markdown remains natural
 
 ### 3.3 Security scenarios
 
 #### Should prevent corpus verification from reading outside HarnessKit
 
-- **Given:** a malicious manifest contains traversal, an absolute path or a symlink target outside the repository
-- **When:** `HarnessKitRepositoryReader` validates the CorpusArtifactId
-- **Then:** verification rejects the case before external content is read
+- **Given:** a malicious manifest contains traversal, an absolute path or an escaping symlink
+- **When:** HarnessKitRepositoryReader validates the case
+- **Then:** it rejects the case before external content is read
 
-#### Should exclude credentials and generated graph state from the manifest
+#### Should exclude secrets and generated graph state from the manifest
 
-- **Given:** a manifest candidate contains a tenant token, absolute local path or generated OpenGraph snapshot
-- **When:** the fixture contract is validated
-- **Then:** validation fails and the sensitive or environment-specific field is not accepted as corpus data
+- **Given:** a manifest candidate contains a tenant token, absolute local path, graphId-specific snapshot or generated OpenGraph response
+- **When:** MarkdownImpactAcceptanceManifest validates the schema
+- **Then:** validation fails and environment-specific data is not accepted as corpus input
+
+#### Should keep HarnessKit free of OpenGraph product dependencies
+
+- **Given:** the complete corpus verification test environment
+- **When:** dependency and import boundaries are inspected during the test run
+- **Then:** no OpenGraph parser, client, graph store, horizon host or promotion implementation is loaded

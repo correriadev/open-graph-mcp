@@ -1,317 +1,431 @@
 # Tactical Design — open-graph-mcp
 
-**Domain:** `markdown_impact_relationships`  
-**Project:** `open-graph-mcp`  
-**Contract posture:** breaking changes are permitted; there are no current clients to preserve.
+**Domain:** `markdown_impact_relationships`
+**Project:** `open-graph-mcp`
+**Architecture:** protocol core puro + reference host MCP + SQLite/JSONL
+**Contract posture:** Graph v2 substitui v1; breaking changes são permitidas e não há clientes atuais.
 
 ## Section 1 — Main Structure
 
-The implementation follows the existing protocol-core/reference-host architecture. Pure identity, evidence, relationship policy, graph schema, and traversal rules belong in `graph-core`; filesystem discovery, SQLite/JSONL durability, tenant transactions, and MCP translation remain in `mcp-server`. This is a schema replacement, not a compatibility layer over the ambiguous v1 contract.
-
 | Element | Layer / Type | Invariants / Tech Rules | 4-line Snippet |
 |---|---|---|---|
-| Artifact Inventory | `mcp-server` repository adapter + `graph-core` contract | Enumerates a canonical repository snapshot; records eligible, excluded, read, analyzed, and failed artifacts by format; never silently drops a read failure. | See below |
-| Markdown Evidence Extractor | `graph-core` pure extractor | Parses Markdown-specific constructs; fenced code is not interpreted as source imports; every signal carries source location and normalized target text. | See below |
-| Artifact Identity Index | `graph-core` immutable index | Resolves only within the current repository snapshot; canonical path wins over aliases; zero, one, and many matches are distinct outcomes. | See below |
-| Relationship Classifier | `graph-core` domain policy | Classifies evidence once under a versioned policy; generic mentions are rejected; hypotheses never become confirmed traversal edges. | See below |
-| Graph Snapshot | `graph-core` aggregate schema | Nodes, published relationships, evidence outcomes, coverage, policy version, and checksum describe one indivisible snapshot identified by `graphId`. | See below |
-| Snapshot Publisher | `mcp-server` application service | Persists a complete candidate snapshot transactionally, then swaps the hot graph; readers observe the prior or new snapshot, never a mixture. | See below |
-| Impact Analyzer | `graph-core` pure domain service | Traverses only policy-eligible published relationships; returns explained paths and an explicit knowledge state per direction. | See below |
-| Graph Impact Tool | `mcp-server` MCP adapter | Validates request/cursor and serializes the domain result without reclassifying evidence; cursor from a different `graphId` is rejected. | See below |
+| HorizonGraphScope | `graph-core` Value Object | Exige `tenantId`, `horizonId`, `graphId`; nenhuma parte do snapshot existe fora desse escopo. | Abaixo |
+| ArtifactInventory | `graph-core` contract + `mcp-server` adapter | Conta elegíveis, excluídos, lidos, analisados e falhos; JSON só por allowlist. | Abaixo |
+| MarkdownEvidenceExtractor | `graph-core` pure extractor | Extrator específico; imports cercados/inline não viram code import; preserva localização. | Abaixo |
+| RelationshipClassifier | `graph-core` domain policy | Separa `depends-on`, `references`, `delegates-to` e `behavioral-hypothesis`; grade não implica tipo. | Abaixo |
+| GraphSnapshotV2 | `graph-core` Aggregate Root | Snapshot atômico por escopo; relations, evidence, coverage e policy são inseparáveis. | Abaixo |
+| HorizonTopology | `graph-core/eap` domain policy | Pai de promoção: negociação→transformação, microtask→transformação, transformação→persistente. | Abaixo |
+| HorizonInitiation | `graph-core/eap` boundary contract | Sessão inicia negociação por NegotiationSeed; transformação inicia microtask por WorkOrder; contexto entra proposed e sem autoridade. | Abaixo |
+| Promotion | `graph-core/eap` Aggregate | Envelope imutável; alvo deve ser pai imediato; estado recebido começa `proposed`. | Abaixo |
+| PromotionReception | `mcp-server/eap` application service | Resolve, reclassifica e revalida sob policy/coverage do receptor; nunca copia autoridade. | Abaixo |
+| ContestAndRecall | `graph-core/eap` + host services | CONTEST carrega evidência sem edge documental; recall/base change gera `STALE_BASE` por lineage. | Abaixo |
+| SnapshotPublisher | `mcp-server` durable service | `serialTransaction`, sequência monotônica e hot swap; readers veem snapshot antigo ou novo. | Abaixo |
+| ImpactAnalyzer | `graph-core` pure service | Travessia interna apenas; knowledge por direção; hipóteses ficam separadas. | Abaixo |
+| GraphImpactAdapter | `mcp-server` thin MCP adapter | Carrega escopo completo e traduz erros nomeados sem reclassificar. | Abaixo |
+
+```text
+HorizonGraphScope:
+  tenantId; horizonId; graphId
+  rule: all three are required
+```
 
 ```text
 ArtifactInventory:
-  snapshotId: SnapshotId; artifacts: ArtifactRecord[]
-  coverage: InventoryCoverage
+  artifacts; byFormat; failures
+  rule: every eligible item terminates
 ```
 
 ```text
 MarkdownEvidenceExtractor:
-  extract(artifact, identities): EvidenceRecord[]
-  // ignores examples as executable imports
-```
-
-```text
-ArtifactIdentityIndex:
-  byCanonicalPath: Map<ArtifactId, ArtifactRecord>
-  resolve(candidate): ResolutionOutcome
+  extract(artifact): EvidenceRecord[]
+  rule: fenced imports are rejected signals
 ```
 
 ```text
 RelationshipClassifier:
-  classify(evidence, policy): ClassificationOutcome
-  // rejection and ambiguity stay observable
+  classify(evidence, policy): Outcome
+  rule: hypotheses are never confirmed traversal
 ```
 
 ```text
 GraphSnapshotV2:
-  graphId: GraphId; policyVersion: PolicyVersion
-  nodes; relationships; evidence; coverage
+  scope; nodes; relationships; evidence
+  coverage; policyVersion
+```
+
+```text
+HorizonTopology:
+  parentOf(sourceHorizonId): HorizonId?
+  rule: promotion crosses exactly one parent
+```
+
+```text
+HorizonInitiation:
+  initiate(seed): ProposedContext
+  rule: provenance crosses, authority never does
+```
+
+```text
+Promotion:
+  envelope; status: proposed | admitted | refused
+  rule: source authority is never a field
+```
+
+```text
+PromotionReception:
+  receive(envelope, targetSnapshot): Decision
+  // resolve, reclassify, revalidate locally
+```
+
+```text
+ContestAndRecall:
+  contest(evidenceRefs); recall(proof)
+  // lineage changes state, never history
 ```
 
 ```text
 SnapshotPublisher:
-  publish(candidate, tenant): PublishedSnapshot
-  // one durable transaction, then hot swap
+  publish(scope, candidate): PublishedSnapshot
+  // transaction then hot swap
 ```
 
 ```text
 ImpactAnalyzer:
-  analyze(snapshot, request): ExplainedImpact
-  // confirmed traversal plus separate hypotheses
+  analyze(snapshot, query): ExplainedImpact
+  // internal relationships only
 ```
 
 ```text
-GraphImpactTool:
-  call(request, tenant): ImpactResponseV2
-  // rejects stale snapshot-bound cursor
+GraphImpactAdapter:
+  call(scope, query, cursor): ImpactResponseV2
+  // named scope/cursor refusals
 ```
 
-### Aggregate and consistency boundaries
+### Invariants
 
-- `GraphSnapshotV2` is the consistency boundary for publication and consultation. A Coverage Manifest from one scan cannot accompany relationships from another.
-- `EvidenceRecord` is immutable inside a snapshot and preserves observable provenance; it is not itself a relationship.
-- `PublishedRelationship` aggregates one or more compatible evidence records for a source-target-type-direction tuple. Conflicting evidence is preserved as separate outcomes, never overwritten.
-- `CouplingHypothesis` remains queryable evidence but is excluded from confirmed traversal.
-- A `known-zero` result is valid only when the relevant source artifact and relationship family were successfully inventoried, read, extracted, resolved, and classified in the queried direction.
+- Os quatro Horizons governados são negociação, microtask, transformação e persistente. Sessão só inicia negociação por `NegotiationSeed`.
+- `INITIATE`, `PROMOTE`, `CONTEST`, `RECALL` e `parent` jamais aparecem em `PublishedRelationship`.
+- `GraphSnapshotV2`, persistence rows, coverage, evidence, relationships, events, queries e cursores carregam `tenantId + horizonId + graphId`.
+- `PromotionEnvelope` contém exatamente o contexto mínimo verificável e não possui campo de autoridade.
+- Candidato recebido é `proposed`; admissão no receptor depende de resolução, classificação, Evidence Grade, Coverage Manifest e Policy Version locais.
+- `CONTEST` pode atravessar o DAG com evidência. `RECALL` ou troca de base preserva histórico e marca derivações `STALE_BASE`.
+- `known-zero` requer cobertura suficiente no horizonte consultado; cobertura/Grau A do filho não conta no pai.
 
 ## Section 2 — Value Objects / Types / Interfaces
 
 | Name | Context / Layer | Validation & Typing Rules | 4-line Snippet |
 |---|---|---|---|
-| `ArtifactId` | Artifact Inventory / `graph-core` | Normalized POSIX path relative to repository root; non-empty; cannot escape root. | See below |
-| `ArtifactFormat` | Artifact Inventory / `graph-core` | Closed union initially covering source code and Markdown; configured JSON families are explicit, not wildcarded. | See below |
-| `SourceLocation` | Evidence Extraction / `graph-core` | Relative artifact id plus one-based line/column span; no absolute path or raw document body. | See below |
-| `EvidenceKind` | Evidence Extraction / `graph-core` | Typed as code import, Markdown link/path, explicit symbol, declarative delegation, or behavioral hypothesis. | See below |
-| `EvidenceGrade` | Relationship Classification / `graph-core` | `A`, `B`, or `C`; grade and relationship type remain orthogonal. | See below |
-| `EvidenceRecord` | Evidence Extraction / `graph-core` | Deterministic id from normalized content fields; carries source, candidate target, syntax, location, and grade candidate. | See below |
-| `ResolutionOutcome` | Relationship Classification / `graph-core` | Discriminated union: `resolved`, `unresolved`, or `ambiguous`; ambiguous preserves all candidate ids. | See below |
-| `RelationshipType` | Relationship Classification / `graph-core` | Closed union; `depends-on`, `references`, and `delegates-to` have distinct semantics and traversal eligibility. | See below |
-| `PublishedRelationship` | Graph Publication / `graph-core` | Deterministic id; typed direction; source and target belong to same snapshot; contains evidence ids and policy decision. | See below |
-| `CoverageManifest` | Graph Publication / `graph-core` | Counts and failures are internally reconcilable; scopes coverage by format and relationship family. | See below |
-| `ImpactKnowledge` | Impact Traversal / `graph-core` | Per-direction state is `known-zero`, `known-nonzero`, or `unknown`; `unknown` includes machine-readable reasons. | See below |
-| `ImpactExplanation` | Impact Traversal / `graph-core` | Identifies relationship path, evidence grade, policy version, and redacted provenance without raw content by default. | See below |
-| `ImpactCursorV2` | MCP contract / `mcp-server` | Opaque, integrity-checked, bound to tenant question parameters and exact `graphId`; stale graph is a named error. | See below |
-| `ImpactResponseV2` | MCP contract / `mcp-server` | Requires `graphId`, directional knowledge, coverage, warnings, explained results, totals, and cursor; ambiguous legacy 0/0 shape is invalid. | See below |
+| HorizonKind | EAP core | Closed union: negotiation, microtask, transformation, persistent; session excluded. | Abaixo |
+| HorizonGraphScope | Graph core | Tríplice obrigatória e imutável; tenant/horizon non-empty. | Abaixo |
+| ArtifactId | Inventory | Caminho POSIX relativo, normalizado, sem escape da raiz. | Abaixo |
+| EvidenceRecord | Extraction | Id determinístico, source, kind, targetText, location; sem corpo bruto. | Abaixo |
+| EvidenceGrade | Classification | `A`, `B`, `C`; ortogonal a tipo e autoridade. | Abaixo |
+| RelationshipType | Graph v2 | União fechada de quatro relações internas. | Abaixo |
+| CoverageManifest | Publication | Escopado; contagens reconciliáveis por formato/família e falhas nomeadas. | Abaixo |
+| PolicyVersion | Classification | Identifica política do próprio horizonte; mudança requer novo snapshot/revalidação. | Abaixo |
+| GraphSnapshotV2 | Publication | Content-addressed; todos membros compartilham o mesmo scope. | Abaixo |
+| InitiationEnvelope | EAP boundary | NegotiationSeed ou WorkOrder com proveniência; conteúdo chega proposed e sem autoridade. | Abaixo |
+| PromotionEnvelope | EAP boundary | Campos obrigatórios definidos; candidates/evidence não vazios; provenance completa. | Abaixo |
+| PromotionPayload | EAP boundary | ChangeContract/AcceptedPredictiveHypothesis, PromotionProposal ou PersistentDelta conforme source/target. | Abaixo |
+| PromotionStatus | EAP boundary | `proposed`, `admitted`, `refused`, `stale-base`; recepção inicia proposed. | Abaixo |
+| ContestEnvelope | EAP boundary | Evidência referenciada e destino explícito; não exige parent imediato. | Abaixo |
+| PromotionLineage | EAP boundary | Liga candidato a source graph/evidence/base sequence sem mutar origem. | Abaixo |
+| ImpactKnowledge | Impact | `known-zero`, `known-nonzero`, `unknown(reasonCodes)`. | Abaixo |
+| ImpactQueryV2 | Impact/MCP | Carrega HorizonGraphScope, nodeId, direção e paginação. | Abaixo |
+| ImpactCursorV2 | MCP | Integridade e query hash; scope completo; erros distintos para graph/horizon stale. | Abaixo |
 
 ```text
-type ArtifactId = string
-rule: repository-relative POSIX path, no '..'
+type HorizonKind =
+  'negotiation' | 'microtask' |
+  'transformation' | 'persistent'
 ```
 
 ```text
-type ArtifactFormat =
-  'typescript' | 'javascript' | 'markdown' | 'configured-json'
-```
-
-```text
-type SourceLocation = {
-  artifactId: ArtifactId; line: int; column?: int
+type HorizonGraphScope = {
+  tenantId; horizonId; graphId
 }
 ```
 
 ```text
-type EvidenceKind =
-  'code-import' | 'markdown-link' | 'path-reference' |
-  'explicit-symbol' | 'declarative-delegation' | 'behavioral-hypothesis'
-```
-
-```text
-type EvidenceGrade = 'A' | 'B' | 'C'
-rule: grade never implies relationship type
+type ArtifactId = string
+rule: relative POSIX path, no '..'
 ```
 
 ```text
 type EvidenceRecord = {
-  id; sourceId; kind; targetText; location; syntax
+  id; sourceId; kind; targetText; location
 }
 ```
 
 ```text
-type ResolutionOutcome =
-  Resolved(targetId) | Unresolved(reason) |
-  Ambiguous(candidateIds)
+type EvidenceGrade = 'A' | 'B' | 'C'
+rule: no cross-horizon authority
 ```
 
 ```text
-type RelationshipType =
-  'depends-on' | 'references' | 'delegates-to' |
-  'behavioral-hypothesis'
-```
-
-```text
-type PublishedRelationship = {
-  id; from; to; type; grade; evidenceIds; traversable
-}
+type RelationshipType = 'depends-on' | 'references' |
+  'delegates-to' | 'behavioral-hypothesis'
 ```
 
 ```text
 type CoverageManifest = {
-  inventory; extraction; resolution; classification
-  byFormat; byRelationshipFamily; failures
+  scope; byFormat; byFamily; failures
+}
+```
+
+```text
+type PolicyVersion = string
+rule: owned by one horizon snapshot
+```
+
+```text
+type GraphSnapshotV2 = {
+  scope; policyVersion; nodes; relationships
+  evidence; coverage
+}
+```
+
+```text
+type InitiationEnvelope = {
+  sourceRef; targetHorizonId; seed; provenance
+  // seed is NegotiationSeed or WorkOrder
+}
+
+```text
+type PromotionEnvelope = {
+  sourceHorizonId; sourceGraphId; targetHorizonId
+  candidates; evidenceIds; coverageSummary; policyVersion; provenance
+}
+```
+
+```text
+type PromotionPayload =
+  ChangeContract | AcceptedPredictiveHypothesis |
+  PromotionProposal | PersistentDelta
+```
+
+```text
+type PromotionStatus =
+  'proposed' | 'admitted' | 'refused' | 'stale-base'
+```
+
+```text
+type ContestEnvelope = {
+  sourceScope; targetScope; evidenceIds; claimRefs
+}
+```
+
+```text
+type PromotionLineage = {
+  promotionId; sourceGraphId; basedOnSeq; evidenceIds
 }
 ```
 
 ```text
 type ImpactKnowledge =
-  KnownZero | KnownNonzero |
-  Unknown(reasonCodes)
+  KnownZero | KnownNonzero | UnknownReasons
 ```
 
 ```text
-type ImpactExplanation = {
-  path; relationshipTypes; grades; evidenceLocations
-  policyVersion
+type ImpactQueryV2 = {
+  scope; nodeId; directions; pageSize
 }
-```
 
 ```text
 type ImpactCursorV2 = {
-  graphId; queryHash; lastKeys
+  tenantId; horizonId; graphId; queryHash; lastKeys
 }
 ```
 
-```text
-type ImpactResponseV2 = {
-  graphId; knowledge; coverage; results
-  totals; warnings; nextCursor
-}
-```
+### Relationship and promotion matrices
 
-### Relationship publication matrix
+| Evidence interna | Relação Graph v2 | Confirmed traversal |
+|---|---|---:|
+| Import resolvido | `depends-on` | Sim |
+| Link/caminho Markdown resolvido | `references` | Conforme policy do horizonte |
+| Delegação inequívoca | `delegates-to` | Sim |
+| Correlação comportamental | `behavioral-hypothesis` | Não |
+| Import cercado, genérico, unresolved/ambiguous | Nenhuma edge | Não |
 
-| Evidence | Default relationship | Published? | Confirmed traversal? |
-|---|---|---:|---:|
-| Resolved code import | `depends-on` | Yes | Yes |
-| Resolved Markdown link or repository path | `references` | Yes | Yes only when policy marks reference changes as impactful |
-| Unambiguous declarative delegation | `delegates-to` | Yes | Yes |
-| Unique explicit symbolic reference | `references` | Yes | Policy-controlled; never silently treated as import |
-| Behavioral correlation | `behavioral-hypothesis` | Yes, in hypothesis channel | No |
-| Generic term, unresolved or ambiguous target | Rejection/outcome only | No edge | No |
+| Source | Target obrigatório | Payload | Estado no receptor |
+|---|---|---|---|
+| negotiation | transformation | `ChangeContract`/`AcceptedPredictiveHypothesis` | `proposed` |
+| microtask | transformation originadora | `PromotionProposal` | `proposed` |
+| transformation | persistent | `PersistentDelta` | `proposed` |
+| qualquer outro par | — | — | recusa `HORIZON_SKIP` |
 
 ## Section 3 — Domain Services / Use Cases / Actions
 
 | Operation / Hook | Responsibility | Coordinates / Subscriptions | 4-line Snippet |
 |---|---|---|---|
-| `BuildArtifactInventory` | Produces canonical artifact identities and complete coverage accounting for one repository scan. | Filesystem adapter, format policy, ignore rules | See below |
-| `ExtractMarkdownEvidence` | Detects links, repository paths, explicit artifact/skill names, and declarative delegations without executing Markdown examples as code. | Artifact record, identity catalog, Markdown parser | See below |
-| `ResolveEvidenceTargets` | Resolves all evidence through a prebuilt identity/alias index in bounded passes, avoiding per-mention global scans. | Evidence records, identity index | See below |
-| `ClassifyRelationships` | Applies the versioned evidence policy and emits published relations, hypotheses, and rejected outcomes. | Resolution outcomes, relationship policy | See below |
-| `AssembleGraphSnapshot` | Builds deterministic Graph v2 with coverage and provenance and computes its content-derived `graphId`. | Nodes, classified outcomes, coverage manifest | See below |
-| `PublishGraphSnapshot` | Writes the entire tenant snapshot transactionally and exposes it atomically to readers. | Snapshot repository, hot graph registry, event publisher | See below |
-| `AnalyzeGraphImpact` | Calculates direct/transitive impact, coverage knowledge, hypotheses, explanations, stable totals, and deterministic pages. | Graph snapshot, traversal policy | See below |
-| `ServeGraphImpact` | Converts MCP input into a domain request and maps named errors/results without changing semantics. | Tenant resolution, cursor codec, Impact Analyzer | See below |
+| BuildHorizonArtifactInventory | Inventariar formatos e coverage em um horizon scope. | Filesystem, format allowlist, ignore rules | Abaixo |
+| ExtractMarkdownEvidence | Extrair sinais Markdown sem interpretar exemplos como código. | Markdown parser, Artifact Identity Index | Abaixo |
+| ResolveAndClassifyRelationships | Resolver identidades e aplicar policy do horizonte. | Evidence records, identity index, Policy Version | Abaixo |
+| AssembleGraphSnapshotV2 | Ordenar e endereçar conteúdo do snapshot completo. | Relationships, evidence, coverage | Abaixo |
+| PublishHorizonGraph | Persistir e ativar snapshot atômico. | SQLite, JSONL mirror, hot registry | Abaixo |
+| InitiateHorizon | Registrar seed como proposed no novo horizonte sem autoridade herdada. | Session/transform reference, target host, provenance | Abaixo |
+| ProposePromotion | Validar pai, payload, provenance e base antes de registrar envelope. | HorizonTopology, source snapshot, lineage store | Abaixo |
+| ReceivePromotion | Recriar decisão no target como proposed. | Target snapshot/policy/coverage, classifier | Abaixo |
+| ContestHorizonKnowledge | Entregar evidência a qualquer destino permitido sem edge documental. | Contest store, evidence repository | Abaixo |
+| RecallPersistentKnowledge | Registrar proof e avançar base persistente. | Recall closure, sequence allocator | Abaixo |
+| MarkDerivedPromotionsStale | Marcar lineage afetada como `STALE_BASE`. | Recall/base events, promotion repository | Abaixo |
+| AnalyzeHorizonImpact | Consultar relações internas com coverage local. | GraphSnapshotV2, traversal policy | Abaixo |
+| ServeGraphImpactV2 | Validar scope/cursor e serializar resposta/refusas. | Tenant resolution, cursor codec, analyzer | Abaixo |
 
 ```text
-BuildArtifactInventory(root, policy): Inventory
-// every eligible artifact ends read/analyzed/failed
+BuildHorizonArtifactInventory(scope, root, policy): Inventory
+// terminal outcome for every eligible artifact
 ```
 
 ```text
-ExtractMarkdownEvidence(artifact, identities): Evidence[]
-// parse links, paths, names, delegation grammar
+ExtractMarkdownEvidence(artifact): EvidenceRecord[]
+// fences and inline examples are non-code
 ```
 
 ```text
-ResolveEvidenceTargets(evidence, index): Outcome[]
-// O(artifacts + evidence), no N+1 filesystem search
+ResolveAndClassifyRelationships(scope, evidence): Outcomes
+// policy belongs to this horizon
 ```
 
 ```text
-ClassifyRelationships(outcomes, policy): ClassificationSet
-// proven, hypothesis, or rejected
+AssembleGraphSnapshotV2(parts): GraphSnapshotV2
+// canonical sort and content graphId
 ```
 
 ```text
-AssembleGraphSnapshot(parts): GraphSnapshotV2
-// canonical sort and content-derived graphId
+PublishHorizonGraph(scope, candidate): Result
+// serial transaction then hot swap
 ```
 
 ```text
-PublishGraphSnapshot(tenant, candidate): Result
-// durable transaction then hot-snapshot swap
+InitiateHorizon(envelope): ProposedContext
+// NegotiationSeed or WorkOrder, no authority
 ```
 
 ```text
-AnalyzeGraphImpact(snapshot, request): ExplainedImpact
-// fail closed when directional coverage is insufficient
+ProposePromotion(envelope): Result
+// target must equal topology parent
 ```
 
 ```text
-ServeGraphImpact(args, tenant): ImpactResponseV2
-// validate cursor graphId, delegate, serialize
+ReceivePromotion(envelope, target): Decision
+// proposed then locally revalidated
 ```
 
-### Operational rules
+```text
+ContestHorizonKnowledge(contest): Result
+// evidence travels, documentary edges do not
+```
 
-- Extraction stores bounded, redacted provenance: source location and normalized syntax metadata by default, never the full Markdown body.
-- Duplicate evidence for the same relationship is aggregated deterministically; only a bounded sample of locations is returned, while total evidence count remains exact.
-- Traversal uses `seen`, maximum depth, deterministic ordering, and an explicit traversal budget. Hitting a budget emits `truncated` and a warning; it never reports the truncated total as complete.
-- Rebuild recomputes unresolved/ambiguous outcomes from the current snapshot, preserving deterministic identity but not carrying stale conclusions across snapshots.
-- Format exclusions and read/parse failures contribute reason codes to directional `unknown` decisions.
+```text
+RecallPersistentKnowledge(proof): RecallResult
+// advance seq and calculate closure
+```
+
+```text
+MarkDerivedPromotionsStale(baseEvent): count
+// append state transition, preserve history
+```
+
+```text
+AnalyzeHorizonImpact(snapshot, query): ExplainedImpact
+// local coverage determines knowledge
+```
+
+```text
+ServeGraphImpactV2(scope, args): ImpactResponseV2
+// thin adapter with named cursor errors
+```
 
 ## Section 4 — Events / Messages / Async Flows
 
 | Event / Action Name | Trigger | Minimum Payload | Consumers |
 |---|---|---|---|
-| `ArtifactInventoryCompleted` | Repository scan and coverage reconciliation finish | `{ candidateId, inventoryCounts, failureCount }` | Snapshot build observability |
-| `RelationshipEvidenceClassified` | All extraction outcomes are classified | `{ candidateId, provenCount, hypothesisCount, rejectedCount }` | Snapshot build observability |
-| `GraphSnapshotPublished` | Durable transaction commits and hot graph swaps | `{ graphId, policyVersion, stats, coverageSummary }` | SSE clients, server resources, audit trail |
-| `GraphSnapshotPublicationFailed` | Candidate build or durable write fails | `{ candidateId, stage, reasonCode }` | Operator diagnostics; existing snapshot remains active |
-| `ImpactCoverageInsufficient` | Impact query resolves to `unknown` in either direction | `{ graphId, nodeId, directions, reasonCodes }` | Audit/telemetry; MCP response already carries details |
+| ArtifactInventoryCompleted | Coverage reconciliada | `{ tenantId, horizonId, candidateGraphId, counts, failureCount }` | Build telemetry |
+| RelationshipEvidenceClassified | Outcomes fechados | `{ tenantId, horizonId, candidateGraphId, proven, hypotheses, rejected }` | Build telemetry |
+| GraphSnapshotV2Published | Commit e hot swap concluídos | `{ tenantId, horizonId, graphId, policyVersion, coverageSummary }` | SSE, resources, audit |
+| GraphSnapshotV2PublicationFailed | Build/persistência falha | `{ tenantId, horizonId, candidateGraphId, stage, reasonCode }` | Diagnostics |
+| HorizonInitiated | Seed registrado como proposed | `{ tenantId, targetHorizonId, targetGraphId, seedKind, provenanceRef }` | Target workflow, audit |
+| PromotionProposed | Envelope validado na origem | `{ promotionId, tenantId, sourceHorizonId, sourceGraphId, targetHorizonId }` | Target receiver, audit |
+| PromotionReceived | Target registra proposed | `{ promotionId, tenantId, targetHorizonId, targetGraphId, status }` | Reception workflow |
+| PromotionAdmitted | Revalidação local completa | `{ promotionId, tenantId, targetHorizonId, targetGraphId, policyVersion }` | Lineage, audit |
+| PromotionRefused | Policy/topology/base falha | `{ promotionId, tenantId, targetHorizonId, targetGraphId, reasonCode }` | Client, audit |
+| HorizonKnowledgeContested | Contest entregue | `{ contestId, sourceScope, targetScope, evidenceIds }` | Target host |
+| PersistentKnowledgeRecalled | Recall admitido | `{ recallId, tenantId, horizonId, graphId, newSeq }` | Lineage projector |
+| PromotionBaseStaled | Derivação atingida | `{ promotionId, tenantId, sourceHorizonId, sourceGraphId, reasonCode: STALE_BASE }` | Promotion workflow |
+| ImpactCoverageInsufficient | Knowledge é unknown | `{ tenantId, horizonId, graphId, nodeId, directions, reasonCodes }` | Audit, response telemetry |
 
-Events contain aggregate counts and reason codes only. Evidence locations stay tenant-scoped in the requested response or snapshot resource and never cross repository boundaries.
+Todos os eventos carregam o escopo suficiente para impedir correlação cross-tenant/cross-horizon. Eventos inter-horizonte referenciam evidência; nunca inserem `INITIATE`, `PROMOTE`, `CONTEST`, `RECALL` ou `parent` no conjunto de relações documentais.
 
 ## Section 5 — Persistence / Repository / Data Access Interfaces
 
-Graph v2 replaces the current nodes/edges-only reconstruction contract. SQLite remains the live durable index and JSONL remains its append-only mirror, but snapshot identity must be explicit in every row so hydration cannot combine generations.
-
 | Resource / Adapter | Methods / Actions | Return Types / Expected State |
 |---|---|---|
-| `RepositorySnapshotReader` | `inventory(root, formatPolicy)`; `read(artifactId)` | Canonical inventory plus typed read results/failures confined to repository root |
-| `GraphSnapshotRepository` | `publish(tenant, snapshot)`; `loadActive(tenant)`; `findById(tenant, graphId)` | Atomic v2 snapshot; no partially visible nodes, relationships, evidence, or coverage |
-| `EvidenceRepository` | `listByRelationship`; `listOutcomesByArtifact` | Snapshot-scoped, tenant-scoped evidence metadata and resolution outcomes |
-| `CoverageRepository` | `getManifest(tenant, graphId)` | Exact manifest belonging to the same graph snapshot |
-| `ImpactCursorCodec` | `encode(cursor)`; `decodeAndVerify(raw)` | Integrity-checked cursor bound to `graphId` and query hash |
+| RepositorySnapshotReader | `inventory`; `read` | Reads confinadas e outcomes tipados |
+| HorizonGraphRepository | `publish`; `loadActive`; `findById` | Snapshot completo por tenant+horizon+graph |
+| EvidenceRepository | `listByRelationship`; `listOutcomesByArtifact` | Evidência no mesmo scope |
+| CoverageRepository | `getManifest` | Manifest exato do snapshot/horizonte |
+| HorizonTopologyRepository | `loadDeclaredTopology` | DAG declarado e versionado |
+| PromotionRepository | `propose`; `receive`; `transition`; `findDerivedFrom` | Envelope/lineage append-only e estado atual |
+| ContestRepository | `append`; `listForTarget` | Contestação separada do grafo documental |
+| RecallRepository | `append`; `loadClosure` | Proof, closure e seq persistente |
+| ImpactCursorCodec | `encode`; `decodeAndVerify` | Cursor íntegro e escopado |
 
 ```text
-interface RepositorySnapshotReader:
-  inventory(root, policy): InventoryResult
-  read(id): ArtifactReadResult
-```
-
-```text
-interface GraphSnapshotRepository:
-  publish(tenant, snapshot): void
-  loadActive(tenant): GraphSnapshotV2 | null
+interface HorizonGraphRepository:
+  publish(scope, snapshot): void
+  loadActive(tenantId, horizonId): GraphSnapshotV2?
 ```
 
 ```text
 interface EvidenceRepository:
-  listByRelationship(tenant, graphId, id): EvidenceSummary[]
-  listOutcomesByArtifact(tenant, graphId, id): Outcome[]
+  listByRelationship(scope, id): EvidenceSummary[]
+  listOutcomesByArtifact(scope, id): Outcome[]
 ```
 
 ```text
 interface CoverageRepository:
-  getManifest(tenant, graphId): CoverageManifest
-  // absent manifest invalidates snapshot hydration
+  getManifest(scope): CoverageManifest
+  // missing manifest invalidates hydration
+```
+
+```text
+interface HorizonTopologyRepository:
+  loadDeclaredTopology(tenantId): HorizonTopology
+```
+
+```text
+interface PromotionRepository:
+  propose(envelope): Promotion
+  transition(id, expected, next): Promotion
+```
+
+```text
+interface ContestRepository:
+  append(contest): void
+  listForTarget(scope): ContestEnvelope[]
+```
+
+```text
+interface RecallRepository:
+  append(recall): void
+  loadClosure(recallId): RecallClosure
 ```
 
 ```text
 interface ImpactCursorCodec:
   encode(cursor): string
-  decodeAndVerify(raw): ImpactCursorV2
+  decodeAndVerify(raw, scope): ImpactCursorV2
 ```
 
 ### Physical schema direction
 
-- Add an explicit `graph_snapshots` record with `graph_id`, schema version, policy version, checksum, status, repository identity, and coverage summary.
-- Scope nodes and published relationships by `(tenant_id, graph_id, id)`; relationship rows carry type, grade, direction, traversability, and policy decision.
-- Persist evidence and resolution/classification outcomes separately, keyed by deterministic evidence id and `graph_id`.
-- Persist normalized coverage dimensions and failures with the same `graph_id`; loading a snapshot without complete coverage metadata is an integrity failure.
-- Mark the active snapshot only after all candidate rows commit. Rebuild failure leaves the previous active snapshot intact.
-- Do not maintain a v1 read path or synthesize v2 fields from old 0/0 data. Existing development databases are rebuilt under v2.
+- Todas as tabelas v2 de snapshots, nodes, relationships, evidence, coverage e query metadata usam `tenant_id`, `horizon_id`, `graph_id`.
+- Promotion/contest/recall usam stores próprios e referências de scope; não reutilizam tabela de edges.
+- `PromotionEnvelope` e lineage preservam source graph, evidence, coverage summary, policy version, provenance e based-on sequence.
+- SQLite é fonte durável; JSONL é mirror append-only e não snapshot completo. Publicação ocorre em `serialTransaction` com `allocateSequence`.
+- Não existe reader v1 nem síntese de coverage v2. Banco de desenvolvimento antigo é recusado ou rebuilt.
+- Cursor com graphId anterior retorna `CURSOR_GRAPH_STALE`; cursor de outro horizonId retorna `CURSOR_HORIZON_MISMATCH`.
 
 ## Section 6 — Ordered Development Tasks
 
@@ -319,185 +433,131 @@ interface ImpactCursorCodec:
 [
   {
     "id": "01",
-    "title": "Define Graph V2 Domain Contracts",
-    "description": "Replace the ambiguous graph model with typed artifacts, evidence, relationships, coverage, impact knowledge, and snapshot-bound pagination contracts.",
-    "scope": [
-      "packages/graph-core/src/build.ts",
-      "packages/graph-core/src/relationship-types.ts",
-      "packages/graph-core/test/relationship-types.test.ts",
-      "packages/mcp-server/src/tools/graph-impact.ts"
-    ],
-    "acceptance": [
-      "Graph v2 requires graphId, policyVersion, coverage, typed relationships, and evidence outcomes",
-      "ImpactResponseV2 cannot represent a bare ambiguous 0/0 result",
-      "No v1 compatibility union or fallback contract remains"
-    ],
+    "title": "Define Horizon-Scoped Graph V2 Contracts",
+    "description": "Replace Graph v1 with immutable tenant-horizon-graph scoped contracts for snapshots, relationships, evidence, coverage, impact knowledge, and cursors.",
+    "scope": ["packages/graph-core/src/build.ts", "packages/graph-core/src/relationship-types.ts", "packages/graph-core/test/build-v2.test.ts", "packages/graph-core/test/relationship-types.test.ts"],
+    "acceptance": ["Every GraphSnapshotV2 member carries one HorizonGraphScope", "Internal relationship types exclude all horizon boundary operations", "No v1 compatibility union or ambiguous 0/0 response remains"],
     "depends_on": null
   },
   {
     "id": "02",
-    "title": "Implement Artifact Inventory Coverage",
-    "description": "Build a canonical repository inventory that accounts for eligible, excluded, read, analyzed, and failed artifacts by format.",
-    "scope": [
-      "packages/graph-core/src/inventory.ts",
-      "packages/graph-core/test/inventory.test.ts",
-      "packages/mcp-server/src/tools/graph-bootstrap.ts",
-      "packages/mcp-server/test/graph-inventory.test.ts"
-    ],
-    "acceptance": [
-      "Every eligible artifact reaches an analyzed or failed terminal state with a reason",
-      "Markdown is explicitly covered and unsupported JSON families are explicitly excluded",
-      "Repository paths cannot escape the indexed root"
-    ],
+    "title": "Implement Horizon Coverage Inventory",
+    "description": "Account for every eligible artifact and configured format independently in each horizon.",
+    "scope": ["packages/graph-core/src/inventory.ts", "packages/graph-core/test/inventory.test.ts", "packages/mcp-server/src/tools/graph-bootstrap.ts"],
+    "acceptance": ["Eligible artifacts terminate as analyzed or failed with a reason", "Coverage is isolated by tenantId and horizonId", "Only configured JSON families enter inventory"],
     "depends_on": "01"
   },
   {
     "id": "03",
     "title": "Implement Markdown Evidence Extraction",
-    "description": "Add a Markdown-specific extractor for links, paths, explicit artifact references, and declarative delegations while rejecting code-example imports as source dependencies.",
-    "scope": [
-      "packages/graph-core/src/extract-markdown.ts",
-      "packages/graph-core/src/relationship-types.ts",
-      "packages/graph-core/test/extract-markdown.test.ts"
-    ],
-    "acceptance": [
-      "Resolved links and repository paths retain source locations and syntax kind",
-      "A fenced or inline code example containing an import does not create a code-import edge",
-      "Generic mentions and repeated prose are not promoted by extraction"
-    ],
+    "description": "Extract links, paths, explicit symbols, and declarative delegations with deterministic provenance while rejecting Markdown examples as code dependencies.",
+    "scope": ["packages/graph-core/src/extract-markdown.ts", "packages/graph-core/test/extract-markdown.test.ts", "packages/graph-core/src/extract.ts"],
+    "acceptance": ["Fenced and inline example imports create no code-import edge", "Signals retain bounded SourceLocation", "Generic mentions remain rejected outcomes"],
     "depends_on": "02"
   },
   {
     "id": "04",
-    "title": "Implement Artifact Identity Resolution",
-    "description": "Resolve evidence candidates against one canonical identity and alias index with explicit resolved, unresolved, and ambiguous outcomes.",
-    "scope": [
-      "packages/graph-core/src/artifact-identity.ts",
-      "packages/graph-core/src/resolve-relationships.ts",
-      "packages/graph-core/test/resolve-relationships.test.ts"
-    ],
-    "acceptance": [
-      "Canonical paths resolve deterministically within the repository snapshot",
-      "Ambiguous aliases preserve all candidates and create no published relationship",
-      "Resolution performs no per-evidence filesystem scan"
-    ],
+    "title": "Implement Scoped Relationship Classification",
+    "description": "Resolve identities and classify the four internal relationship types under the current horizon policy.",
+    "scope": ["packages/graph-core/src/resolve.ts", "packages/graph-core/src/relationship-policy.ts", "packages/graph-core/test/classify-relationships.test.ts"],
+    "acceptance": ["depends-on, references, delegates-to, and behavioral-hypothesis remain distinct", "Evidence Grades are preserved without implying authority", "Unresolved and ambiguous evidence creates no confirmed edge"],
     "depends_on": "03"
   },
   {
     "id": "05",
-    "title": "Implement Relationship Classification Policy",
-    "description": "Classify resolution outcomes into proven relationships, hypotheses, and rejections under a versioned conservative policy.",
-    "scope": [
-      "packages/graph-core/src/relationship-policy.ts",
-      "packages/graph-core/src/classify-relationships.ts",
-      "packages/graph-core/test/classify-relationships.test.ts"
-    ],
-    "acceptance": [
-      "Relationship type, direction, grade, provenance, and traversal eligibility are explicit",
-      "Declarative delegation has a tested source-to-target direction",
-      "Behavioral hypotheses and generic mentions never enter confirmed traversal"
-    ],
+    "title": "Assemble Atomic Graph V2 Snapshots",
+    "description": "Compose canonical nodes, internal relationships, evidence, policy, and coverage into one content-addressed horizon snapshot.",
+    "scope": ["packages/graph-core/src/build.ts", "packages/graph-core/src/graph-checksum.ts", "packages/graph-core/test/build-v2.test.ts"],
+    "acceptance": ["Identical scoped input produces identical graphId", "Coverage and relationships cannot be assembled from different graphIds", "Conflicting evidence remains observable"],
     "depends_on": "04"
   },
   {
     "id": "06",
-    "title": "Assemble Deterministic Graph Snapshots",
-    "description": "Compose inventory, classified outcomes, coverage, and published relationships into a canonically ordered content-addressed Graph v2 snapshot.",
-    "scope": [
-      "packages/graph-core/src/build.ts",
-      "packages/graph-core/src/graph-checksum.ts",
-      "packages/graph-core/test/build-v2.test.ts"
-    ],
-    "acceptance": [
-      "Identical repository content and policy produce the same graphId and relationship identities",
-      "Conflicting evidence remains observable without overwriting stronger evidence",
-      "Coverage and relationships are inseparable members of one snapshot"
-    ],
+    "title": "Migrate Horizon Snapshot Persistence",
+    "description": "Persist and hydrate Graph v2 atomically with tenant, horizon, and graph isolation in SQLite and the append-only mirror.",
+    "scope": ["packages/mcp-server/src/db.ts", "packages/mcp-server/src/store.ts", "packages/mcp-server/test/graph-snapshot-persistence.test.ts", "packages/mcp-server/test/rebuild-from-jsonl.test.ts"],
+    "acceptance": ["Readers observe complete old or new snapshots only", "Cross-tenant and cross-horizon hydration is impossible", "Old schema is rejected or rebuilt instead of projected as v2"],
     "depends_on": "05"
   },
   {
     "id": "07",
-    "title": "Migrate Snapshot Persistence Schema",
-    "description": "Replace the nodes-and-edges persistence model with tenant- and graph-scoped snapshots, relationships, evidence outcomes, and coverage records.",
-    "scope": [
-      "packages/mcp-server/src/db.ts",
-      "packages/mcp-server/src/tools/graph-bootstrap.ts",
-      "packages/mcp-server/test/graph-snapshot-persistence.test.ts",
-      "packages/mcp-server/test/rebuild-from-jsonl.test.ts"
-    ],
-    "acceptance": [
-      "A committed snapshot hydrates with exactly matching nodes, relationships, evidence, coverage, and graphId",
-      "A failed rebuild leaves the previous active snapshot readable",
-      "Old schema data is rejected or rebuilt rather than projected into a misleading v2 response"
-    ],
-    "depends_on": "06"
+    "title": "Declare Promotion Parent Topology",
+    "description": "Encode the normative promotion DAG separately from the internal graph and cell DAG.",
+    "scope": ["packages/graph-core/src/eap/horizon.ts", "packages/graph-core/src/eap/promotion.ts", "packages/graph-core/test/horizon.test.ts"],
+    "acceptance": ["Negotiation and microtask name transformation as parent and transformation names persistent", "Session is excluded from promotion parents", "Any non-parent target returns HORIZON_SKIP"],
+    "depends_on": "01"
   },
   {
     "id": "08",
-    "title": "Integrate Evidence Pipeline Into Bootstrap",
-    "description": "Wire inventory, format-specific extraction, resolution, classification, and snapshot assembly into tenant bootstrap and rebuild.",
-    "scope": [
-      "packages/mcp-server/src/tools/graph-bootstrap.ts",
-      "packages/mcp-server/src/state.ts",
-      "packages/mcp-server/test/graph-bootstrap-markdown.test.ts",
-      "packages/mcp-server/test/graph-rebuild-snapshot.test.ts"
-    ],
-    "acceptance": [
-      "A Markdown-heavy repository publishes typed documentary relationships and coverage",
-      "Read and parse failures appear in the published Coverage Manifest",
-      "Readers observe only the old or new graphId during rebuild"
-    ],
+    "title": "Define Boundary Envelope Contracts",
+    "description": "Create typed initiation and promotion envelopes for NegotiationSeed, WorkOrder, ChangeContract, AcceptedPredictiveHypothesis, PromotionProposal, and PersistentDelta.",
+    "scope": ["packages/graph-core/src/eap/promotion.ts", "packages/graph-core/src/eap/types.ts", "packages/graph-core/test/eap-types.test.ts"],
+    "acceptance": ["Initiation seeds enter proposed with provenance while PromotionEnvelope requires all specified source, target, evidence, coverage, policy, and provenance fields", "Neither contract exposes source authority", "Payload kind is valid only for its declared initiation or immediate promotion pair"],
     "depends_on": "07"
   },
   {
     "id": "09",
-    "title": "Implement Explained Impact Traversal",
-    "description": "Move impact semantics into a pure graph-core analyzer that returns directional knowledge, confirmed paths, separate hypotheses, and explicit budget truncation.",
-    "scope": [
-      "packages/graph-core/src/impact.ts",
-      "packages/graph-core/test/impact.test.ts",
-      "packages/graph-core/test/impact-properties.test.ts"
-    ],
-    "acceptance": [
-      "Known zero is returned only when directional coverage is sufficient",
-      "Cycles terminate deterministically and hypotheses never inflate confirmed totals",
-      "Every confirmed hit includes a typed path and bounded provenance explanation"
-    ],
+    "title": "Implement Promotion Reception Revalidation",
+    "description": "Receive promoted candidates as proposed and rerun resolution, classification, coverage, and policy checks in the target horizon.",
+    "scope": ["packages/mcp-server/src/eap/promotion-service.ts", "packages/mcp-server/src/eap/horizon-store.ts", "packages/mcp-server/test/eap-promotion-reception.test.ts"],
+    "acceptance": ["Every received candidate starts proposed", "Grade A or admission in the child never auto-admits in the parent", "Target policy can reclassify or refuse without mutating source history"],
     "depends_on": "08"
   },
   {
     "id": "10",
-    "title": "Replace Graph Impact MCP Contract",
-    "description": "Expose ImpactResponseV2 through a thin MCP adapter with integrity-checked cursors bound to the exact graph snapshot.",
-    "scope": [
-      "packages/mcp-server/src/tools/graph-impact.ts",
-      "packages/mcp-server/src/transport.ts",
-      "packages/mcp-server/test/graph-impact.test.ts",
-      "packages/mcp-server/test/graph-impact-cursor.test.ts"
-    ],
-    "acceptance": [
-      "Every response includes graphId, directional impactKnowledge, coverage, warnings, explanations, totals, and cursor",
-      "A cursor issued for a prior graphId fails with a named stale-cursor error",
-      "The MCP adapter performs no evidence classification"
-    ],
-    "depends_on": "09"
+    "title": "Separate Contestation From Documentary Edges",
+    "description": "Allow evidence-backed CONTEST across horizon topology without adding an internal Graph v2 relationship.",
+    "scope": ["packages/graph-core/src/eap/contestation.ts", "packages/mcp-server/src/eap/contestation-service.ts", "packages/mcp-server/test/eap-contestation.test.ts"],
+    "acceptance": ["CONTEST can target non-parent horizons with evidence", "No contest creates depends-on, references, delegates-to, or behavioral-hypothesis", "Tenant and horizon evidence isolation is enforced"],
+    "depends_on": "08"
   },
   {
     "id": "11",
-    "title": "Validate Markdown Impact At Repository Scale",
-    "description": "Exercise the complete published pipeline against hostile, ambiguous, cyclic, unreadable, and high-fanout documentary corpora before declaring the new contract complete.",
-    "scope": [
-      "packages/mcp-server/test/graph-impact-markdown-integration.test.ts",
-      "packages/mcp-server/test/fixtures/markdown-impact",
-      "packages/mcp-server/test/probes/markdown-impact-scale.test.ts",
-      "docs/verification/markdown-impact-baseline.json"
-    ],
-    "acceptance": [
-      "The HarnessKit acceptance corpus produces non-zero explained relationships for the orchestrator skill",
-      "Unreadable or excluded relevant artifacts turn directional zero into unknown",
-      "Scale results record time, memory, evidence aggregation, and deterministic output without setting an unsupported one-million-file SLO"
-    ],
-    "depends_on": "10"
+    "title": "Propagate Recall Stale Base State",
+    "description": "Project recall and base changes onto derived promotion lineage as explicit STALE_BASE transitions.",
+    "scope": ["packages/graph-core/src/eap/recall.ts", "packages/mcp-server/src/eap/recall-projection.ts", "packages/mcp-server/test/eap-recall-stale-base.test.ts"],
+    "acceptance": ["Affected promotions become STALE_BASE after recall or base change", "Historical envelope content is never silently rewritten", "Promotion remains blocked until explicit rebase or revalidation"],
+    "depends_on": "09"
+  },
+  {
+    "id": "12",
+    "title": "Implement Horizon Impact Knowledge",
+    "description": "Calculate explained internal blast radius with local coverage and separate behavioral hypotheses.",
+    "scope": ["packages/graph-core/src/impact.ts", "packages/graph-core/test/impact.test.ts", "packages/graph-core/test/impact-properties.test.ts"],
+    "acceptance": ["Known zero requires sufficient coverage in the queried horizon", "Hypotheses never inflate confirmed totals", "Cycles and traversal budgets produce deterministic named outcomes"],
+    "depends_on": "06"
+  },
+  {
+    "id": "13",
+    "title": "Replace Graph Impact MCP Contract",
+    "description": "Expose scoped ImpactResponseV2 and integrity-checked pagination through a semantically thin adapter.",
+    "scope": ["packages/mcp-server/src/tools/graph-impact.ts", "packages/mcp-server/test/graph-impact.test.ts", "packages/mcp-server/test/graph-impact-cursor.test.ts"],
+    "acceptance": ["Every response includes tenantId, horizonId, graphId, knowledge, coverage, explanations, totals, and warnings", "Stale graph cursor returns CURSOR_GRAPH_STALE", "Wrong horizon cursor returns CURSOR_HORIZON_MISMATCH"],
+    "depends_on": "12"
+  },
+  {
+    "id": "14",
+    "title": "Wire Scoped Lifecycle Events",
+    "description": "Emit snapshot, promotion, contestation, recall, stale-base, and impact events with complete isolation scope.",
+    "scope": ["packages/mcp-server/src/eap/services.ts", "packages/graph-core/src/events-snapshot.ts", "packages/mcp-server/test/eap-events-scope.test.ts"],
+    "acceptance": ["Every event carries tenantId and the relevant horizonId and graphId", "Boundary events never appear as documentary relationships", "Retries do not duplicate committed transitions"],
+    "depends_on": "11"
+  },
+  {
+    "id": "15",
+    "title": "Validate HarnessKit Markdown Acceptance",
+    "description": "Exercise the complete Graph v2 pipeline against the external HarnessKit corpus and its negative controls.",
+    "scope": ["packages/mcp-server/test/graph-impact-markdown-integration.test.ts", "packages/mcp-server/test/fixtures/markdown-impact", "packages/mcp-server/test/graph-bootstrap-markdown.test.ts"],
+    "acceptance": ["The autonomous orchestrator node no longer returns an unqualified 0/0", "Fenced imports and generic mentions remain non-relationships", "Unreadable or excluded relevant inputs produce unknown rather than known-zero"],
+    "depends_on": "13"
+  },
+  {
+    "id": "16",
+    "title": "Verify Four-Horizon Boundary Flows",
+    "description": "Run deterministic conformance flows covering immediate promotion, authority non-transfer, contestation, and stale-base recovery.",
+    "scope": ["packages/mcp-server/test/eap-four-horizon-conformance.test.ts", "packages/graph-core/test/eap-lifecycle.test.ts", "packages/mcp-server/test/eap-refusals.test.ts"],
+    "acceptance": ["All three promotion edges succeed only through their immediate parent", "Microtask-to-persistent promotion logs HORIZON_SKIP", "Revalidation, authority non-transfer, CONTEST, and STALE_BASE are observable by log"],
+    "depends_on": "15"
   }
 ]
 ```

@@ -1,113 +1,167 @@
-# Context Map — Relações de Impacto em Markdown
+# Context Map — Relações de Impacto Markdown nos Quatro Horizontes
 
 ## 1. Bounded Context Identification
 
 | Bounded Context | Responsibility | Boundary (excluded) | Team Ownership | Key Entities |
 |---|---|---|---|---|
-| Target Repository | Fornecer o conjunto versionado de arquivos e seus conteúdos como fonte externa de observação. | Não interpreta evidências, não classifica relacionamentos e não conhece a semântica do grafo. | Equipe proprietária do repositório analisado | Repository Snapshot, Source Artifact |
-| Artifact Inventory | Descobrir Artefatos Indexados, atribuir identidade canônica e registrar cobertura e falhas de leitura por formato. | Não extrai referências do conteúdo e não infere dependências. | Plataforma OpenGraph — Indexing | Indexing Scope, Indexed Artifact, Artifact Identity, Inventory Coverage |
-| Evidence Extraction | Detectar e preservar Evidências de Relacionamento observáveis em código e Markdown, com origem e localização. | Não decide que toda menção é um Relacionamento Comprovado nem calcula impacto. | Plataforma OpenGraph — Extraction | Evidence Record, Explicit Textual Reference, Link or Path, Declarative Delegation, Behavioral Coupling Hypothesis |
-| Relationship Classification | Resolver destinos e classificar tipo, direção e grau da evidência segundo uma política conservadora. | Não publica snapshots, não percorre o grafo e não promove Hipótese de Acoplamento a dependência silenciosamente. | Domínio OpenGraph — Relationship Semantics | Relationship Candidate, Resolved Reference, Unresolved Reference, Proven Relationship, Coupling Hypothesis, Evidence Grade |
-| Graph Publication | Publicar atomicamente nós, relacionamentos explicáveis, proveniência e Cobertura do Grafo para um tenant. | Não reclassifica evidências nem calcula Blast Radius. | Plataforma OpenGraph — Graph Storage | Graph Snapshot, Published Relationship, Provenance, Coverage Manifest |
-| Impact Traversal | Avaliar cobertura e calcular Blast Radius direto e transitivo usando apenas relacionamentos elegíveis, expondo a Explicação de Impacto. | Não extrai conteúdo, não inventa arestas ausentes e não converte ausência de evidência em impacto zero. | Domínio OpenGraph — Impact Analysis | Impact Analysis, Dependent, Dependency, Explained Blast Radius, Unknown Impact |
+| Target Repository | Fornecer arquivos versionados como fonte externa observável. | Não classifica relações, cobertura ou autoridade. | Equipe proprietária do repositório | Repository Snapshot, Source Artifact |
+| Artifact Inventory | Descobrir identidades, formatos allowlisted e falhas no escopo do horizonte. | Não extrai evidência nem conclui impacto. | OpenGraph Indexing | Artifact Identity, Format Policy, Inventory Coverage |
+| Evidence Extraction | Extrair sinais Markdown específicos, preservando proveniência e rejeitando imports cercados. | Não publica relação e não promove entre horizontes. | OpenGraph Extraction | Evidence Record, Source Location, Rejected Signal |
+| Relationship Semantics | Resolver e classificar relações internas sob Policy Version do horizonte. | Não executa operações inter-horizonte nem travessia MCP. | OpenGraph Protocol Core | Resolution Outcome, Published Relationship, Evidence Grade |
+| Horizon Graph Publication | Publicar atomicamente GraphSnapshotV2 escopado por tenant, horizonte e graph. | Não herda coverage/policy de outro horizonte. | OpenGraph Reference Host | GraphSnapshotV2, Coverage Manifest, Horizon Graph Scope |
+| Impact Analysis | Calcular Blast Radius explicado e Impact Knowledge dentro de um snapshot. | Não reclassifica evidência nem atravessa DAG de promoção. | OpenGraph Protocol Core | Impact Query, Impact Cursor, ImpactResponseV2 |
+| Horizon Governance | Declarar Parent Topology e governar `INITIATE`, `PROMOTE`, `CONTEST`, `RECALL`. | Não representa esses operadores como arestas documentais. | OpenGraph EAP Host | Horizon, PromotionEnvelope, Contest, Recall, Refusal |
+| Promotion Reception | Receber candidatos como `proposed` e resolvê-los, reclassificá-los e revalidá-los localmente. | Não transfere Relative Authority ou Evidence Grade da origem. | Host do horizonte receptor | Proposed Candidate, Reception Decision, Promotion Lineage |
+| HarnessKit Acceptance Corpus | Oferecer fatos documentais naturais e controles negativos estáveis. | Não implementa parser, política, host, persistência ou traversal OpenGraph. | HarnessKit maintainers | Corpus Manifest, Expected Evidence Case, Exclusion Case |
 
-### Evidence Grades
+### Perfis dos quatro horizontes
 
-| Grade | Evidence admitted | Semantic authority | Impact behavior |
+| Horizon | Conhecimento governado | Pai de promoção | Contrato que promove | Política e Coverage Manifest |
+|---|---|---|---|---|
+| Negociação | Questões, hipóteses preditivas e contratos candidatos | Transformação | `ChangeContract` com `AcceptedPredictiveHypothesis` | Próprios; admissão local não vincula transformação |
+| Microtask | Abordagem, execução e evidência rechecável de uma tarefa | Transformação que a iniciou | `PromotionProposal` | Próprios; Grau A não atravessa como autoridade |
+| Transformação | WorkOrders, composição de resultados e mudança coerente | Persistente | `PersistentDelta` | Próprios; revalida entradas de negociação e microtask |
+| Persistente | Estado oficial versionado e relações admitidas | Nenhum | — | Próprios; só `RECALL` corrige conhecimento admitido |
+
+Sessão fornece continuidade e dispara `INITIATE`/`NegotiationSeed`; não pertence ao DAG de promoção nesta contagem. Transformação pode disparar `INITIATE`/`WorkOrder` para microtask, mas esse início não inverte o pai de promoção da microtask.
+
+### Evidence Grades internos
+
+| Grade | Evidência admitida | Autoridade interna | Efeito inter-horizonte |
 |---|---|---|---|
-| A — explicit structural | Import resolvido, link/caminho resolvido ou Delegação Declarativa com alvo e direção inequívocos | Pode sustentar um Relacionamento Comprovado do tipo correspondente | Elegível para travessia quando a política do tipo de relacionamento assim definir |
-| B — explicit symbolic | Referência Textual Explícita a identificador único, resolvida contra a identidade de um Artefato Indexado e acompanhada da localização | Sustenta uma referência explicável, mas não equivale automaticamente a `depends-on` | Só entra no Blast Radius quando a política declarar que aquele tipo representa impacto |
-| C — behavioral hypothesis | Correlação entre regras, contratos ou comportamento sem vínculo estrutural inequívoco | Permanece Hipótese de Acoplamento; exige validação adicional | Nunca infla o Blast Radius confirmado; pode ser apresentada separadamente como possível impacto |
-| Rejected/ambiguous | Termo genérico, coocorrência, alvo múltiplo, trecho não resolvível ou sinal abaixo do limiar | Nenhuma relação publicada; a rejeição permanece auditável | Não é atravessada e pode reduzir a cobertura declarada |
-
-O grau descreve a força da evidência, enquanto o tipo descreve a semântica da relação. Assim, nem toda menção vira `depends-on`, e uma relação `references` ou `delegates-to` não herda silenciosamente a direção de dependência de um import de código.
+| A | Import, link/caminho ou delegação estrutural resolvida | Pode sustentar relação interna confirmada | Vira apenas evidência em PromotionEnvelope; receptor revalida |
+| B | Referência simbólica explícita e unívoca | Sustenta `references` conforme política | Não garante admissão no pai |
+| C | Correlação comportamental | Permanece `behavioral-hypothesis` | Pode motivar candidato/contestação, nunca autoridade |
+| Rejected/ambiguous | Termo genérico, alvo ausente/múltiplo ou sinal cercado | Nenhuma aresta confirmada | Pode reduzir coverage; não é promovido como fato |
 
 ## 2. Context Map
 
 ### Target Repository → Artifact Inventory
 
-Pattern   : Anti-Corruption Layer (ACL)  
-Direction : upstream / downstream  
-Justification: o inventário traduz caminhos, formatos, encoding e falhas mutáveis do repositório para identidades e cobertura estáveis sem contaminar o domínio com detalhes do sistema de arquivos.
+Pattern   : Anti-Corruption Layer (ACL)
+Direction : upstream / downstream
+Justification: o inventário traduz filesystem mutável em identidades e cobertura confinadas ao repositório.
 
 ### Artifact Inventory → Evidence Extraction
 
-Pattern   : Open Host Service  
-Direction : upstream / downstream  
-Justification: o inventário fornece a múltiplos extratores um catálogo estável de artefatos elegíveis, identidades canônicas e conteúdo disponível.
+Pattern   : Open Host Service
+Direction : upstream / downstream
+Justification: extratores recebem artefatos elegíveis e estado de leitura sem duplicar descoberta.
 
-### Artifact Inventory ↔ Relationship Classification
+### Evidence Extraction → Relationship Semantics
 
-Pattern   : Published Language  
-Direction : bidirectional  
-Justification: resolução e reconciliação dependem de um contrato compartilhado de identidade, aliases, escopo e estado resolvido/não resolvido, sem compartilhar regras internas dos contextos.
+Pattern   : Customer-Supplier
+Direction : upstream / downstream
+Justification: o extrator preserva sinal; a classificação decide tipo, direção, grade e rejeição.
 
-### Evidence Extraction → Relationship Classification
+### Artifact Inventory ↔ Relationship Semantics
 
-Pattern   : Customer-Supplier  
-Direction : upstream / downstream  
-Justification: a classificação exige que o extrator preserve sinal, localização, sintaxe e candidato a alvo, mas decide de forma autônoma tipo, direção e Evidence Grade.
+Pattern   : Published Language
+Direction : bidirectional
+Justification: ambos usam identidade canônica e resultados `resolved`, `unresolved` e `ambiguous`.
 
-### Relationship Classification → Graph Publication
+### Relationship Semantics → Horizon Graph Publication
 
-Pattern   : Published Language  
-Direction : upstream / downstream  
-Justification: somente o esquema versionado de Relacionamento Comprovado, Hipótese de Acoplamento, proveniência e rejeição pode atravessar a fronteira de publicação.
+Pattern   : Published Language
+Direction : upstream / downstream
+Justification: somente relações internas tipadas, hipóteses e outcomes atravessam para o snapshot.
 
-### Artifact Inventory → Graph Publication
+### Artifact Inventory → Horizon Graph Publication
 
-Pattern   : Customer-Supplier  
-Direction : upstream / downstream  
-Justification: a publicação precisa do escopo efetivamente lido e de suas falhas para produzir o Coverage Manifest junto ao mesmo snapshot dos relacionamentos.
+Pattern   : Customer-Supplier
+Direction : upstream / downstream
+Justification: o Coverage Manifest do mesmo escopo deve ser publicado com as relações.
 
-### Graph Publication → Impact Traversal
+### Horizon Graph Publication → Impact Analysis
 
-Pattern   : Open Host Service  
-Direction : upstream / downstream  
-Justification: o snapshot publicado é a autoridade estável para consultas, oferecendo relacionamentos tipados, proveniência e cobertura sem expor detalhes de armazenamento.
+Pattern   : Open Host Service
+Direction : upstream / downstream
+Justification: Impact Analysis consome um snapshot imutável identificado por `(tenantId, horizonId, graphId)`.
 
-### Relationship Classification ↔ Impact Traversal
+### Relationship Semantics ↔ Impact Analysis
 
-Pattern   : Published Language  
-Direction : bidirectional  
-Justification: ambos compartilham a política versionada que define quais tipos e graus são elegíveis à travessia; a consulta não reinterpreta menções como dependências.
+Pattern   : Published Language
+Direction : bidirectional
+Justification: Policy Version define travessia de `depends-on`, `references`, `delegates-to` e exclui hipóteses confirmadas.
+
+### Horizon Graph Publication → Horizon Governance
+
+Pattern   : Customer-Supplier
+Direction : upstream / downstream
+Justification: operações de fronteira referenciam graphId, evidência, coverage e proveniência sem converter relações internas em topologia.
+
+### Horizon Governance → Promotion Reception
+
+Pattern   : Published Language
+Direction : upstream / downstream
+Justification: PromotionEnvelope tem schema fechado e destino validado contra Parent Topology.
+
+### Promotion Reception → Relationship Semantics
+
+Pattern   : Anti-Corruption Layer (ACL)
+Direction : upstream / downstream
+Justification: o receptor traduz candidatos `proposed` para identidades, tipos, grades e política locais, descartando autoridade de origem.
+
+### Horizon Governance ↔ Impact Analysis
+
+Pattern   : Separate Ways
+Direction : bidirectional
+Justification: lineage e contestação podem referenciar evidência, mas nunca viram Internal Relationship ou caminho de Blast Radius.
+
+### HarnessKit Acceptance Corpus → Evidence Extraction
+
+Pattern   : Conformist
+Direction : upstream / downstream
+Justification: OpenGraph adapta seus extratores ao corpus natural e não exige que HarnessKit incorpore lógica de produto.
 
 ## 3. Core Domain Highlight
 
-Context : Evidence Extraction  
-Reason  : materializa a Descoberta de Relações Documentais, distinguindo sinais heterogêneos de Markdown de coincidências lexicais genéricas.  
-Investment: parsers extensíveis por evidência, corpus de falsos positivos e negativos, proveniência precisa e testes de escala e conteúdo hostil.
+Context : Evidence Extraction
+Reason  : resolve o falso 0/0 sem fabricar arestas a partir de termos genéricos ou imports cercados.
+Investment: extrator Markdown específico, corpus positivo/negativo, proveniência determinística e allowlist JSON explícita.
 
-Context : Relationship Classification  
-Reason  : materializa a Semântica e Confiança de Relacionamentos, separando Relacionamento Comprovado de Hipótese de Acoplamento e preservando direção.  
-Investment: modelo tático explícito, invariantes de promoção/rejeição, política versionada de Evidence Grades e testes de propriedades para determinismo e reconciliação.
+Context : Relationship Semantics
+Reason  : distingue relações internas comprovadas de hipóteses e mantém grade ortogonal ao tipo.
+Investment: contratos fechados, política versionada e testes de propriedade para direção, reconciliação e determinismo.
 
-Context : Impact Traversal  
-Reason  : materializa a Análise de Impacto Explicável, diferenciando ausência comprovada de impacto de Impacto Desconhecido por cobertura insuficiente.  
-Investment: regras formais de elegibilidade e cobertura, explicações auditáveis e limites determinísticos para ciclos e paginação vinculada ao snapshot.
+Context : Horizon Governance e Promotion Reception
+Reason  : preservam a tese de autoridade relativa ao fazer toda promoção cruzar exatamente um pai e reiniciar como proposta.
+Investment: Parent Topology determinística, PromotionEnvelope, recusas nomeadas, revalidação e linhagem stale/recall.
+
+Context : Impact Analysis
+Reason  : transforma cobertura por horizonte em uma resposta auditável `known-zero`, `known-nonzero` ou `unknown`.
+Investment: regras formais de cobertura, paginação escopada e explicações limitadas e seguras.
 
 ## 4. Architectural Decisions
 
-Decision    : Separar Artefato Indexado, Evidência de Relacionamento, relacionamento publicado e resultado de impacto em modelos e fronteiras distintos.  
-Context     : a presença de um nó Markdown hoje é confundida com cobertura suficiente para concluir 0/0.  
-Consequences: permite diagnosticar onde a informação se perdeu e evita autoridade indevida; adiciona contratos intermediários e metadados de proveniência.
+Decision    : Governar exatamente quatro horizontes de conhecimento e tratar sessão somente como continuidade/iniciador.
+Context     : sessão não é pai de promoção; `INITIATE` carrega contexto com proveniência e zero autoridade.
+Consequences: evita uma cadeia linear falsa; exige contrato `NegotiationSeed` e distinção explícita da sessão de transporte.
 
-Decision    : Publicar tipos e Evidence Grades explícitos; `depends-on` deixa de ser o recipiente genérico de toda menção documental.  
-Context     : links, caminhos, delegações e referências textuais têm semânticas e direções diferentes.  
-Consequences: reduz falsos positivos e torna a travessia configurável e explicável; permite substituir o schema atual por um contrato mais rigoroso, pois não existem clientes atuais a preservar.
+Decision    : Declarar o DAG de promoção negociação→transformação, microtask→transformação e transformação→persistente, sem saltos.
+Context     : “não saltar o pai” só é verificável com Parent Topology concreta.
+Consequences: `HORIZON_SKIP` é determinístico; descobertas de microtask destinadas ao persistente atravessam dois gates.
 
-Decision    : Manter Acoplamento Comportamental como Hipótese de Acoplamento fora do Blast Radius confirmado.  
-Context     : contratos podem estar acoplados sem vínculo estrutural, mas a inferência automática não possui autoridade para afirmar dependência.  
-Consequences: preserva sinais úteis sem fabricar certeza; o usuário pode precisar revisar possíveis impactos separadamente.
+Decision    : Separar relações internas do Graph v2 de operações e topologia inter-horizonte.
+Context     : uma contestação, promoção ou recall não descreve acoplamento documental.
+Consequences: evita blast radius contaminado; requer modelos, stores, eventos e queries distintos.
 
-Decision    : Acoplar Coverage Manifest e relacionamentos no mesmo Graph Snapshot atômico.  
-Context     : falhas de leitura, formatos não inventariados e rebuild concorrente invalidam uma conclusão de impacto zero se a cobertura vier de outro instante.  
-Consequences: `graph.impact` pode retornar Impacto Desconhecido de forma fail-closed e determinística; snapshots e respostas ficam maiores.
+Decision    : Escopar todo GraphSnapshotV2 e seus derivados por `(tenantId, horizonId, graphId)`.
+Context     : isolamento apenas por tenant permite misturar coverage, cursor ou relações de horizontes diferentes.
+Consequences: persistência e contratos ficam maiores; queries e rebuilds passam a ser atomicamente verificáveis.
 
-Decision    : Fazer Impact Traversal consumir uma política versionada de elegibilidade, sem reclassificar evidência no adapter MCP.  
-Context     : classificação divergente entre indexação e consulta destruiria a consistência da direção e da confiança.  
-Consequences: centraliza invariantes e preserva adapters finos; mudanças de política exigem identificação da versão e rebuild, sem obrigação de manter o schema anterior.
+Decision    : Receber PromotionEnvelope sempre como `proposed` e revalidar no receptor.
+Context     : Evidence Grade A e Relative Authority pertencem ao horizonte de origem.
+Consequences: elimina authority laundering; acrescenta latência e pode rebaixar/rejeitar candidatos no pai.
 
-Decision    : Aceitar breaking changes no contrato MCP, no schema persistido e na semântica de paginação deste domínio.  
-Context     : não existem clientes atuais; preservar o 0/0 ambíguo ou a continuidade de cursor entre snapshots manteria defeitos conhecidos sem benefício de compatibilidade.  
-Consequences: o novo contrato pode exigir cobertura, conhecimento de impacto, proveniência e `graphId`, além de rejeitar cursor obsoleto; fixtures e testes internos deverão migrar atomicamente.
+Decision    : Fazer `CONTEST` cruzar o DAG com evidência e fazer `RECALL`/mudança de base produzir `STALE_BASE` em derivações.
+Context     : dúvida precisa viajar mais rápido que afirmação, mas correção não pode reescrever história.
+Consequences: contestação não precisa promover; promoções em voo exigem rebase/revalidação explícita.
+
+Decision    : Substituir Graph v1 por Graph v2 sem camada de compatibilidade.
+Context     : não existem clientes atuais e o contrato v1 permite 0/0 ambíguo.
+Consequences: schema, MCP e cursor mudam de forma breaking; `CURSOR_GRAPH_STALE` e `CURSOR_HORIZON_MISMATCH` são erros nomeados.
+
+Decision    : Manter HarnessKit como corpus de aceite externo.
+Context     : mover parsing ou promoção para o corpus inverteria a responsabilidade do produto.
+Consequences: HarnessKit só fixa casos naturais e drift; todas as asserções Graph v2 permanecem em OpenGraph.

@@ -1,380 +1,382 @@
 # Test Scenarios — open-graph-mcp
 
-**Domain:** `markdown_impact_relationships`  
-**Project:** `open-graph-mcp`  
-**Framework:** Bun Test  
+**Domain:** `markdown_impact_relationships`
+**Project:** `open-graph-mcp`
+**Framework:** Bun Test e Playwright
 **Date:** 2026-08-15
+
+Todos os cenários derivam de `003-open-graph-mcp-tactical-design.md`.
 
 ## 1. Unit Tests
 
-### 1.1 Graph Snapshot aggregate
+### 1.1 GraphSnapshotV2 and Promotion aggregates
 
-#### Should create Graph Snapshot V2 when all members describe one repository snapshot
+#### Should create GraphSnapshotV2 when every member shares one HorizonGraphScope
 
-- **Given:** canonically ordered Artefatos Indexados, Relacionamentos Publicados, Evidence Outcomes, a reconciled Coverage Manifest, a Policy Version and their content checksum
-- **When:** `AssembleGraphSnapshot` creates the Graph Snapshot
-- **Then:** the Graph Snapshot contains all supplied members under one deterministic `graphId`
+- **Given:** nodes, internal relationships, evidence, Coverage Manifest and Policy Version for tenant Alpha, negotiation horizon N1 and graph G1
+- **When:** GraphSnapshotV2 is assembled
+- **Then:** the immutable snapshot is created with scope Alpha/N1/G1
 
-#### Should reject Graph Snapshot V2 when coverage belongs to another snapshot
+#### Should reject GraphSnapshotV2 when coverage belongs to another horizon
 
-- **Given:** relationships from one repository scan and a Coverage Manifest identified by a different candidate snapshot
-- **When:** `AssembleGraphSnapshot` validates the consistency boundary
-- **Then:** creation is rejected without producing a publishable Graph Snapshot
+- **Given:** relationships for transformation horizon T1 and a Coverage Manifest for microtask horizon M1
+- **When:** GraphSnapshotV2 is assembled
+- **Then:** assembly fails before a graphId is published
 
-#### Should reject Graph Snapshot V2 when a relationship endpoint is outside the snapshot
+#### Should reject GraphSnapshotV2 when an inter-horizon operation is supplied as an internal relationship
 
-- **Given:** a Published Relationship whose source or target is absent from the Artifact Inventory
-- **When:** `AssembleGraphSnapshot` validates the relationship
-- **Then:** creation is rejected and no `graphId` is assigned
+- **Given:** a candidate relationship typed `PROMOTE`, `CONTEST`, `RECALL`, `INITIATE` or `parent`
+- **When:** GraphSnapshotV2 validates its relationship set
+- **Then:** the candidate is rejected because only the four Graph v2 internal types are accepted
 
-#### Should preserve conflicting evidence when assembling a Graph Snapshot
+#### Should create Promotion in proposed state when envelope targets the immediate parent
 
-- **Given:** compatible and conflicting Evidence Records for the same source and target
-- **When:** `AssembleGraphSnapshot` aggregates classification outcomes
-- **Then:** compatible evidence is aggregated deterministically and conflicting evidence remains observable as a separate outcome
+- **Given:** a complete microtask PromotionEnvelope targeting its originating transformation with a PromotionProposal
+- **When:** ProposePromotion validates the envelope
+- **Then:** Promotion is created as `proposed` without any source authority field
 
-#### Should produce the same graphId when repository content and policy are unchanged
+#### Should reject Promotion with HORIZON_SKIP when microtask targets persistent
 
-- **Given:** two Graph Snapshot candidates with identical canonical content and Policy Version but different discovery order
-- **When:** each candidate is assembled
-- **Then:** both Graph Snapshots have the same `graphId`, relationship identities and canonical ordering
+- **Given:** a microtask PromotionEnvelope whose target is the persistent horizon
+- **When:** HorizonTopology validates the target
+- **Then:** proposal fails with `HORIZON_SKIP` and no target candidate is created
 
-### 1.2 Value Objects
+#### Should keep source history unchanged when target refuses a Promotion
 
-#### Should create ArtifactId when the path is repository-relative POSIX
+- **Given:** a proposed ChangeContract whose evidence is insufficient under the transformation policy
+- **When:** ReceivePromotion records a refusal
+- **Then:** the target transition is append-only and the negotiation snapshot and envelope remain unchanged
 
-- **Given:** the path `skills/autonomous-orchestrator/SKILL.md`
-- **When:** an ArtifactId is created
-- **Then:** the ArtifactId preserves the normalized repository-relative path
+### 1.2 Value Objects and contracts
 
-#### Should reject ArtifactId when the path escapes the repository root
+#### Should reject HorizonGraphScope when tenantId, horizonId or graphId is absent
 
-- **Given:** a path containing a parent traversal outside the repository root
-- **When:** an ArtifactId is created
-- **Then:** creation is rejected before inventory or file access
+- **Given:** a scope missing one member of the required triple
+- **When:** HorizonGraphScope is created
+- **Then:** validation fails with no default tenant, horizon or graph
 
-#### Should admit only configured JSON families when ArtifactFormat is JSON
+#### Should exclude session from HorizonKind
 
-- **Given:** a format policy whose JSON allowlist contains the Markdown Impact Acceptance Manifest family
-- **When:** the Artifact Inventory classifies an allowlisted JSON file and an unrelated JSON file
-- **Then:** the allowlisted file is eligible as `configured-json` and the unrelated file is explicitly excluded with a reason
+- **Given:** the value `session`
+- **When:** HorizonKind validates the value
+- **Then:** validation fails while negotiation, microtask, transformation and persistent remain valid
 
-#### Should create SourceLocation without leaking an absolute path or document body
+#### Should reject ArtifactId when path escapes repository root
 
-- **Given:** a Markdown Evidence location with ArtifactId, one-based line and column
-- **When:** SourceLocation is created
-- **Then:** it contains only repository-relative location metadata and no absolute path or raw Markdown body
+- **Given:** an absolute path or a normalized path containing parent traversal
+- **When:** ArtifactId is created
+- **Then:** validation fails without reading the external target
 
-#### Should reject SourceLocation when line or column is not positive
+#### Should preserve EvidenceGrade independently from RelationshipType
 
-- **Given:** a SourceLocation with line zero or a negative column
-- **When:** the location is validated
-- **Then:** validation fails before the Evidence Record is accepted
+- **Given:** grade A evidence classified as `references` and grade B evidence classified as `references`
+- **When:** Published Relationships are created
+- **Then:** each retains its own grade and neither is rewritten as `depends-on`
 
-#### Should create deterministic EvidenceRecord identity from normalized evidence fields
+#### Should require every PromotionEnvelope field
 
-- **Given:** two equivalent Markdown signals with the same source, target text, syntax and SourceLocation
-- **When:** Evidence Records are created independently
-- **Then:** they have equal deterministic identities and behave as one key in Set and Map collections
+- **Given:** an envelope missing provenance, evidenceIds, coverageSummary or Policy Version
+- **When:** PromotionEnvelope is validated
+- **Then:** validation fails before topology or reception is evaluated
 
-#### Should distinguish EvidenceKind without equating grade and relationship type
+#### Should reject PromotionPayload when source-target pair is incompatible
 
-- **Given:** a resolved Markdown path and an unambiguous Declarative Delegation, both with Evidence Grade A
-- **When:** their Evidence Records are classified
-- **Then:** the first remains a path reference and the second remains a delegation rather than both becoming `depends-on`
+- **Given:** a PersistentDelta sent from negotiation to transformation
+- **When:** PromotionPayload is validated against HorizonTopology
+- **Then:** the payload is rejected and no Promotion is stored
 
-#### Should preserve all candidates in an ambiguous ResolutionOutcome
+#### Should consider two ImpactCursorV2 values unequal when horizonId differs
 
-- **Given:** one explicit artifact alias that identifies multiple Artefatos Indexados
-- **When:** Artifact Identity Resolution produces a ResolutionOutcome
-- **Then:** the outcome is `ambiguous`, retains every deterministic candidate id and exposes no resolved target
+- **Given:** cursors with equal tenantId, graphId and query hash but different horizonIds
+- **When:** cursor equality is evaluated
+- **Then:** the cursors are not equal and cannot continue the same query
 
-#### Should keep ImpactKnowledge unknown when coverage has named failures
+### 1.3 Domain services
 
-- **Given:** a Coverage Manifest with a relevant Markdown read or parse failure in the dependency direction
-- **When:** ImpactKnowledge is evaluated for that direction
-- **Then:** it is `unknown` with machine-readable reason codes rather than `known-zero`
+#### Should extract Markdown links and delegations without executing fenced imports
 
-#### Should create ImpactCursorV2 bound to graphId and query identity
+- **Given:** Markdown containing a resolvable link, a declarative delegation and an import inside a code fence
+- **When:** ExtractMarkdownEvidence runs
+- **Then:** link and delegation evidence retain SourceLocation while the import is a rejected signal
 
-- **Given:** a Graph Snapshot, tenant-scoped impact request and deterministic page boundary
-- **When:** the cursor is encoded
-- **Then:** the opaque cursor binds the exact `graphId`, query hash and last keys with an integrity check
+#### Should classify behavioral evidence outside confirmed traversal
 
-#### Should reject ImpactResponseV2 when it represents bare ambiguous zero totals
+- **Given:** a behavioral correlation without structural evidence
+- **When:** ResolveAndClassifyRelationships applies the horizon Policy Version
+- **Then:** it emits `behavioral-hypothesis` with grade C and `traversable=false`
 
-- **Given:** zero dependents and dependencies without directional ImpactKnowledge or Coverage Manifest
-- **When:** an ImpactResponseV2 is created
-- **Then:** creation is rejected because the Graph v2 contract cannot express unqualified 0/0
+#### Should return known-zero only from sufficient local coverage
 
-### 1.3 Domain Services
+- **Given:** a persistent snapshot with complete relevant coverage and no eligible internal paths
+- **When:** AnalyzeHorizonImpact evaluates both directions
+- **Then:** it returns `known-zero` without consulting a child horizon Coverage Manifest
 
-#### Should account for every eligible artifact when building Artifact Inventory
+#### Should return unknown when Markdown analysis failed
 
-- **Given:** a repository snapshot containing readable Markdown, allowlisted JSON, excluded formats and one unreadable eligible artifact
-- **When:** `BuildArtifactInventory` completes
-- **Then:** every candidate is counted as analyzed, explicitly excluded or failed with a reason and no eligible artifact silently disappears
+- **Given:** a relevant Markdown artifact with a named read or parse failure in the local Coverage Manifest
+- **When:** AnalyzeHorizonImpact evaluates the affected direction
+- **Then:** it returns `unknown` with the failure reason instead of zero
 
-#### Should extract resolved Markdown links and repository paths with provenance
+#### Should receive promoted content as proposed and reclassify it locally
 
-- **Given:** Markdown containing a link and a repository-relative path to existing Artefatos Indexados
-- **When:** `ExtractMarkdownEvidence` analyzes the artifact
-- **Then:** it emits distinct Evidence Records with normalized targets, syntax kinds and SourceLocations
+- **Given:** grade A negotiation evidence included in a ChangeContract and a transformation policy that classifies it as grade B `references`
+- **When:** ReceivePromotion runs against the transformation snapshot
+- **Then:** the candidate remains `proposed` until local grade B validation completes and no grade A authority is inherited
 
-#### Should extract Declarative Delegation with source-to-target direction
+#### Should initiate negotiation and microtask without transferring authority
 
-- **Given:** a skill declaration that assigns work to another named skill or agent represented by a unique ArtifactId
-- **When:** Markdown Evidence is extracted and classified
-- **Then:** a `delegates-to` Published Relationship points from the declaring artifact to the delegated artifact
+- **Given:** a session NegotiationSeed and a transformation WorkOrder with complete provenance
+- **When:** InitiateHorizon registers each seed in its target horizon
+- **Then:** negotiation and microtask contexts start `proposed` and contain no Relative Authority from their initiator
 
-#### Should reject a fenced import example as a code dependency
+#### Should carry no state between ReceivePromotion executions
 
-- **Given:** Markdown whose fenced or inline code example contains an import statement
-- **When:** `ExtractMarkdownEvidence` analyzes the document
-- **Then:** no `code-import` Evidence Record or `depends-on` Published Relationship is produced from that example
+- **Given:** envelopes for two tenants with identical candidate ids and different target policies
+- **When:** ReceivePromotion runs sequentially
+- **Then:** each decision uses only its supplied target scope, policy and coverage
 
-#### Should reject generic textual mentions as Proven Relationships
+#### Should allow CONTEST to cross non-parent horizons with evidence
 
-- **Given:** prose containing a generic term or repeated lexical coincidence without a unique Artifact Identity
-- **When:** extraction, resolution and classification complete
-- **Then:** the signal remains a rejected auditable outcome and does not enter confirmed traversal
+- **Given:** a persistent claim contested by microtask evidence
+- **When:** ContestHorizonKnowledge validates the ContestEnvelope
+- **Then:** the contest reaches the persistent target without `HORIZON_SKIP` and creates no internal relationship
 
-#### Should resolve canonical path deterministically without per-evidence filesystem scans
+#### Should mark derived promotions STALE_BASE after recall
 
-- **Given:** a prebuilt Artifact Identity Index and many Evidence Records targeting the same canonical repository path
-- **When:** `ResolveEvidenceTargets` runs
-- **Then:** every target resolves to the same ArtifactId in bounded index lookups without rescanning the filesystem per mention
+- **Given:** a transformation Promotion derived from persistent base sequence 41
+- **When:** RecallPersistentKnowledge admits proof and advances the base to sequence 42
+- **Then:** MarkDerivedPromotionsStale appends `STALE_BASE` and preserves the original envelope
 
-#### Should keep unresolved and ambiguous references outside published relationships
+### 1.4 Domain events
 
-- **Given:** one Evidence Record with no target and another with multiple alias candidates
-- **When:** `ClassifyRelationships` applies the versioned policy
-- **Then:** neither creates a Published Relationship and both outcomes remain explainable in coverage and evidence results
+#### Should emit HorizonInitiated after proposed context is registered
 
-#### Should keep Behavioral Hypothesis outside confirmed Blast Radius
+- **Given:** InitiateHorizon durably records a NegotiationSeed or WorkOrder
+- **When:** HorizonInitiated is emitted
+- **Then:** it identifies tenant, target horizon, target graph, seed kind and provenance reference without authority
 
-- **Given:** a behavioral correlation between two contracts without an explicit structural relationship
-- **When:** `ClassifyRelationships` and `AnalyzeGraphImpact` process the correlation
-- **Then:** a Coupling Hypothesis is available separately and never increments confirmed dependent or dependency totals
+#### Should emit GraphSnapshotV2Published with complete isolation scope
 
-#### Should aggregate duplicate evidence with bounded explanations
+- **Given:** a durable snapshot commit and successful hot swap
+- **When:** GraphSnapshotV2Published is emitted
+- **Then:** it contains tenantId, horizonId, graphId, Policy Version and coverage summary and is immutable
 
-- **Given:** many equivalent Evidence Records supporting one Published Relationship
-- **When:** classification and impact explanation are produced
-- **Then:** the exact evidence count is retained while only a deterministic bounded sample of SourceLocations appears in the response
+#### Should emit PromotionAdmitted only after local revalidation
 
-#### Should terminate deterministic traversal when relationships contain cycles
+- **Given:** a target candidate that completed local resolution, classification, coverage and policy checks
+- **When:** reception transitions it from proposed to admitted
+- **Then:** PromotionAdmitted identifies target horizon, target graph and target Policy Version
 
-- **Given:** a Graph Snapshot whose confirmed relationships form a cycle
-- **When:** `AnalyzeGraphImpact` traverses to the configured maximum depth
-- **Then:** each ArtifactId is visited at most once per traversal path and results have stable ordering and totals
+#### Should emit PromotionBaseStaled without candidate content
 
-#### Should declare truncated impact when traversal budget is exhausted
+- **Given:** a recall invalidates a derived Promotion
+- **When:** PromotionBaseStaled is emitted
+- **Then:** it contains promotion id, source graph and `STALE_BASE` reason without raw Markdown or mutated candidate data
 
-- **Given:** a high-fanout Graph Snapshot whose traversal exceeds the explicit budget
-- **When:** `AnalyzeGraphImpact` reaches the budget
-- **Then:** the result is marked `truncated`, includes a warning and does not present partial totals as complete
+#### Should emit HorizonKnowledgeContested without documentary edge fields
 
-#### Should return an explained path for every confirmed impact hit
-
-- **Given:** a confirmed path composed of `references` and `delegates-to` relationships eligible under the Policy Version
-- **When:** `AnalyzeGraphImpact` returns the affected artifact
-- **Then:** its Impact Explanation identifies the typed path, grades, bounded evidence locations and Policy Version
-
-#### Should carry no state between Impact Analyzer executions
-
-- **Given:** two Graph Snapshots with different relationships and coverage
-- **When:** `AnalyzeGraphImpact` runs sequentially against each snapshot
-- **Then:** each result depends only on its supplied Graph Snapshot and request
-
-### 1.4 Domain Events
-
-#### Should emit ArtifactInventoryCompleted with reconciled counts
-
-- **Given:** Artifact Inventory reaches terminal outcomes for all candidates
-- **When:** inventory completes
-- **Then:** `ArtifactInventoryCompleted` contains candidate id, inventory counts and failure count without evidence content
-
-#### Should emit RelationshipEvidenceClassified with aggregate classifications
-
-- **Given:** every Evidence Record has a classification outcome
-- **When:** classification completes
-- **Then:** `RelationshipEvidenceClassified` contains candidate id and exact proven, hypothesis and rejected counts
-
-#### Should emit GraphSnapshotPublished only after durable publication
-
-- **Given:** a valid Graph Snapshot candidate
-- **When:** persistence commits and the hot graph swaps successfully
-- **Then:** `GraphSnapshotPublished` contains graphId, Policy Version, statistics and coverage summary and is immutable
-
-#### Should emit GraphSnapshotPublicationFailed without exposing evidence locations
-
-- **Given:** candidate assembly or durable persistence fails
-- **When:** publication aborts
-- **Then:** `GraphSnapshotPublicationFailed` contains candidate id, stage and reason code while the prior snapshot remains authoritative
-
-#### Should emit ImpactCoverageInsufficient for each unknown direction
-
-- **Given:** dependency or dependent coverage cannot support a conclusive impact answer
-- **When:** impact analysis produces `unknown`
-- **Then:** `ImpactCoverageInsufficient` names graphId, node id, affected directions and reason codes without crossing tenant boundaries
+- **Given:** an evidence-backed ContestEnvelope accepted for delivery
+- **When:** HorizonKnowledgeContested is emitted
+- **Then:** it carries source scope, target scope and evidence ids and no RelationshipType
 
 ## 2. Integration Tests
 
-### 2.1 Snapshot and evidence repositories
+### 2.1 Repositories and atomic publication
 
-#### Should persist and hydrate one complete tenant-scoped Graph Snapshot
+#### Should persist and hydrate one complete horizon-scoped GraphSnapshotV2
 
-- **Given:** a Graph Snapshot containing nodes, Published Relationships, Evidence Outcomes and Coverage Manifest for tenant Alpha
-- **When:** `GraphSnapshotRepository` publishes and reloads it from SQLite
-- **Then:** every member and the `graphId` match exactly and no tenant Beta data is visible
+- **Given:** a GraphSnapshotV2 for tenant Alpha, transformation T1 and graph G1
+- **When:** HorizonGraphRepository publishes and reloads it from SQLite
+- **Then:** nodes, relationships, evidence, coverage, policy and scope match exactly
 
-#### Should rebuild the same Graph Snapshot from the append-only mirror deterministically
+#### Should isolate identical graphId values across tenants and horizons
 
-- **Given:** a committed Graph v2 snapshot mirrored to JSONL with its Policy Version and coverage records
-- **When:** the tenant state is rebuilt from the mirror
-- **Then:** hydration produces the same canonical content and `graphId` without treating JSONL as an unrelated mixed-generation snapshot
+- **Given:** identical graphId text stored for Alpha/N1, Alpha/T1 and Beta/N1
+- **When:** each active snapshot is loaded
+- **Then:** every load returns only the exact tenant-horizon rows requested
 
-#### Should reject old schema data rather than synthesize Graph v2 knowledge
+#### Should rebuild the same scoped snapshot from JSONL deterministically
 
-- **Given:** persisted nodes-and-edges data without Graph v2 Coverage Manifest and snapshot identity
-- **When:** the active snapshot is loaded
-- **Then:** the data is rejected or scheduled for rebuild and is never projected as a qualified ImpactResponseV2
+- **Given:** a committed Graph v2 snapshot mirrored append-only with scope and Policy Version
+- **When:** the horizon state is rebuilt
+- **Then:** it produces the same canonical content and graphId without treating JSONL as a complete unrelated snapshot
 
-#### Should leave the active snapshot unchanged when publication fails mid-transaction
+#### Should leave active snapshot unchanged when publication fails
 
-- **Given:** tenant Alpha has an active Graph Snapshot and a candidate publication fails while writing evidence or coverage
-- **When:** the transaction rolls back
-- **Then:** readers continue to hydrate the complete prior `graphId` and no candidate rows are visible
+- **Given:** graph G1 is active and publication of G2 fails while writing evidence or coverage
+- **When:** serialTransaction rolls back
+- **Then:** readers keep complete G1 and no G2 rows are visible
 
-#### Should expose only the old or new graphId during concurrent rebuild
+#### Should expose only old or new graphId during concurrent rebuild
 
-- **Given:** impact queries run while a new Graph Snapshot is being persisted for one tenant
-- **When:** the durable transaction commits and the hot graph swaps
-- **Then:** every reader observes a complete old or complete new snapshot and never mixed nodes, relationships, evidence or coverage
+- **Given:** impact queries run while G2 replaces G1 for one horizon
+- **When:** publication commits and hot graph swaps
+- **Then:** every query observes complete G1 or complete G2 with no mixed relationships, evidence or coverage
 
-#### Should recompute unresolved and ambiguous outcomes during rebuild
+#### Should persist only one Promotion transition under concurrent reception
 
-- **Given:** an alias was ambiguous in the prior snapshot but repository content now resolves it uniquely
-- **When:** rebuild inventories, extracts, resolves and classifies the current repository snapshot
-- **Then:** the current outcome is resolved under the current Policy Version without carrying the stale ambiguity forward
+- **Given:** two receivers attempt to admit the same proposed Promotion version
+- **When:** PromotionRepository compares expected state in serial transactions
+- **Then:** one transition commits and the other receives a named conflict without duplicate event
 
-### 2.2 Bootstrap and graph impact use cases
+### 2.2 Use cases and boundary flows
 
-#### Should publish documentary relationships when bootstrapping a Markdown-heavy repository
+#### Should publish explained Markdown relationships in every selected horizon
 
-- **Given:** a repository containing resolvable links, paths, Explicit Textual References and Declarative Delegations
-- **When:** Graph v2 bootstrap executes inventory through atomic publication
-- **Then:** the active Graph Snapshot contains typed documentary relationships, Evidence Outcomes and reconciled coverage
+- **Given:** the same Markdown-heavy repository is bootstrapped into negotiation and transformation with distinct policies
+- **When:** BuildHorizonArtifactInventory through PublishHorizonGraph completes for each
+- **Then:** each active GraphSnapshotV2 has independent relationships, evidence, coverage and Policy Version
 
-#### Should report unknown instead of zero when a relevant artifact cannot be analyzed
+#### Should promote negotiation content only to transformation
 
-- **Given:** a relevant Markdown artifact is unreadable, excluded by a declared format rule or fails parsing
-- **When:** `ServeGraphImpact` queries the affected direction
-- **Then:** the response contains `unknown`, named reason codes, Coverage Manifest details and no unqualified zero conclusion
+- **Given:** an AcceptedPredictiveHypothesis and ChangeContract admitted in negotiation
+- **When:** ProposePromotion targets transformation
+- **Then:** the target records proposed content and performs its own revalidation
 
-#### Should reject cursor from a previous graphId after rebuild
+#### Should promote microtask content only to its originating transformation
 
-- **Given:** an ImpactCursorV2 issued for Graph Snapshot A and the same tenant now serving Graph Snapshot B
-- **When:** `ServeGraphImpact` receives the old cursor
-- **Then:** it returns the named stale-cursor error instead of continuing pagination against Graph Snapshot B
+- **Given:** a PromotionProposal admitted in microtask M1 created by transformation T1
+- **When:** ProposePromotion targets T1
+- **Then:** T1 receives a proposed candidate and another transformation cannot receive it as parent
 
-#### Should preserve tenant isolation for identical ArtifactIds
+#### Should promote transformation content only to persistent
 
-- **Given:** tenants Alpha and Beta each contain `skills/autonomous-orchestrator/SKILL.md` with different Graph Snapshots
-- **When:** both tenants request impact and evidence explanations
-- **Then:** each response uses only its tenant's graphId, coverage, relationships and SourceLocations
+- **Given:** a PersistentDelta admitted in transformation T1 on a current base
+- **When:** ProposePromotion targets persistent P1
+- **Then:** P1 receives proposed content and admits it only after persistent policy and coverage validation
 
-#### Should keep the MCP adapter semantically thin
+#### Should refuse direct negotiation-to-persistent promotion with HORIZON_SKIP
 
-- **Given:** an Impact Analyzer result with confirmed relationships, hypotheses, unknown coverage and warnings
-- **When:** `ServeGraphImpact` serializes it
-- **Then:** the MCP response preserves every classification and direction without promoting, rejecting or retyping evidence
+- **Given:** a ChangeContract envelope from negotiation whose target is persistent
+- **When:** ProposePromotion validates Parent Topology
+- **Then:** it logs `HORIZON_SKIP`, persists no target candidate and emits no PromotionAdmitted
 
-### 2.3 External integration with HarnessKit
+#### Should prevent authority transfer across immediate promotion
 
-#### Should produce explained non-zero impact for the autonomous orchestrator skill
+- **Given:** a child candidate with Relative Authority and grade A evidence
+- **When:** the immediate parent receives its PromotionEnvelope
+- **Then:** authority is absent, status is proposed and local admission may refuse or reclassify the candidate
 
-- **Given:** the verified HarnessKit corpus includes resolvable workflow references and Declarative Delegations involving `skills/autonomous-orchestrator/SKILL.md`
-- **When:** OpenGraph bootstraps the corpus and queries impact for that ArtifactId
-- **Then:** the relevant direction is `known-nonzero`, confirmed results include typed explanations, and the response no longer returns unqualified 0 dependents and 0 dependencies
+#### Should keep CONTEST outside the documentary graph
 
-#### Should classify each HarnessKit manifest case according to its declared evidence kind
+- **Given:** a negotiation artifact contests persistent knowledge with evidence
+- **When:** ContestRepository and target service accept it
+- **Then:** the contest is queryable in its own store and GraphSnapshotV2 relationships remain unchanged
 
-- **Given:** a valid Markdown Impact Acceptance Manifest with path, workflow reference, delegation and non-relationship controls
-- **When:** the OpenGraph acceptance integration consumes the external corpus
-- **Then:** each positive case resolves to its expected relationship type and minimum grade while every exclusion remains outside confirmed traversal
+#### Should block stale Promotion until explicit revalidation
 
-#### Should fail the acceptance precondition when the HarnessKit corpus drifts
+- **Given:** recall changed the source base after a PromotionEnvelope was proposed
+- **When:** reception attempts to admit the Promotion
+- **Then:** it returns `STALE_BASE` and succeeds only after a new envelope or explicit revalidation against the current base
 
-- **Given:** a manifest path or unique marker no longer exists in the checked-out HarnessKit snapshot
+#### Should reject cursor from a prior graphId
+
+- **Given:** an ImpactCursorV2 for graph G1 and active graph G2 in the same horizon
+- **When:** ServeGraphImpactV2 decodes the cursor
+- **Then:** it returns `CURSOR_GRAPH_STALE` with no G2 page
+
+#### Should reject cursor from another horizonId
+
+- **Given:** an ImpactCursorV2 issued for negotiation N1 and a query scoped to transformation T1
+- **When:** ServeGraphImpactV2 decodes the cursor
+- **Then:** it returns `CURSOR_HORIZON_MISMATCH` with no cross-horizon result
+
+### 2.3 External HarnessKit corpus
+
+#### Should replace the original Markdown 0/0 with explained knowledge
+
+- **Given:** the verified HarnessKit corpus containing references and delegations involving `skills/autonomous-orchestrator/SKILL.md`
+- **When:** OpenGraph publishes Graph v2 and queries that ArtifactId
+- **Then:** relevant confirmed directions are `known-nonzero`, while any uncovered direction is `unknown` rather than unqualified 0/0
+
+#### Should honor HarnessKit negative controls
+
+- **Given:** fenced imports, generic mentions and non-allowlisted JSON pinned by the corpus manifest
+- **When:** the Markdown pipeline builds its snapshot
+- **Then:** those signals create no confirmed internal relationship and their exclusion outcomes remain explainable
+
+#### Should fail acceptance precondition when HarnessKit corpus drifts
+
+- **Given:** a pinned path or unique marker no longer exists
 - **When:** the external acceptance flow begins
-- **Then:** it stops with a named corpus-drift diagnostic rather than interpreting changed fixture facts as an OpenGraph regression
+- **Then:** it stops with CorpusContractDrifted before interpreting drift as an OpenGraph regression
 
 ## 3. Functional Tests
 
 ### 3.1 Happy path flows
 
-#### Should explain documentary blast radius when a caller queries a Markdown node
+#### Should explain Markdown blast radius within one horizon
 
-- **Given:** a tenant has a published Graph v2 snapshot with sufficient directional coverage and typed Markdown relationships
-- **When:** the caller invokes `graph.impact` for a Markdown ArtifactId
-- **Then:** ImpactResponseV2 includes graphId, directional ImpactKnowledge, confirmed totals, explained paths, separate hypotheses, coverage, warnings and a snapshot-bound cursor
+- **Given:** a tenant has a published scoped GraphSnapshotV2 with sufficient directional coverage
+- **When:** a caller invokes `graph.impact` for a Markdown ArtifactId and horizonId
+- **Then:** ImpactResponseV2 includes full scope, knowledge, typed paths, separate hypotheses, coverage, totals, warnings and scoped cursor
 
-#### Should rebuild deterministically when repository content is unchanged
+#### Should complete the four-horizon governed knowledge flow
 
-- **Given:** one tenant bootstraps the same repository content twice under the same format and Relationship Classification policies
-- **When:** both complete snapshots are published in sequence
-- **Then:** the observable canonical graph content, relationship identities, evidence outcomes and `graphId` are identical
+- **Given:** a session initiates negotiation, transformation initiates a microtask and every local cycle produces valid evidence
+- **When:** negotiation and microtask promote separately to transformation and transformation promotes a PersistentDelta to persistent
+- **Then:** every receiver starts proposed, revalidates locally and only the persistent horizon gains persistent Relative Authority
 
-#### Should paginate stable impact results within one Graph Snapshot
+#### Should contest urgent persistent knowledge without shortcut promotion
 
-- **Given:** a high-fanout explained Blast Radius spanning multiple pages under one graphId
-- **When:** the caller follows each returned ImpactCursorV2
-- **Then:** pages are deterministic, contain no duplicates or omissions and their totals remain bound to the same Graph Snapshot
+- **Given:** microtask execution finds evidence invalidating a persistent claim
+- **When:** it submits CONTEST directly to persistent
+- **Then:** the contest is delivered without `HORIZON_SKIP`, no PersistentDelta is admitted and no documentary edge is created
+
+#### Should recover a stale promotion through explicit revalidation
+
+- **Given:** recall marks a transformation-to-persistent Promotion `STALE_BASE`
+- **When:** transformation rebases, regenerates evidence and submits a new envelope
+- **Then:** the old envelope remains stale and the new proposed candidate may enter persistent validation
 
 ### 3.2 Alternative and error flows
 
-#### Should expose ambiguity without manufacturing a relationship
+#### Should expose unknown when relevant format coverage is incomplete
 
-- **Given:** a Markdown reference resolves to multiple ArtifactIds
-- **When:** the caller queries evidence and impact for its source artifact
-- **Then:** the ambiguous outcome and candidates are explainable, no confirmed edge is traversed and insufficient directional coverage is not reported as known zero
+- **Given:** relevant JSON belongs to no configured allowlist family in the queried horizon
+- **When:** a caller requests impact
+- **Then:** response reports `unknown` with format exclusion warning and does not claim known zero
 
-#### Should preserve prior availability when rebuild fails
+#### Should reject malformed or tampered scoped cursor
 
-- **Given:** a tenant has a readable active Graph Snapshot and the next rebuild encounters a durable publication failure
-- **When:** a caller invokes `graph.impact` during and after the failed rebuild
-- **Then:** the prior graphId remains available and the failed candidate is reported only through publication diagnostics
+- **Given:** an opaque cursor with invalid integrity or query hash
+- **When:** it is submitted to `graph.impact`
+- **Then:** the request fails with a named cursor error and returns no data from another scope
 
-#### Should reject malformed or tampered impact cursor
+#### Should preserve prior availability after failed rebuild
 
-- **Given:** an opaque cursor whose integrity check or query hash is invalid
-- **When:** the caller submits it to `graph.impact`
-- **Then:** the request fails with a named cursor error and returns no results from another query or Graph Snapshot
+- **Given:** one complete horizon snapshot is active and its replacement fails durably
+- **When:** impact queries continue
+- **Then:** the prior graphId remains available and the failed candidate appears only in publication diagnostics
+
+#### Should refuse skipped promotion without operator override
+
+- **Given:** an operator approves a microtask-to-persistent shortcut
+- **When:** ProposePromotion validates the target
+- **Then:** it still returns `HORIZON_SKIP` because approval cannot replace the intermediate transformation cycle
 
 ### 3.3 Security and resilience scenarios
 
-#### Should confine repository inventory to the configured root
+#### Should prevent tenant and horizon evidence leakage
 
-- **Given:** a symlink, Markdown path or encoded target attempts to escape the repository root
+- **Given:** Alpha/N1 and Beta/N1 contain equal ArtifactIds with different evidence and Alpha/T1 has another graph
+- **When:** Alpha/N1 requests impact and evidence explanations
+- **Then:** only Alpha/N1 data is returned and event correlation cannot expose Beta/N1 or Alpha/T1
+
+#### Should confine inventory and resolution to repository root
+
+- **Given:** a symlink or encoded Markdown path escapes the configured repository
 - **When:** inventory or identity resolution processes it
-- **Then:** the artifact is rejected with an auditable reason and no external file content or SourceLocation is exposed
+- **Then:** the artifact is rejected with an auditable reason and external content is not read
 
-#### Should redact sensitive Markdown content from evidence and events
+#### Should redact sensitive Markdown from evidence and boundary events
 
-- **Given:** a source line contains a credential adjacent to a valid reference
-- **When:** evidence, impact explanation and lifecycle events are produced
+- **Given:** a credential appears beside a valid reference
+- **When:** evidence, impact, promotion and contestation outputs are produced
 - **Then:** only bounded normalized provenance is exposed and the credential and raw body are absent
 
-#### Should remain within measured budget for the repository-scale corpus
+#### Should bound repeated evidence and cyclic traversal deterministically
 
-- **Given:** the documented hostile, cyclic, ambiguous and high-fanout Markdown scale corpus
-- **When:** bootstrap and explained impact probes execute
-- **Then:** the run records elapsed time, memory, evidence aggregation, truncation and deterministic checks against the documented baseline without claiming an unsupported one-million-file SLO
-
-#### Should bound adversarial evidence fanout
-
-- **Given:** one Markdown artifact repeats the same resolvable reference enough times to exceed the explanation sample limit
-- **When:** the Graph Snapshot is built and queried
-- **Then:** processing retains the exact evidence count, bounds returned SourceLocations, respects traversal budget and produces deterministic warnings
+- **Given:** a high-fanout cyclic corpus repeats the same resolvable reference beyond the explanation limit
+- **When:** the graph is built and queried
+- **Then:** exact evidence totals are retained, locations are bounded and truncation is explicitly named without claiming a one-million-file SLO
