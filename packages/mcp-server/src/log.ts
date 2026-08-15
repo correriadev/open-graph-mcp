@@ -20,6 +20,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from "node:fs"
 import path from "node:path"
+import { generateSpanId, generateTraceId, getTraceContext } from "@open-graph-mcp/graph-core/telemetry/index"
 
 export const DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024 // 10MB por arquivo antes de rotacionar p/ .1
 
@@ -88,7 +89,31 @@ export function createLogger(file: string, maxBytes = DEFAULT_LOG_MAX_BYTES): Lo
     try {
       mkdirSync(path.dirname(file), { recursive: true })
       rotateIfNeeded()
-      appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), ...line }) + "\n")
+      const ts = new Date().toISOString()
+      const ctx = getTraceContext()
+      const level = line.error ? "ERROR" : (line.verdict === "refused" ? "WARN" : "INFO")
+      const eventName = typeof line.event === "string" ? line.event : "unknown"
+      const tenant = (typeof line.tenant === "string" ? line.tenant : ctx?.tenantId) || "default"
+      const message = typeof line.tool === "string" ? `Tool ${line.tool} called` : typeof line.uri === "string" ? `Resource ${line.uri} read` : typeof line.event === "string" ? line.event : "server event"
+
+      const record = {
+        ts,
+        timestamp: ts,
+        level,
+        service: "mcp-server",
+        environment: process.env.NODE_ENV || "alpha",
+        traceId: ctx?.traceId || generateTraceId(),
+        spanId: ctx?.spanId || generateSpanId(),
+        parentSpanId: ctx?.parentSpanId,
+        tenantId: tenant,
+        horizonId: ctx?.horizonId,
+        agentId: ctx?.agentId,
+        event: eventName,
+        message,
+        attributes: line,
+        ...line,
+      }
+      appendFileSync(file, JSON.stringify(record) + "\n")
     } catch {
       /* uma falha de escrita de log nunca derruba a requisição que a gerou */
     }

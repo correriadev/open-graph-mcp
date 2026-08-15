@@ -6,6 +6,9 @@
   "private": true,
   "license": "MIT",
   "exports": {
+    ".": "./src/index.ts",
+    "./telemetry": "./src/telemetry/index.ts",
+    "./telemetry/*": "./src/telemetry/*.ts",
     "./*": "./src/*.ts"
   },
   "dependencies": {

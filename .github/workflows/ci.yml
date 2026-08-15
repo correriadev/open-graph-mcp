@@ -4,12 +4,26 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual, opt-in trigger for the advisory probe job. No schedule is chosen because trigger cadence
+  # is an unresolved architecture question and CI must not settle it by convenience.
+  workflow_dispatch:
+    inputs:
+      run_eap_probes:
+        description: Run the advisory EAP concurrency, cancellation, and 100k scale probes
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   test:
+    # BLOCKING SIGNAL: on push/PR, any suite, quarantine, strict typecheck, or web build failure blocks.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Flake Ledger append-only reconciliation reads the branch-point revision.
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
@@ -39,6 +53,13 @@ jobs:
       - name: Quarantine Violation Gate (blocking)
         if: ${{ !cancelled() }}
         run: bun scripts/verification/quarantine-gate.ts
+      # F002 task 22 — Flake quarantine is owned, append-only credibility debt. This integrity
+      # check is BLOCKING: malformed ownership, a closure without a cause, or an open record whose
+      # test file disappeared fails the job. An open flake itself is reported debt, never permission
+      # to skip or delete the test, and therefore does not turn a failing suite green.
+      - name: Flake Ledger Integrity Gate (blocking)
+        if: ${{ !cancelled() }}
+        run: bun scripts/verification/flake-ledger.ts --check
       # Was `bunx tsc --noEmit` in packages/mcp-web, which resolved an unpinned TypeScript 7.0.2
       # from bunx's registry fallback (no `typescript` was declared at the repo root). F002 task 01
       # pinned typescript@5.8.2 at the root; this now runs THAT compiler. mcp-web has no frozen
@@ -55,6 +76,7 @@ jobs:
   # into docs/verification/typecheck-baseline.json in the same change. Reproduce locally with the
   # identical command: `bun run typecheck`.
   typecheck:
+    # BLOCKING SIGNAL: on push/PR, growth or an uncommitted shrink of the Frozen Error Set blocks.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +93,8 @@ jobs:
   # this repo otherwise only promises Bun. Uses the real `node` binary from
   # actions/setup-node for every assertion below, not bun's node-compat shim.
   client-node:
+    # BLOCKING SIGNAL: on push/PR, a Node-LTS build or client contract failure blocks.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,6 +116,8 @@ jobs:
   # layer had zero coverage before this). setup-node alongside bun: Playwright's test runner forks real
   # Node worker processes for the actual test files regardless of what invoked the CLI.
   e2e:
+    # BLOCKING SIGNAL: on push/PR, browser parity, presence, toast, or reconnect failure blocks.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -121,9 +147,8 @@ jobs:
   # BLOCKING STATUS IS DECLARED HERE, NOT INHERITED. `continue-on-error: false` is written out at
   # both the job and the step level even though false is the default: a reader deciding whether a
   # red mark here stops a merge must be able to answer from this file, and "it does not say" is not
-  # an answer. Equally deliberate is what is ABSENT — there is no `if:` on the job and none on the
-  # gate step, so no branch, event or upstream result can make this advisory. Any future change that
-  # adds one is changing the gate's blocking status and must say so.
+  # an answer. Its event condition excludes only the manual probe-only dispatch; on push/PR no
+  # branch or upstream result can make the gate advisory.
   #
   # Its own job, running in PARALLEL with `test`, rather than a step appended to `test`:
   # instrumentation costs +1501 ms / +1.85% on an ~82 s suite (task 14 measured it, it is recorded
@@ -145,6 +170,8 @@ jobs:
   # goes red on a known flake, RE-RUN IT. Do not add `continue-on-error: true`; that converts a gate
   # that measures into a gate that reports.
   coverage:
+    # BLOCKING SIGNAL: on push/PR, an unmeasured run or line/function coverage regression blocks.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: false
@@ -160,8 +187,37 @@ jobs:
         continue-on-error: false
         run: bun scripts/verification/coverage-gate.ts
 
+  # F002 task 23 — one process executes the Suite Run and all six declared quality gates, captures
+  # their real stdout/stderr/exit codes, and exclusively creates `.verification/run/<runId>.json`.
+  # This duplicates expensive checks intentionally: cross-job status labels are not gate output and
+  # cannot satisfy ADR-0021. The artifact step runs after red gates so a failed verdict is evidence too.
+  suite-verdict:
+    # BLOCKING SIGNAL: on push/PR, any failed blocking gate makes the published Suite Verdict fail.
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Compose gates from runner output and publish append-only verdict
+        run: bun scripts/verification/publish-verdict.ts
+      - name: Upload immutable Suite Verdict evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: suite-verdict-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .verification/run/
+          retention-days: 30
+
   load:
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    # ADVISORY SIGNAL: on PRs to main, presence-load failures report capacity evidence but never block.
+    if: github.event_name != 'workflow_dispatch' && github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -172,3 +228,50 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test:load
         working-directory: packages/mcp-server
+
+  # F002 task 20 — performance/volume evidence runs only on explicit manual dispatch. The job is
+  # advisory as a whole: timings and volumes are observations inside QA6/QA7, never merge gates.
+  # Deterministic correctness remains blocking in `test`, because the same probe test files are part
+  # of the root `bun run test` suite. Probe commands here are serial because the append-only ledger
+  # deliberately has one writer and no cross-process append lock.
+  eap-probes:
+    # ADVISORY SIGNAL: probe failures and slow/large observations are uploaded but never block.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_eap_probes
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    env:
+      EAP_BENCHMARK_RECORD: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Multi-process concurrency probe (advisory measurement)
+        run: bun run probe:concurrency
+        working-directory: packages/mcp-server
+      - name: Cancellation fault injection probe (advisory execution)
+        if: ${{ always() }}
+        run: bun run probe:cancellation
+        working-directory: packages/mcp-server
+      - name: 100k-claim scale probe (advisory measurement)
+        if: ${{ always() }}
+        run: bun run probe:scale
+        working-directory: packages/mcp-server
+      - name: Materialize Benchmark Ledger delta
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          mkdir -p .verification/run
+          git diff --binary -- docs/verification/benchmark-ledger.jsonl > .verification/run/benchmark-ledger.delta.patch
+          cp docs/verification/benchmark-ledger.jsonl .verification/run/benchmark-ledger.jsonl
+      - name: Upload advisory probe evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: eap-probes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .verification/run/
+          retention-days: 14

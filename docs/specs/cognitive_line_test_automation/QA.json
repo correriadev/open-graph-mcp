@@ -1,0 +1,92 @@
+{
+  "featureId": "F002",
+  "domain": "cognitive_line_test_automation",
+  "mode": "autonomous",
+  "scoreThresholdAdv": 0.7,
+  "score": 0.35,
+  "passedAdversarial": false,
+  "isCrashing": true,
+  "hasHighCriticalVuln": true,
+  "verdict": "RETRY",
+  "vulnerabilities": [
+    {
+      "type": "QUALITY_GATE_BYPASS",
+      "severity": "HIGH",
+      "description": "The blocking typecheck job can be skipped by a job-level condition. `scripts/verification/typecheck-gate.test.ts` explicitly forbids any job-level `if`, but `.github/workflows/ci.yml` now contains `if: github.event_name != 'workflow_dispatch'`. Reproduction: `bun test scripts/verification/typecheck-gate.test.ts` produced 21 pass / 1 fail at the assertion `expect(typecheckJob).not.toMatch(/\\n {4}if:/)`. This leaves the committed feature suite red and violates task 01's unconditional blocking-gate contract."
+    },
+    {
+      "type": "EVIDENCE_TAMPERING",
+      "severity": "HIGH",
+      "description": "The Flake Ledger's CLI integrity gate does not enforce append-only history. `scripts/verification/flake-ledger.ts` defines `reconcileAppendOnly(prior, current)`, but the `--check` branch only loads and validates the current ledger and verifies that open-flake test files exist; it never obtains a prior revision or calls `reconcileAppendOnly`. Consequently deletion or rewriting of historical closed records can still print PASS. Current bounded execution printed `Flake Ledger: PASS — 1 record(s), 0 open`, confirming the gate has no historical comparison input."
+    },
+    {
+      "type": "VERDICT_POLICY_BYPASS",
+      "severity": "HIGH",
+      "description": "`executeGate` trusts caller-controlled `GateDefinition.blocking` for mandatory gates, and `composeQualityGates` verifies mandatory names but not their required blocking policy. Reproduction constructed all six mandatory signals with a failing coverage command and `blocking:false`; the composed verdict returned `outcome:'pass'`, `failed:0`, and coverage as advisory despite exitCode 1. A caller or future topology edit can therefore downgrade a required merge gate without rejection."
+    },
+    {
+      "type": "EVIDENCE_LOSS_ON_RUNNER_FAILURE",
+      "severity": "HIGH",
+      "description": "Suite Verdict publication is unreachable when a runner throws. `main` eagerly maps every `DEFAULT_GATES` entry through `executeGate` before calling `publishSuiteVerdict`, and neither `systemRunner`, `executeGate`, nor `main` catches spawn exceptions. Reproduction with a throwing runner yielded `Error: spawn failed` followed by `signal=none; publication=unreachable`. A process-spawn failure therefore crashes the publisher without the required red verdict or raw evidence artifact, violating tasks 23 and the verification-by-log rule."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F002-QA-001",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "file": ".github/workflows/ci.yml",
+      "evidence": "Focused typecheck-gate suite: 21 passed, 1 failed; the failure identifies the new job-level conditional skip."
+    },
+    {
+      "id": "F002-QA-002",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "file": "scripts/verification/flake-ledger.ts",
+      "evidence": "The `--check` control path at main() never calls the existing `reconcileAppendOnly` function and accepts no prior-ledger source."
+    },
+    {
+      "id": "F002-QA-003",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "file": "scripts/verification/publish-verdict.ts",
+      "evidence": "A failing mandatory coverage signal marked `blocking:false` composed to an overall passing verdict."
+    },
+    {
+      "id": "F002-QA-004",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "file": "scripts/verification/publish-verdict.ts",
+      "evidence": "A runner exception escaped before signal capture and publication; no red verdict could be produced."
+    }
+  ],
+  "edgeCasesMissed": [
+    "A mandatory gate definition is supplied with blocking=false.",
+    "A subprocess cannot be spawned or throws before returning an exit code.",
+    "A prior committed flake-ledger record is deleted or rewritten while the remaining current JSONL is internally valid.",
+    "A manual workflow event skips a gate whose contract and regression test require no conditional skip."
+  ],
+  "checks": [
+    {
+      "command": "bun test scripts/verification/typecheck-gate.test.ts",
+      "result": "FAIL",
+      "summary": "21 pass, 1 fail"
+    },
+    {
+      "command": "bun test scripts/verification/flake-ledger.test.ts",
+      "result": "PASS",
+      "summary": "10 pass, 0 fail; the suite contains no CLI prior-revision deletion case"
+    },
+    {
+      "command": "bun test scripts/verification/publish-verdict.test.ts",
+      "result": "PASS",
+      "summary": "9 pass, 0 fail; the suite contains neither mandatory-policy downgrade nor runner-throw coverage"
+    },
+    {
+      "command": "bun run verify",
+      "result": "INCONCLUSIVE",
+      "summary": "Sandbox execution failed with EPERM while spawning Bun; the approved out-of-sandbox run was interrupted and is not counted as implementation evidence"
+    }
+  ],
+  "assessment": "F002 does not satisfy the adversarial decision gate. Four independently evidenced HIGH integrity/reliability flaws can skip a required gate, erase ledger history undetected, downgrade a mandatory failure into an overall pass, or crash before publishing failure evidence. The score is below 0.70 and HIGH findings force RETRY regardless of score."
+}

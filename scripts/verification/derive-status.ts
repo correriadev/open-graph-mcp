@@ -53,8 +53,8 @@
 
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { dirname, join, resolve } from "node:path"
 
 import {
   JUNIT_REPORT_PATH,
@@ -170,6 +170,32 @@ export interface SuiteRunIdentity {
 }
 
 function headCommit(root: string): string {
+  try {
+    const dotGit = join(root, ".git")
+    const gitDir = statSync(dotGit).isDirectory()
+      ? dotGit
+      : resolve(dirname(dotGit), readFileSync(dotGit, "utf8").trim().replace(/^gitdir:\s*/, ""))
+    const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim()
+    if (/^[0-9a-f]{40}$/i.test(head)) return head
+    const ref = head.match(/^ref:\s+(.+)$/)?.[1]
+    if (ref) {
+      const looseRef = join(gitDir, ...ref.split("/"))
+      if (existsSync(looseRef)) {
+        const commit = readFileSync(looseRef, "utf8").trim()
+        if (/^[0-9a-f]{40}$/i.test(commit)) return commit
+      }
+      const packedRefs = join(gitDir, "packed-refs")
+      if (existsSync(packedRefs)) {
+        const packed = readFileSync(packedRefs, "utf8")
+          .split(/\r?\n/)
+          .find((line) => line.endsWith(` ${ref}`))
+          ?.split(" ")[0]
+        if (packed && /^[0-9a-f]{40}$/i.test(packed)) return packed
+      }
+    }
+  } catch {
+    // Fall through to the Git executable for unusual repository layouts.
+  }
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim()
   } catch {

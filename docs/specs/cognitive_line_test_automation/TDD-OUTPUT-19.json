@@ -1,0 +1,80 @@
+{
+  "featureId": "F002",
+  "domain": "cognitive_line_test_automation",
+  "task": {
+    "id": "19",
+    "title": "Implement the 100k-Claim Scale and Read-Model Volume Probes"
+  },
+  "status": "SUCCESS",
+  "statusReason": "All task-owned acceptance criteria are evidenced by the real 100k run, the append-only ledger check, and green focused suites. Full-suite attempts were inconclusive environmental diagnostics: sandbox EPERM failures were reduced to unrelated external harness-kit timeouts outside this task's scope when rerun with subprocess access.",
+  "metrics": {
+    "totalTests": 54,
+    "passed": 54,
+    "failed": 0,
+    "todo": 0,
+    "files": 2,
+    "expectCalls": 303,
+    "durationSeconds": 4.97,
+    "coverage": null,
+    "coverageNote": "Coverage was not re-measured for this advisory probe task; null avoids fabricating a percentage."
+  },
+  "tdd": {
+    "red": [
+      "The inherited WIP test failed because a fixture described as complete omitted the declared contending-writer metric (11 pass, 1 fail).",
+      "New scenario-derived checks failed for the absent heap.observed_peak_lower_bound metric and for acceptance of a negative absolute heap high-water mark (11 pass, 2 fail)."
+    ],
+    "green": "Focused scale-probe and Benchmark Ledger suites pass: 54 pass, 0 fail, 259 expect() calls across 2 files in 4.01s. The broader scale/ledger/concurrency set passed earlier with 63 pass, 0 fail.",
+    "refactor": "The heap observation now reports the maximum absolute heapUsed value from before, immediately after, and post-GC snapshots. It is explicitly named observed_peak_lower_bound because Bun exposes no in-call allocation sampler; no timing, volume, page-size, batch-size, or completion bound is asserted."
+  },
+  "acceptance": [
+    {
+      "criterion": "Fixture build time, closure re-derivation wall time, read-model row count, wall time and peak heap are appended with runner fingerprints",
+      "met": true,
+      "evidence": "Corrective Benchmark Ledger run local-msum0g58-18o appended seq 30-40 for a 100,000-claim tenant. It recorded build 418085.776 ms, re-derivation 2431.294 ms over 2,000 recall cases, 100,000 rows from each read model, read walls 1565.36/1752.734 ms, and observed peak lower bounds 98,286,984/36,529,242 bytes. Every sample carries runner fingerprint fp-06fa7e373efab259."
+    },
+    {
+      "criterion": "The probe measures only and asserts no QA6 maximum batch size, page size, or completion bound",
+      "met": true,
+      "evidence": "All 11 metrics carry familyId QA6. The ledger validator refuses expected/bound/asserted fields and refuses bands for quarantined samples. Focused tests validate measurement integrity only, never magnitude."
+    },
+    {
+      "criterion": "TL.json open points 1 and 3 acquire named measurements attributable to a run and commit",
+      "met": true,
+      "evidence": "Each seq 30-40 record carries one verbatim TL open-point question in testName, common runId local-msum0g58-18o, and commit 8e178b9cee2417d78f67a97bebabdbaef9d70048."
+    }
+  ],
+  "benchmarkEvidence": {
+    "command": "$env:EAP_BENCHMARK_RECORD='1'; $env:GITHUB_SHA='8e178b9cee2417d78f67a97bebabdbaef9d70048'; bun packages/mcp-server/test/probes/scale-probe.ts --run",
+    "exitCode": 0,
+    "probeWallSeconds": 439.4,
+    "claims": 100000,
+    "proposals": 100000,
+    "recallCases": 2000,
+    "ledgerSeqs": [30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40],
+    "ledgerCheck": "PASS - 41 records, 39 samples, 1 band, one runner fingerprint; hash chain intact and no band breached.",
+    "correctionHistory": "Seq 19-29 are preserved append-only observations from the first run. They carry commit 'unknown' because sandboxed child-process Git failed, and their old heap.retained metrics exposed the WIP semantic defect. They were not rewritten. Seq 30-40 are the attributable corrective evidence."
+  },
+  "verification": {
+    "focused": "PASS - 54 pass, 0 fail",
+    "ledger": "PASS - append-only chain intact, no breach",
+    "fullSuiteSandboxed": "INCONCLUSIVE - 1079 pass, 50 fail, 1 todo; 38 failures were direct EPERM subprocess restrictions or cascading failures.",
+    "fullSuiteEscalated": "INCONCLUSIVE - 1116 pass, 12 fail, 1 todo, 2 runner errors; remaining failures were external transport and harness-kit indexing tests timing out at 5 seconds, with no task-owned failure.",
+    "taskOwnedFailures": 0
+  },
+  "modifiedFiles": [
+    "packages/mcp-server/test/probes/scale-probe.ts",
+    "packages/mcp-server/test/probes/scale-probe.test.ts",
+    "docs/verification/benchmark-ledger.jsonl",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-19.json",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json"
+  ],
+  "scopeNotes": {
+    "eapRepositories": "packages/mcp-server/src/eap/eap-repositories.ts was exercised through its real production repositories and source-digested, but required no modification.",
+    "projectMemory": "No docs/feature, docs/.digest.md, docs/.graph.json, or docs/README.md edit was made. Task 21 owns derived documentation reconciliation, and task 19 is explicitly constrained not to take another task's scope.",
+    "preservedDirtyWorktree": "Pre-existing docs/product changes made by the parent orchestrator were not edited by this developer task."
+  },
+  "environmentalLimitations": [
+    "A sandboxed full-suite run could not spawn Git/Bun subprocesses (EPERM). With subprocess access, 12 unrelated tests that exercise live transport or index C:/Users/User/Documents/harness-kit exceeded their 5-second timeout. The task-owned suites and ledger validation remained green, so proportional verification is complete for F002-19."
+  ],
+  "reworksCount": 0
+}

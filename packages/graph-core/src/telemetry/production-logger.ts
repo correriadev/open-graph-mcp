@@ -1,3 +1,5 @@
+import { appendFile, mkdir } from "node:fs/promises";
+import path from "node:path";
 import { defaultRedactor, PIIRedactor } from "./pii-redactor";
 import { AsyncRingBuffer } from "./ring-buffer";
 import { generateSpanId, generateTraceId, getTraceContext } from "./trace-context";
@@ -34,8 +36,10 @@ export class ProductionLogger {
     this.environment = (process.env.NODE_ENV as Environment) || "alpha";
     this.config = {
       minLevel: config?.minLevel || "INFO",
+      logFilePath: config?.logFilePath,
       enableStderr: config?.enableStderr ?? false,
       enableOtel: config?.enableOtel ?? false,
+      otelEndpoint: config?.otelEndpoint,
       redactKeys: config?.redactKeys || [],
       batchFlushIntervalMs: config?.batchFlushIntervalMs || 50,
       batchSize: config?.batchSize || 100,
@@ -52,9 +56,18 @@ export class ProductionLogger {
 
   private createDefaultSink(): LogSink {
     return async (events: ProductionLogEvent[]) => {
-      for (const event of events) {
-        if (this.config.enableStderr) {
+      if (this.config.enableStderr) {
+        for (const event of events) {
           process.stderr.write(JSON.stringify(event) + "\n");
+        }
+      }
+      if (this.config.logFilePath) {
+        try {
+          const lines = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+          await mkdir(path.dirname(this.config.logFilePath), { recursive: true });
+          await appendFile(this.config.logFilePath, lines, "utf-8");
+        } catch (err) {
+          // Non-blocking error handling
         }
       }
     };
@@ -150,7 +163,25 @@ export class ProductionLogger {
     this.log("FATAL", event, message, attributes, err);
   }
 
+  public async flush(): Promise<void> {
+    await this.ringBuffer.flush();
+  }
+
   public async shutdown(): Promise<void> {
     await this.ringBuffer.shutdown();
   }
 }
+
+let defaultLoggerInstance: ProductionLogger | undefined;
+
+export function getDefaultLogger(): ProductionLogger {
+  if (!defaultLoggerInstance) {
+    defaultLoggerInstance = new ProductionLogger("graph-core");
+  }
+  return defaultLoggerInstance;
+}
+
+export function setDefaultLogger(logger: ProductionLogger): void {
+  defaultLoggerInstance = logger;
+}
+

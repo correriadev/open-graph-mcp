@@ -1,0 +1,70 @@
+{
+  "featureId": "F002",
+  "domain": "cognitive_line_test_automation",
+  "task": {
+    "id": "20",
+    "title": "Reconcile CI Job Topology for Probes and Evidence"
+  },
+  "status": "SUCCESS",
+  "metrics": {
+    "totalTests": 16,
+    "passed": 16,
+    "failed": 0,
+    "todo": 0,
+    "files": 2,
+    "expectCalls": 62,
+    "durationSeconds": 0.254,
+    "coverage": null,
+    "coverageNote": "This task changes CI topology and package scripts; coverage was not re-measured, so null is reported rather than a fabricated percentage."
+  },
+  "tdd": {
+    "red": "scripts/verification/ci-probe-topology.test.ts was written before the workflow/package changes and produced 0 pass, 7 fail. Failures named the missing workflow_dispatch input, eap-probes job, scripts, ledger delta, blocking suite link, and signal declarations.",
+    "green": "The topology test passed 7/7 after the minimal workflow and package-script implementation. Final proportional run with entrypoint regression coverage passed 16/16 with 62 expect() calls.",
+    "refactor": "Every job now carries one machine-checked BLOCKING SIGNAL or ADVISORY SIGNAL comment. Manual dispatch is isolated from push/PR jobs, and all probe/evidence steps after the first use always() so one advisory failure cannot hide later evidence."
+  },
+  "acceptance": [
+    {
+      "criterion": "An eap-probes job runs concurrency, cancellation, and scale probes on its own trigger with continue-on-error true and uploads the Benchmark Ledger delta",
+      "met": true,
+      "evidence": "workflow_dispatch exposes the opt-in boolean run_eap_probes. Only eap-probes is eligible on that event, it declares continue-on-error: true, runs the three package scripts sequentially with EAP_BENCHMARK_RECORD=1, materializes .verification/run/benchmark-ledger.delta.patch plus the resulting ledger, and uploads the directory with actions/upload-artifact@v4 even after failure."
+    },
+    {
+      "criterion": "Deterministic correctness assertions still run in the blocking suite, separate from advisory timing measurements",
+      "met": true,
+      "evidence": "The blocking test job still invokes root bun run test. packages/mcp-server exposes test:probes:deterministic naming concurrency-probe.test.ts, cancellation-probe.test.ts, cancellation-duplicate-effect.test.ts, and scale-probe.test.ts; the advisory job invokes only the executable probe entrypoints."
+    },
+    {
+      "criterion": "Every CI job explicitly states whether it blocks and on which signal",
+      "met": true,
+      "evidence": "A structural test enumerates test, typecheck, client-node, e2e, coverage, load, and eap-probes and requires exactly one governed BLOCKING SIGNAL or ADVISORY SIGNAL declaration in every job block."
+    }
+  ],
+  "verification": {
+    "topologyAndEntrypoint": "PASS - 16 tests, 0 failures, 62 expect() calls",
+    "workflowSyntax": "PASS - PyYAML safe_load",
+    "benchmarkLedger": "PASS - 41 records, 39 samples, one band, chain intact, no breach",
+    "diffCheck": "PASS",
+    "combinedProbeSuite": "INCONCLUSIVE - a combined escalated command was externally interrupted after approximately 9.6 minutes. No pass is claimed from it; no subprocess created by that command remained afterward.",
+    "proportionality": "Task 20 changes static CI orchestration only. The executable probes were already individually evidenced by tasks 17-19; task 20 verifies command reachability and topology without rerunning the seven-minute 100k fixture."
+  },
+  "decisions": [
+    "The dedicated trigger is manual workflow_dispatch with an explicit boolean. No schedule or cadence was invented because the specification leaves cadence undecided.",
+    "Push/PR jobs explicitly exclude workflow_dispatch, so the manual probe trigger does not accidentally run the blocking pipeline; eap-probes is excluded from push/PR.",
+    "The three probe commands are separate serial steps. Cancellation produces deterministic evidence but no Benchmark Ledger sample; concurrency and scale append under EAP_BENCHMARK_RECORD=1.",
+    "The artifact contains only the ledger delta patch and resulting ledger, not tenant fixtures. This avoids choosing the unresolved fixture-redaction policy."
+  ],
+  "modifiedFiles": [
+    ".github/workflows/ci.yml",
+    "packages/mcp-server/package.json",
+    "scripts/verification/ci-probe-topology.test.ts",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-20.json",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json",
+    "docs/product/DEVELOPMENT-STATE.md"
+  ],
+  "scopeNotes": {
+    "verificationRun": ".verification/run is intentionally ignored transient output. CI creates it, writes the ledger delta and resulting ledger, uploads it, and does not commit it.",
+    "projectMemory": "No docs/.digest.md, docs/.graph.json, docs/README.md, or docs/feature edit was made. Task 21 owns derived documentation reconciliation and was not started.",
+    "preservedTask19": "All task-19 source, tests, and append-only ledger records were preserved."
+  },
+  "reworksCount": 0
+}

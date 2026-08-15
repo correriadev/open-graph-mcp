@@ -154,10 +154,11 @@ export const METRIC_REDERIVATION_CONTENDING =
   "eap.scale.recall.closure.rederivation.contending_tenant.write.wall.max"
 export const METRIC_EVENTS_ROWS = "eap.scale.promotion.get_events.rows"
 export const METRIC_EVENTS_WALL = "eap.scale.promotion.get_events.wall"
-export const METRIC_EVENTS_HEAP = "eap.scale.promotion.get_events.heap.retained"
+export const METRIC_EVENTS_HEAP = "eap.scale.promotion.get_events.heap.observed_peak_lower_bound"
 export const METRIC_PROPOSALS_ROWS = "eap.scale.promotion.get_proposals_for_parent.rows"
 export const METRIC_PROPOSALS_WALL = "eap.scale.promotion.get_proposals_for_parent.wall"
-export const METRIC_PROPOSALS_HEAP = "eap.scale.promotion.get_proposals_for_parent.heap.retained"
+export const METRIC_PROPOSALS_HEAP =
+  "eap.scale.promotion.get_proposals_for_parent.heap.observed_peak_lower_bound"
 
 /** Every metric this probe can emit. `toSamples` produces at most one sample per entry. */
 export const MEASURED_METRICS: readonly string[] = [
@@ -237,6 +238,8 @@ export interface ReadModelMeasurement {
   /** Rows the tenant's durable JSONL mirror holds for the same table. Recorded beside it, for a reader. */
   durableRows: number
   wallMs: number
+  /** Largest absolute heapUsed value among the before, post-call and retained snapshots. */
+  observedPeakHeapBytes: number
   /** heapUsed after a forced GC, result still referenced. A LOWER BOUND on peak. See the header. */
   retainedHeapBytes: number
   /** heapUsed immediately after the call, before any GC. Also a lower bound on peak. */
@@ -343,6 +346,9 @@ export function verifyMeasurementIntegrity(measurement: ScaleMeasurement): Integ
       for (const field of ["wallMs", "retainedHeapBytes", "postCallHeapBytes", "rssDeltaBytes"] as const) {
         if (!finite(observed[field])) problems.push(`${at}: ${readModel}.${field} is not a finite number.`)
       }
+      if (!finite(observed.observedPeakHeapBytes) || observed.observedPeakHeapBytes < 0) {
+        problems.push(`${at}: ${readModel}.observedPeakHeapBytes is not a finite non-negative byte count.`)
+      }
     }
   }
 
@@ -391,8 +397,8 @@ export function toSamples(measurement: ScaleMeasurement): SampleInput[] {
     closureMemberRows: point.recallCases * point.closurePerCase,
     curveRederivationMs: curve((p) => p.rederivationMs),
     curveGetEventsWallMs: curve((p) => p.readModels.find((r) => r.readModel === "getEvents")?.wallMs ?? null),
-    curveGetEventsRetainedBytes: curve(
-      (p) => p.readModels.find((r) => r.readModel === "getEvents")?.retainedHeapBytes ?? null,
+    curveGetEventsObservedPeakBytes: curve(
+      (p) => p.readModels.find((r) => r.readModel === "getEvents")?.observedPeakHeapBytes ?? null,
     ),
     curveGetProposalsWallMs: curve(
       (p) => p.readModels.find((r) => r.readModel === "getProposalsForParent")?.wallMs ?? null,
@@ -477,15 +483,17 @@ export function toSamples(measurement: ScaleMeasurement): SampleInput[] {
     },
     {
       metric: METRIC_EVENTS_HEAP,
-      value: events?.retainedHeapBytes ?? 0,
+      value: events?.observedPeakHeapBytes ?? 0,
       unit: "bytes",
-      aggregation: "retained-after-forced-gc",
-      observations: 1,
+      aggregation: "max-of-three-process-memory-snapshots",
+      observations: 3,
       note:
-        "heapUsed delta across one unpaginated getEvents(), measured after a forced full GC with the " +
-        "returned array still referenced. A LOWER BOUND on peak, not the peak: Bun exposes no " +
+        "Largest absolute process.memoryUsage().heapUsed snapshot before, immediately after, and " +
+        "after forced GC around one unpaginated getEvents() call. This is an observed LOWER BOUND " +
+        "on the in-call peak: Bun exposes no " +
         `allocation-sampling profiler. RSS delta on the same call was ${events?.rssDeltaBytes ?? 0} ` +
-        `bytes and pre-GC heapUsed delta ${events?.postCallHeapBytes ?? 0}. ${OBSERVATION_ONLY}`,
+        `bytes, pre-GC heapUsed delta ${events?.postCallHeapBytes ?? 0}, and retained delta ` +
+        `${events?.retainedHeapBytes ?? 0}. ${OBSERVATION_ONLY}`,
     },
     {
       metric: METRIC_PROPOSALS_ROWS,
@@ -511,14 +519,17 @@ export function toSamples(measurement: ScaleMeasurement): SampleInput[] {
     },
     {
       metric: METRIC_PROPOSALS_HEAP,
-      value: proposals?.retainedHeapBytes ?? 0,
+      value: proposals?.observedPeakHeapBytes ?? 0,
       unit: "bytes",
-      aggregation: "retained-after-forced-gc",
-      observations: 1,
+      aggregation: "max-of-three-process-memory-snapshots",
+      observations: 3,
       note:
-        "heapUsed delta across one unpaginated getProposalsForParent(), after a forced full GC with " +
-        "the returned array still referenced. A lower bound on peak. RSS delta on the same call was " +
-        `${proposals?.rssDeltaBytes ?? 0} bytes. ${OBSERVATION_ONLY}`,
+        "Largest absolute process.memoryUsage().heapUsed snapshot before, immediately after, and " +
+        "after forced GC around one unpaginated getProposalsForParent() call. An observed lower " +
+        "bound on the in-call peak. RSS delta on the same call was " +
+        `${proposals?.rssDeltaBytes ?? 0} bytes, pre-GC heapUsed delta ` +
+        `${proposals?.postCallHeapBytes ?? 0}, and retained delta ` +
+        `${proposals?.retainedHeapBytes ?? 0}. ${OBSERVATION_ONLY}`,
     },
   ]
 
@@ -551,6 +562,7 @@ export function toSamples(measurement: ScaleMeasurement): SampleInput[] {
 export interface HeapObservation<T> {
   value: T
   wallMs: number
+  observedPeakHeapBytes: number
   retainedHeapBytes: number
   postCallHeapBytes: number
   rssDeltaBytes: number
@@ -575,6 +587,7 @@ export function measureHeap<T>(body: () => T): HeapObservation<T> {
   return {
     value,
     wallMs,
+    observedPeakHeapBytes: Math.max(before.heapUsed, after.heapUsed, settled.heapUsed),
     retainedHeapBytes: retained,
     postCallHeapBytes: after.heapUsed - before.heapUsed,
     rssDeltaBytes: after.rss - before.rss,
@@ -707,10 +720,10 @@ function recallCaseFor(index: number, closurePerCase: number): RecallCase {
       recallId: `recall-${index}`,
       contestationId: `contestation-${index}`,
       targetClaimIds: [closure[0]!],
-      severity: "moderate",
+      severity: "informative",
       contestationStatus: "admitted",
       initiatedAt: new Date().toISOString(),
-    } as RecallCase["notice"],
+    },
     status: "completed",
     closure,
     processedClaimIds: new Set(closure),
@@ -850,6 +863,7 @@ export async function runScaleProbe(config: ScaleProbeConfig = {}): Promise<Scal
           rowsReturned: eventsObservation.value.length,
           durableRows: durableMirrorRows(stateDir, "promotion_events"),
           wallMs: eventsObservation.wallMs,
+          observedPeakHeapBytes: eventsObservation.observedPeakHeapBytes,
           retainedHeapBytes: eventsObservation.retainedHeapBytes,
           postCallHeapBytes: eventsObservation.postCallHeapBytes,
           rssDeltaBytes: eventsObservation.rssDeltaBytes,
@@ -859,6 +873,7 @@ export async function runScaleProbe(config: ScaleProbeConfig = {}): Promise<Scal
           rowsReturned: proposalsObservation.value.length,
           durableRows: durableMirrorRows(stateDir, "proposals"),
           wallMs: proposalsObservation.wallMs,
+          observedPeakHeapBytes: proposalsObservation.observedPeakHeapBytes,
           retainedHeapBytes: proposalsObservation.retainedHeapBytes,
           postCallHeapBytes: proposalsObservation.postCallHeapBytes,
           rssDeltaBytes: proposalsObservation.rssDeltaBytes,

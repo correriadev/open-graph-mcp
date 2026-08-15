@@ -4,3 +4,4 @@ export * from "./pii-redactor";
 export * from "./ring-buffer";
 export * from "./production-logger";
 export * from "./audit-ledger";
+export * from "./mcp-notification-bridge";

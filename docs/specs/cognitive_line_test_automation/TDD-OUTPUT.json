@@ -1,32 +1,34 @@
 {
   "featureId": "F002",
   "domain": "cognitive_line_test_automation",
-  "schemaNote": "Multi-task feature. The top-level status/metrics/modifiedFiles/reworksCount describe the MOST RECENT task (02) for orchestrator compatibility; `tasks` carries the full, unabridged record of every task executed so far. Task 01s record is preserved verbatim.",
+  "schemaNote": "Multi-task feature. Per-task TDD-OUTPUT-*.json files preserve task evidence; TDD-OUTPUT-RETRY-1.json is authoritative for the most recent feature-wide retry.",
   "task": {
-    "id": "02",
-    "title": "Unify Local and CI Verification Entrypoint"
+    "id": "23",
+    "title": "Compose Quality Gates and Publish the Suite Verdict"
   },
   "status": "SUCCESS",
   "metrics": {
-    "totalTests": 732,
-    "passed": 731,
+    "totalTests": 31,
+    "passed": 31,
     "failed": 0,
-    "todo": 1,
-    "files": 136,
-    "expectCalls": 3389,
-    "durationSeconds": 75.83,
+    "todo": 0,
+    "files": 4,
+    "expectCalls": 123,
+    "durationSeconds": 0.46,
     "coverage": null,
-    "coverageNote": "No coverage tooling is configured; task 07 owns that. null rather than a fabricated 0.00."
+    "coverageNote": "This task composes existing measured gates and CI evidence; coverage was not re-measured, so null is reported rather than a fabricated percentage."
   },
   "modifiedFiles": [
-    "package.json",
-    "packages/mcp-server/package.json",
+    "scripts/verification/publish-verdict.ts",
+    "scripts/verification/publish-verdict.test.ts",
     ".github/workflows/ci.yml",
-    "README.md",
-    "scripts/verification/entrypoint.test.ts",
+    "scripts/verification/ci-probe-topology.test.ts",
+    "docs/.digest.md",
+    "docs/README.md",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-23.json",
     "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json"
   ],
-  "reworksCount": 0,
+  "reworksCount": 1,
   "tasks": [
     {
       "featureId": "F002",
@@ -401,6 +403,198 @@
           "item": "docs/feature/*.md was not updated (Step 5, project-memory).",
           "whyNotDone": "Prohibited to this run and owned by task 21 / task 09, whose acceptance requires those fields be derived rather than hand-authored."
         }
+      ],
+      "reworksCount": 0
+    },
+    {
+      "featureId": "F002",
+      "domain": "cognitive_line_test_automation",
+      "task": {
+        "id": "19",
+        "title": "Implement the 100k-Claim Scale and Read-Model Volume Probes"
+      },
+      "status": "SUCCESS",
+      "metrics": {
+        "totalTests": 54,
+        "passed": 54,
+        "failed": 0,
+        "todo": 0,
+        "files": 2,
+        "expectCalls": 303,
+        "durationSeconds": 4.97,
+        "coverage": null
+      },
+      "acceptance": {
+        "implemented": true,
+        "focusedTests": "54 pass, 0 fail",
+        "fullScaleRun": "100,000 claims; ledger seq 30-40; runId local-msum0g58-18o; commit 8e178b9cee2417d78f67a97bebabdbaef9d70048",
+        "ledger": "PASS - 41 records, chain intact, no breach",
+        "qa6": "Measurement only; no maximum batch size, page size, or completion bound asserted."
+      },
+      "environmentalLimitation": "Full-suite attempts were inconclusive: sandbox EPERM failures, then 12 unrelated transport/harness-kit 5-second timeouts. No task-owned test failed; focused proportional verification and ledger validation are green.",
+      "modifiedFiles": [
+        "packages/mcp-server/test/probes/scale-probe.ts",
+        "packages/mcp-server/test/probes/scale-probe.test.ts",
+        "docs/verification/benchmark-ledger.jsonl",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-19.json",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json"
+      ],
+      "reworksCount": 0
+    },
+    {
+      "featureId": "F002",
+      "domain": "cognitive_line_test_automation",
+      "task": {
+        "id": "20",
+        "title": "Reconcile CI Job Topology for Probes and Evidence"
+      },
+      "status": "SUCCESS",
+      "metrics": {
+        "totalTests": 16,
+        "passed": 16,
+        "failed": 0,
+        "todo": 0,
+        "files": 2,
+        "expectCalls": 62,
+        "durationSeconds": 0.254,
+        "coverage": null
+      },
+      "acceptance": {
+        "advisoryProbeJob": true,
+        "manualOptInTrigger": "workflow_dispatch.inputs.run_eap_probes",
+        "ledgerDeltaArtifact": ".verification/run/benchmark-ledger.delta.patch",
+        "deterministicAssertionsRemainBlocking": true,
+        "allJobSignalsDeclared": true
+      },
+      "verification": "16/16 proportional tests green; YAML parses; Benchmark Ledger chain passes; combined broad probe command inconclusive after external interruption.",
+      "modifiedFiles": [
+        ".github/workflows/ci.yml",
+        "packages/mcp-server/package.json",
+        "scripts/verification/ci-probe-topology.test.ts",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-20.json",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json",
+        "docs/product/DEVELOPMENT-STATE.md"
+      ],
+      "reworksCount": 0
+    },
+    {
+      "featureId": "F002",
+      "domain": "cognitive_line_test_automation",
+      "task": {
+        "id": "21",
+        "title": "Add the Test Index and Documentation Reconciliation Gate"
+      },
+      "status": "SUCCESS",
+      "metrics": {
+        "totalTests": 41,
+        "passed": 41,
+        "failed": 0,
+        "todo": 0,
+        "files": 2,
+        "expectCalls": 431,
+        "durationSeconds": 0.488,
+        "coverage": null
+      },
+      "acceptance": {
+        "traceabilityDerivedIndex": true,
+        "testedByCount": 58,
+        "testFileCount": 22,
+        "postRenamePathsOnly": true,
+        "pinnedTypecheckCommand": "bun run typecheck",
+        "prdNodesIndexed": true,
+        "structuredBlockingDrift": true
+      },
+      "verification": "41/41 proportional tests green; post-write reconciliation gate and git diff --check pass. Pinned typecheck execution was inconclusive because the sandbox denied its nested bun spawn with uv_spawn EPERM.",
+      "modifiedFiles": [
+        "docs/feature/cognitive_line.md",
+        "docs/.digest.md",
+        "docs/.graph.json",
+        "scripts/verification/reconcile-index.ts",
+        "scripts/verification/reconcile-index.test.ts",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-21.json",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json",
+        "docs/product/DEVELOPMENT-STATE.md"
+      ],
+      "reworksCount": 0
+    },
+    {
+      "featureId": "F002",
+      "domain": "cognitive_line_test_automation",
+      "task": {
+        "id": "22",
+        "title": "Add the Flake Ledger and Quarantine Policy"
+      },
+      "status": "SUCCESS",
+      "metrics": {
+        "totalTests": 58,
+        "passed": 58,
+        "failed": 0,
+        "todo": 0,
+        "files": 3,
+        "expectCalls": 307,
+        "durationSeconds": 0.578,
+        "coverage": null
+      },
+      "acceptance": {
+        "sameCommitVarianceDetection": true,
+        "verdictsAndRunIdsRecorded": true,
+        "namedOwnerRequired": true,
+        "testFilePreserved": true,
+        "namedClosureCauseRequired": true,
+        "runnerFingerprintVerified": true,
+        "contentionSourceNamed": true
+      },
+      "verification": "58/58 proportional tests green; committed ledger integrity gate, workflow YAML parse, and git diff --check pass.",
+      "modifiedFiles": [
+        "docs/verification/flake-ledger.jsonl",
+        "scripts/verification/flake-ledger.ts",
+        "scripts/verification/flake-ledger.test.ts",
+        ".github/workflows/ci.yml",
+        "docs/.digest.md",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-22.json",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json",
+        "docs/product/DEVELOPMENT-STATE.md"
+      ],
+      "reworksCount": 0
+    },
+    {
+      "featureId": "F002",
+      "domain": "cognitive_line_test_automation",
+      "task": {
+        "id": "23",
+        "title": "Compose Quality Gates and Publish the Suite Verdict"
+      },
+      "status": "SUCCESS",
+      "metrics": {
+        "totalTests": 31,
+        "passed": 31,
+        "failed": 0,
+        "todo": 0,
+        "files": 4,
+        "expectCalls": 123,
+        "durationSeconds": 0.46,
+        "coverage": null
+      },
+      "acceptance": {
+        "oneVerdictPerRun": true,
+        "sixRequiredGates": true,
+        "advisoryExcludedFromPass": true,
+        "runnerOutputOnly": true,
+        "selfReportRejected": true,
+        "appendOnlyPublication": true,
+        "artifactRetentionDays": 30
+      },
+      "verification": "31/31 bounded proportional tests green; workflow YAML and git diff --check pass. Full serial publisher CLI is delegated to CI and was not claimed locally.",
+      "modifiedFiles": [
+        "scripts/verification/publish-verdict.ts",
+        "scripts/verification/publish-verdict.test.ts",
+        ".github/workflows/ci.yml",
+        "scripts/verification/ci-probe-topology.test.ts",
+        "docs/.digest.md",
+        "docs/README.md",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-23.json",
+        "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json",
+        "docs/product/DEVELOPMENT-STATE.md"
       ],
       "reworksCount": 0
     }

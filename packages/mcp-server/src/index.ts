@@ -27,6 +27,7 @@ import { sweepPresence } from "./tools/presence"
 import { sweepTyping } from "./tools/typing"
 import { lookupToken } from "./tokens"
 import { createLogger, noopLogger, stripUriQuery, toErrorInfo, type Logger } from "./log"
+import { createTraceContext, parseW3CTraceParent, runWithTraceContext } from "@open-graph-mcp/graph-core/telemetry/index"
 
 /** Exact-match only — no wildcard/subdomain matching (that would be too permissive for the check below).
  * A literal empty `Origin: ""` header is folded into the same "treat as absent" path as no header at
@@ -380,16 +381,28 @@ export function startServer(opts: StartOptions = {}): RunningServer {
     hostname: host,
     idleTimeout: 0,
     async fetch(req) {
-      try {
-        return await handleFetch(req)
-      } catch (err) {
-        // Rede de segurança: handleRpc já captura tudo que é erro de negócio (tool/resource) e devolve
-        // como JSON-RPC error, não como throw. Chegar aqui é um bug real não previsto — registra com
-        // stack (isto SIM tem stack: é um Error de verdade, não uma mensagem já achatada por
-        // transport.ts) e devolve 500 em vez de deixar o Bun estourar sem log nenhum.
-        logger.fetchError({ path: new URL(req.url).pathname, error: toErrorInfo(err) })
-        return new Response("internal server error", { status: 500 })
-      }
+      const w3c = parseW3CTraceParent(req.headers.get("traceparent"))
+      const tenantHeader = req.headers.get("x-tenant-id")
+      const horizonHeader = req.headers.get("x-horizon-id")
+      const traceCtx = createTraceContext({
+        traceId: w3c?.traceId,
+        parentSpanId: w3c?.parentSpanId,
+        tenantId: tenantHeader ?? DEFAULT_TENANT,
+        horizonId: horizonHeader ?? undefined,
+      })
+
+      return runWithTraceContext(traceCtx, async () => {
+        try {
+          return await handleFetch(req)
+        } catch (err) {
+          // Rede de segurança: handleRpc já captura tudo que é erro de negócio (tool/resource) e devolve
+          // como JSON-RPC error, não como throw. Chegar aqui é um bug real não previsto — registra com
+          // stack (isto SIM tem stack: é um Error de verdade, não uma mensagem já achatada por
+          // transport.ts) e devolve 500 em vez de deixar o Bun estourar sem log nenhum.
+          logger.fetchError({ path: new URL(req.url).pathname, error: toErrorInfo(err) })
+          return new Response("internal server error", { status: 500 })
+        }
+      })
     },
   })
 

@@ -1,0 +1,72 @@
+{
+  "featureId": "F002",
+  "domain": "cognitive_line_test_automation",
+  "task": {
+    "id": "23",
+    "title": "Compose Quality Gates and Publish the Suite Verdict"
+  },
+  "status": "SUCCESS",
+  "metrics": {
+    "totalTests": 31,
+    "passed": 31,
+    "failed": 0,
+    "todo": 0,
+    "files": 4,
+    "expectCalls": 123,
+    "durationSeconds": 0.46,
+    "coverage": null,
+    "coverageNote": "This task composes existing measured gates and CI evidence; coverage was not re-measured, so null is reported rather than a fabricated percentage."
+  },
+  "tdd": {
+    "red": "scripts/verification/publish-verdict.test.ts was written before production code and failed because ./publish-verdict did not exist. After the compositor was implemented, publication semantics were green while the CI-retention scenario remained RED because suite-verdict was absent from ci.yml.",
+    "green": "The runner-output authority boundary, six-gate composition, exclusive evidence sink, blocking CI job, and always-uploaded 30-day artifact made all focused scenarios pass.",
+    "refactor": "Gate execution, composition, and publication are separate boundaries. Captured signals and verdicts are frozen, advisory outcomes have their own closed value, evidence logs are digest-addressed, and no verdict-input or from-JSON path exists."
+  },
+  "acceptance": [
+    {
+      "criterion": "One verdict per run names every gate, its outcome and evidence reference, with advisory outcomes never counted as pass",
+      "met": true,
+      "evidence": "composeQualityGates requires typecheck, traceability, quarantine, conformance, coverage, and flake exactly once; the production run also includes the suite signal. Every gate records explicit blocking policy, pass/fail/advisory outcome, command, exit code, log reference and SHA-256. Advisory entries are excluded from both pass count and pass-rate denominator."
+    },
+    {
+      "criterion": "The verdict is parsed from runner and gate output; a hand-authored or self-reported verdict is rejected",
+      "met": true,
+      "evidence": "Only executeGate can mint an admitted signal from command exit/stdout/stderr; composeQualityGates rejects an identically shaped authored object. The CLI exposes no verdict JSON input and always executes the declared commands itself. Raw stdout/stderr and exit code are persisted beside the verdict."
+    },
+    {
+      "criterion": "Published verdicts are append-only and retained as CI artifacts",
+      "met": true,
+      "evidence": "publishSuiteVerdict creates .verification/run/<runId>.json and its evidence directory exclusively and refuses an existing run id without changing prior bytes. CI uploads .verification/run/ under a run-id/run-attempt artifact name with if: always() and retention-days: 30."
+    }
+  ],
+  "verification": {
+    "focusedAndRelated": "PASS - 31 tests, 0 failures, 123 expect() calls across publisher, CI topology, flake ledger and documentation reconciliation",
+    "workflowSyntax": "PASS - PyYAML safe_load, eight jobs including suite-verdict",
+    "diffCheck": "PASS",
+    "fullPublisherCLI": "NOT RUN LOCALLY - by design it executes the full suite, pinned typecheck, traceability, quarantine, conformance, coverage and flake gates serially. The authority/publishing boundary is covered with injected runner output; CI owns the real end-to-end execution. No end-to-end success is claimed from this bounded Phase-B run."
+  },
+  "decisions": [
+    "The Suite Run itself is included as a seventh blocking signal in production in addition to the six gates the task explicitly requires. A red suite therefore cannot coexist with a green Suite Verdict.",
+    "The suite-verdict job reruns checks instead of composing GitHub job status labels. Job labels are orchestration metadata, not runner/gate output, and using them would violate ADR-0021.",
+    "Advisory is an outcome, not a successful exit relabelled as pass. It never increments passed and never enters the pass-rate denominator.",
+    "The verdict sink is ephemeral and git-ignored; CI artifact retention, not repository commits, preserves each per-run record for 30 days.",
+    "Project-memory updated the digest and reconciled docs/README.md with the PRD nodes already present in docs/.graph.json. No new documentation node was created."
+  ],
+  "modifiedFiles": [
+    "scripts/verification/publish-verdict.ts",
+    "scripts/verification/publish-verdict.test.ts",
+    ".github/workflows/ci.yml",
+    "scripts/verification/ci-probe-topology.test.ts",
+    "docs/.digest.md",
+    "docs/README.md",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT-23.json",
+    "docs/specs/cognitive_line_test_automation/TDD-OUTPUT.json",
+    "docs/product/DEVELOPMENT-STATE.md"
+  ],
+  "scopeNotes": {
+    "phaseC": "No adversarial QA, architectural review, optimization loop, or Phase C validation was performed.",
+    "ephemeralOutput": ".verification/run is intentionally ignored; tests publish only into isolated temporary roots and leave no workspace verdict artifact.",
+    "preservedPriorWork": "All prior dirty workflow, probe, ledger, documentation, and report changes were preserved."
+  },
+  "reworksCount": 0
+}

@@ -63,13 +63,16 @@ const measurement = (overrides: Partial<ScaleMeasurement> = {}): ScaleMeasuremen
       batchMs: [4, 6],
       rederivationMs: 3,
       eventLoopLagMaxMs: 1.5,
-      contendingWriterWaitMaxMs: null,
+      // This fixture represents the full probe shape. The real in-suite run below deliberately
+      // disables the separate-process writer and therefore exercises the nullable path instead.
+      contendingWriterWaitMaxMs: 2.5,
       readModels: [
         {
           readModel: "getEvents",
           rowsReturned: 100,
           durableRows: 100,
           wallMs: 2,
+          observedPeakHeapBytes: 32768,
           retainedHeapBytes: 4096,
           postCallHeapBytes: 8192,
           rssDeltaBytes: 16384,
@@ -79,6 +82,7 @@ const measurement = (overrides: Partial<ScaleMeasurement> = {}): ScaleMeasuremen
           rowsReturned: 100,
           durableRows: 100,
           wallMs: 1,
+          observedPeakHeapBytes: 16384,
           retainedHeapBytes: 2048,
           postCallHeapBytes: 4096,
           rssDeltaBytes: 8192,
@@ -114,7 +118,7 @@ describe("the TL.json open points this probe answers are cited verbatim, in the 
       expect(TL_OPEN_POINT_3).toContain("SqlitePromotionRepository.getEvents")
       expect(TL_OPEN_POINT_3).toContain("getProposalsForParent")
       expect(TL_OPEN_POINT_3).toContain("without pagination cursors or retention windows")
-      for (const leaf of ["rows", "wall", "heap.retained"]) {
+      for (const leaf of ["rows", "wall", "heap.observed_peak_lower_bound"]) {
         expect(MEASURED_METRICS.some((m) => m.startsWith("eap.scale.promotion.") && m.endsWith(leaf))).toBe(true)
       }
     },
@@ -176,6 +180,14 @@ describe("verifyMeasurementIntegrity — a probe that measured nothing must not 
     const verdict = verifyMeasurementIntegrity(broken)
     expect(verdict.ok).toBe(false)
     expect(verdict.problems.join(" ")).toContain("rowsReturned")
+  })
+
+  test("a negative observed heap peak is REFUSED because an absolute heap high-water mark cannot be negative", () => {
+    const broken = measurement()
+    broken.points[0]!.readModels[0]!.observedPeakHeapBytes = -1
+    const verdict = verifyMeasurementIntegrity(broken)
+    expect(verdict.ok).toBe(false)
+    expect(verdict.problems.join(" ")).toContain("observedPeakHeapBytes")
   })
 
   test("the verdict names no threshold, so nothing here can become a bound by accident", () => {

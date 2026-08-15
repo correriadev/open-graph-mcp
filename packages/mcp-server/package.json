@@ -11,7 +11,11 @@
     "test:load": "bun test/load/presence-load.ts",
     "test:soak": "bun test/load/presence-load.ts --soak",
     "test:storm": "bun test/load/presence-load.ts --storm",
-    "test:client-contract": "bun test/mcp-client-contract.ts"
+    "test:client-contract": "bun test/mcp-client-contract.ts",
+    "test:probes:deterministic": "bun test test/probes/concurrency-probe.test.ts test/probes/cancellation-probe.test.ts test/probes/cancellation-duplicate-effect.test.ts test/probes/scale-probe.test.ts",
+    "probe:concurrency": "bun test/probes/concurrency-probe.ts --run",
+    "probe:cancellation": "bun test/probes/cancellation-probe.ts --run",
+    "probe:scale": "bun test/probes/scale-probe.ts --run"
   },
   "exports": {
     "./*": "./src/*.ts"

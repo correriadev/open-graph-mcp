@@ -1,0 +1,42 @@
+{
+  "featureId": "F002",
+  "domain": "cognitive_line_test_automation",
+  "scoreThresholdTL": 0.7,
+  "score": 0.62,
+  "severity": "high",
+  "verdict": "RETRY",
+  "openPoints": [
+    "Como o pipeline pode promover o estado atual enquanto o gate bloqueante de typecheck falha? `bun run typecheck` reproduziu 2 violações do Frozen Error Set: crescimento de 14 para 17 erros em `packages/mcp-server/src/index.ts` e 7 erros novos em `packages/graph-core/src/telemetry/index.ts`; a falha torna o job `typecheck` de `.github/workflows/ci.yml:78` vermelho, mesmo com a topologia incondicional corrigida.",
+    "Que contrato de integração impede alterações concorrentes fora do escopo de F002 de introduzir erros no conjunto congelado e deixar o Suite Verdict ou o merge gate permanentemente vermelho? As mudanças correntes em `packages/graph-core/src/telemetry/index.ts` e `packages/mcp-server/src/index.ts` são a evidência reproduzível da regressão; o teste completo verde não cobre a invariância de typecheck.",
+    "Como a validação de promoção distinguirá um retry F002 fechado de uma árvore de trabalho globalmente não publicável, mantendo a evidência de que o typecheck executado no mesmo commit e no mesmo workflow passou?"
+  ],
+  "closedFindings": [
+    {
+      "id": "F002-QA-001",
+      "status": "CLOSED",
+      "evidence": "`bun test scripts/verification/typecheck-gate.test.ts scripts/verification/ci-probe-topology.test.ts` passou 40/40; o job `typecheck` não possui condição nem continue-on-error."
+    },
+    {
+      "id": "F002-QA-002",
+      "status": "CLOSED",
+      "evidence": "`flake-ledger --check` resolve merge-base/HEAD, chama `checkFlakeLedgerIntegrity` e executa `reconcileAppendOnly`; teste de remoção/rewrite passou."
+    },
+    {
+      "id": "F002-QA-003",
+      "status": "CLOSED",
+      "evidence": "`executeGate` força mandatory gates como blocking e `composeQualityGates` rejeita downgrade; regressão de coverage com blocking=false passou."
+    },
+    {
+      "id": "F002-QA-004",
+      "status": "CLOSED",
+      "evidence": "Exceções/malformed runner results viram exitCode 255 e raw evidence; publicação de verdict vermelho foi validada pelo teste de EPERM."
+    }
+  ],
+  "checks": {
+    "focusedRegression": "PASS — 51 pass, 0 fail across typecheck, topology, ledger, and verdict suites",
+    "fullSuite": "PASS — 1169 pass, 1 todo, 0 fail, 6228 expect calls across 164 files",
+    "typecheck": "FAIL — 2 violations: count-rose in packages/mcp-server/src/index.ts and new-file errors in packages/graph-core/src/telemetry/index.ts",
+    "diffCheck": "NOT RUN — no formatting correction was made"
+  },
+  "architectureTip": "Preserve a single commit-scoped validation record that gates promotion on both behavioural tests and the frozen typecheck contract, including changes introduced by neighbouring work."
+}
