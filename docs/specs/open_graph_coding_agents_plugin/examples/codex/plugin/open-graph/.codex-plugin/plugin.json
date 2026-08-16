@@ -1,0 +1,32 @@
+{
+  "name": "open-graph",
+  "version": "0.1.0",
+  "description": "Governed pre-implementation and implementation workflow for OpenGraph MCP.",
+  "author": {
+    "name": "OpenGraph MCP"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "mcp",
+    "graph",
+    "governance"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "OpenGraph",
+    "shortDescription": "Governed coding workflows backed by OpenGraph MCP.",
+    "longDescription": "Plans, validates, executes, audits, and recovers repository changes through durable OpenGraph workflows.",
+    "developerName": "OpenGraph MCP",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Plan and execute this change through OpenGraph.",
+      "Check whether this repository is ready for OpenGraph."
+    ]
+  }
+}
